@@ -1,6 +1,9 @@
 [BITS 16]
 ;Source code of andy.sys. This file is called by the bootloader.
 
+mov si, HelloString
+call BiosPrintString
+
 ;Try to enter protected mode - https://wiki.osdev.org/Protected_Mode
 ;Disable interrupts
 cli
@@ -9,6 +12,8 @@ in AL, 0x70
 or al, 0x80
 out 0x70, al
 in al, 0x71
+mov si, TestA20
+call BiosPrintString
 ;Enable the a20 line if needed
 call check_a20
 test ax,1
@@ -18,7 +23,10 @@ in al, 0x92	;a20 not enabled, do it now
 or al, 2
 out 0x92, al
 a20_enabled:
+mov si, A20En
+call BiosPrintString
 
+jmp $
 
 ; Function: check_a20
 ;
@@ -63,4 +71,28 @@ check_a20:
 check_a20__exit:
     ret
 
+; uses BIOS int10 to output the character in AL to the screen
+BiosPrintCharacter:
+	mov ah, 0x0E
+	mov bh, 0x00
+	mov bl, 0x07
+	int 0x10
+	ret
+
+; repeatedly calls PrintCharacter to output the ASCIIZ string pointed to by the SI register
+BiosPrintString:
+	next_char:
+	mov al, [cs:si]
+	inc si
+	or al, al	;sets zero flag if al is 0 => end of string
+	jz exit_function
+	call BiosPrintCharacter
+	jmp next_char
+	exit_function:
+	ret
+
+;Data
+HelloString db 'ANDY.SYS v1', 0x0a,0x0d,0
+TestA20 db 'TestingA20', 0x0a,0x0d,0
+A20En db 'A20 enabled.', 0x0a,0x0d,0
 
