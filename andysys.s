@@ -26,7 +26,30 @@ a20_enabled:
 mov si, A20En
 call BiosPrintString
 
-jmp $
+;Now set up Global Descriptor Table
+mov ax,cs
+mov ds,ax
+mov es,ax
+xor ax, ax
+mov ax, SimpleGDT		;get the location of the GDT
+add ax, 0x7E00			;add our base address at the start of conventional RAM
+mov [SimpleGDTPtr+2], ax	;set the GDT location into the pointer structure
+lgdt [SimpleGDTPtr]
+
+mov si, GdtDone
+call BiosPrintString
+
+;Get the current cursor position
+mov ax, 0x0300
+mov bx, 0
+int 0x10
+;DH is row and DL is column
+
+;now we are ready!
+mov eax, cr0
+or al, 1
+mov cr0, eax	;hello protected mode
+jmp 0x08:PModeMain+0x7E00
 
 ; Function: check_a20
 ;
@@ -95,4 +118,54 @@ BiosPrintString:
 HelloString db 'ANDY.SYS v1', 0x0a,0x0d,0
 TestA20 db 'TestingA20', 0x0a,0x0d,0
 A20En db 'A20 enabled.', 0x0a,0x0d,0
+GdtDone db 'GDT ready.', 0x0a, 0x0d, 0
+
+;basic GDT configuration. Each entry is 8 bytes long
+SimpleGDT:
+;entry 0: null entry
+dd 0
+dd 0
+;entry 1 (segment 0x08): kernel CS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x0000	;base bits 16-23
+db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
+db 0x4f		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 2 (segment 0x10): kernel DS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x10		;base bits 16-23. Start from 1meg.
+db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0x4f		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;FIXME: should set up TSS here
+SimpleGDTPtr:
+dw 0x18		;length in bytes
+dd 0x0		;offset, filled in by code
+
+%define CursorRowPtr 0x00	;where we store cursor row in kernel data segment
+%define CursorColPtr 0x01	;where we store cursor col in kernel data segment
+
+[BITS 32]
+;we jump here once the switch to protected mode is complete, and we can use 32-bit code.
+PModeMain:
+;assuming that DH is still the cursor row and DL is still the cursor position
+
+mov ax, 0x10
+mov ds, ax	;set up segments to point to 32-bit data seg
+mov es, ax
+mov ss, ax
+mov esp, 0x00fffff	;stack at the end of RAM data segment
+
+mov byte [CursorRowPtr], dl
+mov byte [CursorColPtr], dh
+
+mov eax,0x01
+push eax
+mov eax, 0xFFFFFFFF
+push eax
+
+jmp $
+
 
