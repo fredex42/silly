@@ -121,6 +121,11 @@ TestA20 db 'TestingA20', 0x0a,0x0d,0
 A20En db 'A20 enabled.', 0x0a,0x0d,0
 GdtDone db 'GDT ready.', 0x0a, 0x0d, 0
 HelloTwo db 'Hello Protected Mode!', 0
+DivZeroMsg db 'FATAL: Divide by zero', 0
+DebugMsg db 'FATAL: Debug trap', 0
+NMIMsg db 'FATAL: Non-maskable interrupt occurred', 0
+BreakPointMsg db 'FATAL: Hardware breakpoint', 0
+OverflowMsg db 'FATAL: An overflow error occurred', 0
 StringTableEnd:
 
 ;basic GDT configuration. Each entry is 8 bytes long
@@ -136,7 +141,7 @@ db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
 db 0x4f		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
 ;entry 2 (segment 0x10): kernel DS
-dw 0xffff	;limit bits 0-15
+dw 0xff00	;limit bits 0-15
 dw 0x0000	;base bits 0-15
 db 0x10		;base bits 16-23. Start from 1meg.
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
@@ -149,20 +154,28 @@ db 0x0A		; base bits 16-23. Start from 0x0A0000
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
 db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
+;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
+dw 0x68		;limit bits 0-15
+dw 0xff00	;base bits 0-15.
+db 0x10		;base bits 16-23. Start from end of kernel DS
+db 0x84		;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=0
+db 0x40		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
 
-;FIXME: should set up TSS here
 SimpleGDTPtr:
-dw 0x20		;length in bytes
+dw 0x28		;length in bytes
 dd 0x0		;offset, filled in by code
 
 %define IDTOffset    0x00	;where we store the interrupt descriptor table in our data segment
 %define IDTSize      0x800	;256 entries of 8 bytes each
-%define CursorRowPtr 0x800	;where we store screem cursor row in kernel data segment
-%define CursorColPtr 0x801	;where we store cursor col in kernel data segment
+%define IDTPtr	     0x800	;IDT pointer block goes straight after the IDT
+%define TSS_Selector 0x20	;TSS starts at offset 0 in this selector
+%define CursorRowPtr 0x900	;where we store screen cursor row in kernel data segment
+%define CursorColPtr 0x901	;where we store cursor col in kernel data segment
 %define DisplayMemorySeg 0x18	;segment identifier for mapped video RAM
 %define TextConsoleOffset 0x18000	;text mode console memory is at 0xB8000 and the segment starts at 0xA0000
 %define DefaultTextAttribute 0x07	;light-grey-on-black https://wiki.osdev.org/Printing_To_Screen
-%define StringTableOffset 0x1000	;offset to the string table in our data segment
+%define StringTableOffset 0x1000	;offset to the string table in our data segment. The string data above is copied to this location once in PM
 
 [BITS 32]
 ;we jump here once the switch to protected mode is complete, and we can use 32-bit code.
@@ -173,7 +186,7 @@ mov ax, 0x10
 mov ds, ax	;set up segments to point to 32-bit data seg
 mov es, ax
 mov ss, ax
-mov esp, 0x00fffff	;stack at the end of RAM data segment
+mov esp, 0x00fff00	;stack at the end of RAM data segment
 
 mov byte [CursorColPtr], dl
 mov byte [CursorRowPtr], dh
@@ -199,20 +212,43 @@ sub eax, StringTableStart
 add eax, StringTableOffset	;we are actually accessing the string in the data-segment copy. So we need to adjust the offset here.
 mov esi, eax
 call PMPrintString
-;call PMScrollConsole
+call PMScrollConsole
 ;call PMScrollConsole
 
+;set up TSS
+
 ;set up IDT
+push es
 mov esi, IDTOffset
 xor eax, eax
 mov ax, cs
 mov es, ax
 mov edi, IDivZero
-mov bl, 0x0E
+mov bl, 0x0F	;trap gate (Present flag is set by CreateIA32IDTEntry)
 xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IDebug
 call CreateIA32IDTEntry
+mov edi, INMI
+mov bl, 0x0E	;interrupt gate
+call CreateIA32IDTEntry
+mov edi, IBreakPoint
+mov bl, 0x0F	;trap gate
+call CreateIA32IDTEntry
+mov edi, IOverflow
+call CreateIA32IDTEntry
+
+;Configure IDT pointer
+mov word [IDTPtr],  0x800	;IDT length
+mov dword [IDTPtr+2], IDTOffset+0x100000	;IDT offset
+lidt [IDTPtr]
+
+pop es
+
+;trigger the divide-by-zero interrupt to make sure everything is working
+mov ax, 5
+mov dx, 0
+div dx
 
 jmp $
 
@@ -301,19 +337,48 @@ PMScrollConsole:
 ;bl : gate type. 0x05 32-bit task gate, 0x0E 32-bit interrupt gate, 0x0F 32-bit trap gate
 ;cl : ring level required to call. Only 2 bits are used.
 CreateIA32IDTEntry:
+	add edi, 0x7E00		;add in our own code offset
 	mov word [ds:esi], di	;lower 4 bytes of offset
 	mov word [ds:esi+2], es	;selector
 	mov byte [ds:esi+4], 0x00	;reserved
 	;next byte is (LSB to MSB) gate type x3, reserved 0 x1, DPL x2, present 1 x1
-	and bl, 0x80	;set present bit
+	or bl, 0x80	;set present bit
 	clc
 	xor ch, ch
 	shl cl, 5	;DPL value, shift this to the right position then add it on
 	or bl, cl
 	mov byte [ds:esi+5], bl
-	shr edi, 15
+	shr edi, 16
 	mov word [ds:esi+6], di
 	add esi,8
 	ret
-	
 
+;output the given message and hang.
+;expects the message pointer in the string table in eax, it applies the string table offset itself.	
+FatalMsg:
+	sub eax, StringTableStart
+	add eax, StringTableOffset	;we are actually accessing the string in the data-segment copy. So we need to adjust the offset here.
+	mov esi, eax
+	call PMPrintString
+	jmp $				;don't return yet
+
+;Trap handlers
+IDivZero:
+	mov eax, DivZeroMsg
+	jmp FatalMsg
+
+IDebug:
+	mov eax, DebugMsg
+	jmp FatalMsg
+
+INMI:
+	mov eax, NMIMsg
+	jmp FatalMsg
+
+IBreakPoint:
+	mov eax, BreakPointMsg
+	jmp FatalMsg
+
+IOverflow:
+	mov eax, OverflowMsg
+	jmp FatalMsg
