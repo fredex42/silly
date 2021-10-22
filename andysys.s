@@ -115,10 +115,13 @@ BiosPrintString:
 	ret
 
 ;Data
+StringTableStart:
 HelloString db 'ANDY.SYS v1', 0x0a,0x0d,0
 TestA20 db 'TestingA20', 0x0a,0x0d,0
 A20En db 'A20 enabled.', 0x0a,0x0d,0
 GdtDone db 'GDT ready.', 0x0a, 0x0d, 0
+HelloTwo db 'Hello Protected Mode!', 0
+StringTableEnd:
 
 ;basic GDT configuration. Each entry is 8 bytes long
 SimpleGDT:
@@ -139,13 +142,27 @@ db 0x10		;base bits 16-23. Start from 1meg.
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
 db 0x4f		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
+;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
+dw 0xFFFF	; limit bits 0-15.
+dw 0x0000	; base bits 0-15
+db 0x0A		; base bits 16-23. Start from 0x0A0000
+db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+
 ;FIXME: should set up TSS here
 SimpleGDTPtr:
-dw 0x18		;length in bytes
+dw 0x20		;length in bytes
 dd 0x0		;offset, filled in by code
 
-%define CursorRowPtr 0x00	;where we store cursor row in kernel data segment
-%define CursorColPtr 0x01	;where we store cursor col in kernel data segment
+%define IDTOffset    0x00	;where we store the interrupt descriptor table in our data segment
+%define IDTSize      0x800	;256 entries of 8 bytes each
+%define CursorRowPtr 0x800	;where we store screem cursor row in kernel data segment
+%define CursorColPtr 0x801	;where we store cursor col in kernel data segment
+%define DisplayMemorySeg 0x18	;segment identifier for mapped video RAM
+%define TextConsoleOffset 0x18000	;text mode console memory is at 0xB8000 and the segment starts at 0xA0000
+%define DefaultTextAttribute 0x07	;light-grey-on-black https://wiki.osdev.org/Printing_To_Screen
+%define StringTableOffset 0x1000	;offset to the string table in our data segment
 
 [BITS 32]
 ;we jump here once the switch to protected mode is complete, and we can use 32-bit code.
@@ -158,14 +175,145 @@ mov es, ax
 mov ss, ax
 mov esp, 0x00fffff	;stack at the end of RAM data segment
 
-mov byte [CursorRowPtr], dl
-mov byte [CursorColPtr], dh
+mov byte [CursorColPtr], dl
+mov byte [CursorRowPtr], dh
 
-mov eax,0x01
-push eax
-mov eax, 0xFFFFFFFF
-push eax
+;Now we want to copy our strings from the code segment into the data segment
+push ds
+cld
+mov ax, cs
+mov ds, ax	;set ds=cs. es is already set up
+mov eax, StringTableEnd
+sub eax, StringTableStart
+xor edx, edx
+mov ecx, 0x04				;for clock-efficiency move 32bits at once. Therefore divide the byte count by 4.
+div ecx
+mov ecx, eax
+mov esi, StringTableStart+0x7E00	;we are loaded at an offset of 0x7E00 by the bootloader
+mov edi, StringTableOffset
+rep movsd	;move from ds:esi to es:edi, cx times
+pop ds
+
+mov eax, HelloTwo
+sub eax, StringTableStart
+add eax, StringTableOffset	;we are actually accessing the string in the data-segment copy. So we need to adjust the offset here.
+mov esi, eax
+call PMPrintString
+;call PMScrollConsole
+;call PMScrollConsole
+
+;set up IDT
+mov esi, IDTOffset
+xor eax, eax
+mov ax, cs
+mov es, ax
+mov edi, IDivZero
+mov bl, 0x0E
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IDebug
+call CreateIA32IDTEntry
 
 jmp $
 
+;Print a string in protected mode.
+;Expects the string to print in ds:esi
+PMPrintString:
+	push es
+	push edi
+	push eax
+	push ecx
+	push edx
+	pushf
+
+	;set up es:edi to point to where we want to write the characters
+	mov ax, DisplayMemorySeg
+	mov es, ax
+	mov edi, TextConsoleOffset
+
+	reset_offset:
+	;calculate the correct display offset based on the cursor position
+	xor eax, eax
+	mov al, byte [CursorRowPtr]	;assume 80 columns per row = 0x50. Double this because each char is 2 bytes (char, attribute)
+	mov cx, 0x00a0
+	mul cx
+	xor dx, dx
+	mov dl, byte [CursorColPtr]
+	add ax, dx			;AX is the offset
+	add ax, dx			;add again to double the offset
+	add edi, eax
+
+	pm_next_char:
+	lodsb
+	test al, al
+	jz pm_string_done	;if the next char is 0, then exit
+	
+	stosb
+	mov al, DefaultTextAttribute
+	stosb	;only use default attribute at the moment
+
+	jmp pm_next_char
+
+	pm_string_done:
+	popf
+	pop edx
+	pop ecx
+	pop eax
+	pop edi
+	pop es
+	ret
+
+;Scrolls the console down by 1 line.
+;Destroys AX, CX
+PMScrollConsole:
+	push es
+	push esi
+	push ds
+	push edi
+
+	mov ax, DisplayMemorySeg
+	mov es, ax
+	mov ds, ax
+
+	;we want to copy all of the data _up_ one line, and fill the last with 0x20/0x00 (blank space) characters
+	;es:edi is destination and ds:esi is source
+	mov edi, TextConsoleOffset
+	mov esi, TextConsoleOffset
+	add esi, 0xA0		;80 characters * 2 bytes = 1 line
+	mov ecx, 0x3C0		;80 characters * 24 lines * 2 bytes per char / 4 bytes per dword (into doublewords)
+	rep movsd
+
+	mov eax, 0x20
+	mov ecx, 0x50		;1 line
+	rep stosw
+
+	pop edi
+	pop ds
+	pop esi
+	pop es
+	ret
+
+;Create an IDT (Interrupt Descriptor Table) entry
+;The entry is created at ds:esi. esi is incremented to point to the next entry
+;destroys values in bl, cx, edi
+;edi: offset of handler
+;es : GDT selector containing the code
+;bl : gate type. 0x05 32-bit task gate, 0x0E 32-bit interrupt gate, 0x0F 32-bit trap gate
+;cl : ring level required to call. Only 2 bits are used.
+CreateIA32IDTEntry:
+	mov word [ds:esi], di	;lower 4 bytes of offset
+	mov word [ds:esi+2], es	;selector
+	mov byte [ds:esi+4], 0x00	;reserved
+	;next byte is (LSB to MSB) gate type x3, reserved 0 x1, DPL x2, present 1 x1
+	and bl, 0x80	;set present bit
+	clc
+	xor ch, ch
+	shl cl, 5	;DPL value, shift this to the right position then add it on
+	or bl, cl
+	mov byte [ds:esi+5], bl
+	shr edi, 15
+	mov word [ds:esi+6], di
+	add esi,8
+	ret
+	
 
