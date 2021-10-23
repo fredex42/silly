@@ -121,11 +121,27 @@ TestA20 db 'TestingA20', 0x0a,0x0d,0
 A20En db 'A20 enabled.', 0x0a,0x0d,0
 GdtDone db 'GDT ready.', 0x0a, 0x0d, 0
 HelloTwo db 'Hello Protected Mode!', 0
+;all these errors are fatal if the occur in the kernel. see https://wiki.osdev.org/Exceptions
 DivZeroMsg db 'FATAL: Divide by zero', 0
 DebugMsg db 'FATAL: Debug trap', 0
 NMIMsg db 'FATAL: Non-maskable interrupt occurred', 0
 BreakPointMsg db 'FATAL: Hardware breakpoint', 0
 OverflowMsg db 'FATAL: An overflow error occurred', 0
+BoundRangeMsg db 'FATAL: Bound range exceeded', 0
+InvalidOpcodeMsg db 'FATAL: Invalid opcode', 0
+DevNotAvailMsg db 'FATAL: Device not availalbe', 0
+DoubleFaultMsg db 'FATAL: Double fault', 0	;leaves error code on top of stack
+InvalidTSSMsg db 'FATAL: Invalid TSS', 0	;leaves error code
+SegmentNotPresentMsg db 'FATAL: Segment not present', 0	;leaves error code
+StackSegmentFaultMsg db 'FATAL: Stack segment fault', 0	;leaves error code
+GPFMsg db 'FATAL: General protection fault', 0		;leaves error code
+PageFaultMsg db 'FATAL: Page fault', 0			;leaves error code
+FPExceptMsg db 'FATAL: Floating-point Exception', 0
+AlignCheckMsg db 'FATAL: Alignment check failed', 0	;leaves error code
+MachineCheckMsg db 'FATAL: Machine check failed', 0
+SIMFPExceptMsg db 'FATAL: SIMD floating-point exception', 0
+VirtExceptMsg db 'FATAL: Virtualization exception', 0
+SecExceptMsg db 'FATAL: Security exception', 0		;leaves error code
 StringTableEnd:
 
 ;basic GDT configuration. Each entry is 8 bytes long
@@ -217,7 +233,7 @@ call PMScrollConsole
 
 ;set up TSS
 
-;set up IDT
+;set up IDT for standard intel exceptions
 push es
 mov esi, IDTOffset
 xor eax, eax
@@ -236,7 +252,15 @@ mov edi, IBreakPoint
 mov bl, 0x0F	;trap gate
 call CreateIA32IDTEntry
 mov edi, IOverflow
+mov bl, 0x0F	;trap gate
 call CreateIA32IDTEntry
+mov edi, IBoundRange
+mov bl, 0x0F
+call CreateIA32IDTEntry
+mov edi, IOpcodeInval
+mov bl, 0x0F
+call CreateIA32IDTEntry
+
 
 ;Configure IDT pointer
 mov word [IDTPtr],  0x800	;IDT length
@@ -371,7 +395,7 @@ IDebug:
 	mov eax, DebugMsg
 	jmp FatalMsg
 
-INMI:
+INMI:	;technically an interrupt, not a trap
 	mov eax, NMIMsg
 	jmp FatalMsg
 
