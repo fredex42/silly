@@ -1,3 +1,4 @@
+%include "memlayout.inc"
 [BITS 16]
 ;Source code of andy.sys. This file is called by the bootloader.
 
@@ -182,16 +183,7 @@ SimpleGDTPtr:
 dw 0x28		;length in bytes
 dd 0x0		;offset, filled in by code
 
-%define IDTOffset    0x00	;where we store the interrupt descriptor table in our data segment
-%define IDTSize      0x800	;256 entries of 8 bytes each
-%define IDTPtr	     0x800	;IDT pointer block goes straight after the IDT
-%define TSS_Selector 0x20	;TSS starts at offset 0 in this selector
-%define CursorRowPtr 0x900	;where we store screen cursor row in kernel data segment
-%define CursorColPtr 0x901	;where we store cursor col in kernel data segment
-%define DisplayMemorySeg 0x18	;segment identifier for mapped video RAM
-%define TextConsoleOffset 0x18000	;text mode console memory is at 0xB8000 and the segment starts at 0xA0000
-%define DefaultTextAttribute 0x07	;light-grey-on-black https://wiki.osdev.org/Printing_To_Screen
-%define StringTableOffset 0x1000	;offset to the string table in our data segment. The string data above is copied to this location once in PM
+
 
 [BITS 32]
 ;we jump here once the switch to protected mode is complete, and we can use 32-bit code.
@@ -377,32 +369,4 @@ CreateIA32IDTEntry:
 	add esi,8
 	ret
 
-;output the given message and hang.
-;expects the message pointer in the string table in eax, it applies the string table offset itself.	
-FatalMsg:
-	sub eax, StringTableStart
-	add eax, StringTableOffset	;we are actually accessing the string in the data-segment copy. So we need to adjust the offset here.
-	mov esi, eax
-	call PMPrintString
-	jmp $				;don't return yet
-
-;Trap handlers
-IDivZero:
-	mov eax, DivZeroMsg
-	jmp FatalMsg
-
-IDebug:
-	mov eax, DebugMsg
-	jmp FatalMsg
-
-INMI:	;technically an interrupt, not a trap
-	mov eax, NMIMsg
-	jmp FatalMsg
-
-IBreakPoint:
-	mov eax, BreakPointMsg
-	jmp FatalMsg
-
-IOverflow:
-	mov eax, OverflowMsg
-	jmp FatalMsg
+%include "exceptions.s"
