@@ -1,6 +1,7 @@
 %include "memlayout.inc"
 [BITS 16]
 ;Source code of andy.sys. This file is called by the bootloader.
+;Some parts are split into other files which are %include'd into here
 
 mov si, HelloString
 call BiosPrintString
@@ -236,21 +237,101 @@ mov bl, 0x0F	;trap gate (Present flag is set by CreateIA32IDTEntry)
 xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IDebug
+xor cx, cx
 call CreateIA32IDTEntry
 mov edi, INMI
 mov bl, 0x0E	;interrupt gate
+xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IBreakPoint
 mov bl, 0x0F	;trap gate
+xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IOverflow
 mov bl, 0x0F	;trap gate
+xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IBoundRange
 mov bl, 0x0F
+xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IOpcodeInval
 mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IDevNotAvail
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IDoubleFault
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IInvalidTSS
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, ISegNotPresent
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IStackSegFault
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IGPF
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IPageFault
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IFloatingPointExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IAlignmentCheck
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IMachineCheck
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, ISIMDFPExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IVirtExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+;next 8 interrupts are all reserved
+mov dx, 9
+_idt_reserv_loop:
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+dec dx
+test dx, dx	;got to 0 yet?
+jnz _idt_reserv_loop
+mov edi, ISecurityExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
 call CreateIA32IDTEntry
 
 
@@ -261,10 +342,12 @@ lidt [IDTPtr]
 
 pop es
 
+;configure the PIC to send IRQs to IDT 0x20+
+
 ;trigger the divide-by-zero interrupt to make sure everything is working
 mov ax, 5
 mov dx, 0
-div dx
+;div dx
 
 jmp $
 
