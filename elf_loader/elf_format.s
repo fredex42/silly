@@ -17,26 +17,18 @@ LoadElfBase:
 	cmp word [ds:si+2], 0x464C
 	jnz not_elf
 
-	;we got elf. Check 32-bit little-endian.
-	cmp byte [ds:si+4], 0x1
-	jnz bits_err
-	cmp byte [ds:si+5], 0x1
-	jnz endian_err
-	;now check for x86 instructions
-	cmp byte [ds:si+0x12], 0x03
-	jnz inst_err
+	;we got elf. Due to space constraints we are just going to have to assume that it's 32-bit LE 
 
 	;ok. With that out of the way we need to get hold of the program header, set di to its location
 	mov di, word [ds:si+0x1C]	;start of the program header table. https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
 	add di, si			;add it to the base offset
 	
-	push si				;store our offsets (image base, prog table header) on the stack in preparation for the move
-	push di
+	push si				;store our offsets (to the image base) on the stack in preparation for the move
 
 	mov cx, word [ds:di+0x10]	;size of the segment in memory
 	shr cx, 1			;quick way of dividing by 2
  
-	mov dx, word [ds:di+0x04]	;COPY SOURCE - offset of the section in the file (ds:si unchanged:base+offset)
+	mov dx, word [ds:di+0x04]	;COPY SOURCE - offset of the section in the file (ds:si => unchanged:base+offset)
 	add dx, si
 	mov si, dx
 
@@ -45,20 +37,27 @@ LoadElfBase:
 	mov di,	0
 	rep movsw			;copy the block of memory over
 
-	pop di
 	pop si
+
+	;now the code is loaded, load in the data from 0xa000
+	;we have to assume that the .data section is immediately after the .text section
+	mov di, word [ds:si+0x20]	;start of the section header table.
+	add di, si			;add it to the base offset
+	add di, 0x50			;we are making an assumption here that the structure of the file has the .data section here
+	mov cx, word [ds:di+0x14]	;size, in bytes of the section
+	shr cx, 1
+	
+	mov dx, word [ds:di+0x10]	;COPY SOURCE - offset of the data in the file
+	add dx, si
+	mov si, dx
+
+	mov ax, 0xA00			;COPY DEST move to conventional memoty at 0xA000
+	mov es, ax
+	mov di, 0
+	rep movsw
 
 	mov dx,0
 	ret
 not_elf:
 	mov dx, ERR_NOT_ELF
-	ret
-bits_err:
-	mov dx, ERR_NOT_32bits
-	ret
-endian_err:
-	mov dx, ERR_ENDIAN
-	ret
-inst_err:
-	mov dx, ERR_INSTRUCTIONSET
 	ret

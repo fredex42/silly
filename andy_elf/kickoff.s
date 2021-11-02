@@ -8,30 +8,21 @@ _start:
 
 ;Now we need to re-set up the selectors as what we got from the bootloader was fairly minimal.
 ;The new one here has the code and data segments the same but adds in framebuffer ram and TSS
-mov ax, cs
+mov ax, 0x10 
 mov ds, ax
 mov es, ax
+mov ss, ax
+mov esp, 0x7fff0	;set stack pointer to the end of conventional RAM
 xor ax, ax
 mov ax, SimpleGDT
 mov [SimpleGDTPtr+2], ax
 lgdt [SimpleGDTPtr]
 
-mov ax, 0x10
-mov ds, ax	;set up segments to point to 32-bit data seg
-mov es, ax
-mov ss, ax
-mov esp, 0x00fff00	;stack at the end of RAM data segment
-
-
 mov byte [CursorColPtr], dl
 mov byte [CursorRowPtr], dh
 
-mov si, HelloString
-push ds
-mov ax, 0x8
-mov ds, ax
+mov esi, HelloString
 call PMPrintString
-pop ds
 
 jmp $
 
@@ -53,7 +44,7 @@ PMPrintString:
 	reset_offset:
 	;calculate the correct display offset based on the cursor position
 	xor eax, eax
-	mov al, byte [CursorRowPtr]	;assume 80 columns per row = 0x50. Double this because each char is 2 bytes (char, attribute)
+	mov al, byte [CursorRowPtr]	;assume 80 columns per row = 0x50. Double this to 0xa0 because each char is 2 bytes (char, attribute)
 	mov cx, 0x00a0
 	mul cx
 	xor dx, dx
@@ -160,7 +151,7 @@ db 0x47		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], 
 db 0x00		;base bits 24-31
 ;entry 2 (segment 0x10): kernel DS
 dw 0xffff	;limit bits 0-15
-dw 0x7E00	;base bits 0-15
+dw 0x0000	;base bits 0-15
 db 0x10		;base bits 16-23. Start from 1meg.
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
 db 0x47		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]

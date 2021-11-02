@@ -235,12 +235,12 @@ db 0x0000	;base bits 16-23
 db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
 db 0x43		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
-;entry 2 (segment 0x10): kernel DS. Sits right above the CS (0x3c0FF length, starting at 0x43F00)
+;entry 2 (segment 0x10): kernel DS. Overlaps the kernel CS and occupies the whole first meg. 
 dw 0xFFFF	;limit bits 0-15
-dw 0x7E00	;base bits 0-15
+dw 0x0000	;base bits 0-15
 db 0x00		;base bits 16-23.
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0x47		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x4F		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
 
 SimpleGDTPtr:
