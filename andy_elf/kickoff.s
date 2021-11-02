@@ -2,7 +2,10 @@
 section .text
 global _start
 
+%include "basic_console.inc"
 %include "memlayout.inc"
+%include "exceptions.inc"
+
 ;assuming that DH is still the cursor row and DL is still the cursor position
 _start:
 
@@ -24,115 +27,148 @@ mov byte [CursorRowPtr], dh
 mov esi, HelloString
 call PMPrintString
 
+;set up IDT for standard intel exceptions
+push es
+mov esi, IDTOffset
+xor eax, eax
+mov ax, cs
+mov es, ax
+mov edi, IDivZero
+mov bl, 0x0F	;trap gate (Present flag is set by CreateIA32IDTEntry)
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IDebug
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, INMI
+mov bl, 0x0E	;interrupt gate
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IBreakPoint
+mov bl, 0x0F	;trap gate
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IOverflow
+mov bl, 0x0F	;trap gate
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IBoundRange
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IOpcodeInval
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IDevNotAvail
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IDoubleFault
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IInvalidTSS
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, ISegNotPresent
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IStackSegFault
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IGPF
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IPageFault
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IFloatingPointExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IAlignmentCheck
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IMachineCheck
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, ISIMDFPExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IVirtExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+;next 8 interrupts are all reserved
+mov dx, 9
+_idt_reserv_loop:
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+dec dx
+test dx, dx	;got to 0 yet?
+jnz _idt_reserv_loop
+mov edi, ISecurityExcept
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+;That is the end of the system exceptions part. Next is what we will configure the PIC to write IRQs to
+;IRQ0 - system timer
+mov edi, IReserved
+mov bl,0x0F
+xor cx,cx
+call CreateIA32IDTEntry
+;IRQ1 - keyboard
+mov edi, IKeyboard
+mov bl,0x0F
+xor cx,cx
+call CreateIA32IDTEntry
+mov dx, 14
+_irq_reserv_loop:
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+dec dx
+test dx, dx	;got to 0 yet?
+jnz _irq_reserv_loop
+
+
+
+;Configure IDT pointer
+mov word [IDTPtr],  IDTSize	;IDT length
+mov dword [IDTPtr+2], IDTOffset	;IDT offset
+lidt [IDTPtr]
+
+pop es
+
+;test that the exceptions are working
+mov ax, 0x10
+mov cx, 0
+div cx
 jmp $
-
-;Print a string in protected mode.
-;Expects the string to print in ds:esi
-PMPrintString:
-	push es
-	push edi
-	push eax
-	push ecx
-	push edx
-	pushf
-
-	;set up es:edi to point to where we want to write the characters
-	mov ax, DisplayMemorySeg
-	mov es, ax
-	mov edi, TextConsoleOffset
-
-	reset_offset:
-	;calculate the correct display offset based on the cursor position
-	xor eax, eax
-	mov al, byte [CursorRowPtr]	;assume 80 columns per row = 0x50. Double this to 0xa0 because each char is 2 bytes (char, attribute)
-	mov cx, 0x00a0
-	mul cx
-	xor dx, dx
-	mov dl, byte [CursorColPtr]
-	add ax, dx			;AX is the offset
-	add ax, dx			;add again to double the offset
-	add edi, eax
-
-	pm_next_char:
-	lodsb
-	test al, al
-	jz pm_string_done	;if the next char is 0, then exit
-	
-	stosb
-	mov al, DefaultTextAttribute
-	stosb	;only use default attribute at the moment
-
-	jmp pm_next_char
-
-	pm_string_done:
-	popf
-	pop edx
-	pop ecx
-	pop eax
-	pop edi
-	pop es
-	ret
-
-;Print a character in protected mode.
-;Expects the character to print in bl.
-PMPrintChar:
-	push es
-	push eax
-	push dx
-	mov ax, DisplayMemorySeg
-	mov es, ax
-	mov edi, TextConsoleOffset
-
-	xor eax,eax
-	mov al, byte [CursorRowPtr]
-	mov cx, 0x00a0
-	mul cx
-	xor dx, dx
-	mov dl, byte [CursorColPtr]
-	add ax, dx
-	add ax, dx
-	add edi, eax
-
-	mov al, bl
-	stosb
-	mov al, DefaultTextAttribute
-	stosb
-
-	inc byte [CursorColPtr]
-	pop dx
-	pop eax
-	pop es
-	ret
-
-;Scrolls the console down by 1 line.
-;Destroys AX, CX
-PMScrollConsole:
-	push es
-	push esi
-	push ds
-	push edi
-
-	mov ax, DisplayMemorySeg
-	mov es, ax
-	mov ds, ax
-
-	;we want to copy all of the data _up_ one line, and fill the last with 0x20/0x00 (blank space) characters
-	;es:edi is destination and ds:esi is source
-	mov edi, TextConsoleOffset
-	mov esi, TextConsoleOffset
-	add esi, 0xA0		;80 characters * 2 bytes = 1 line
-	mov ecx, 0x3C0		;80 characters * 24 lines * 2 bytes per char / 4 bytes per dword (into doublewords)
-	rep movsd
-
-	mov eax, 0x20
-	mov ecx, 0x50		;1 line
-	rep stosw
-
-	pop edi
-	pop ds
-	pop esi
-	pop es
-	ret
 
 section .data
 HelloString: db 'Hello world', 0
