@@ -333,6 +333,27 @@ mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
 call CreateIA32IDTEntry
+;That is the end of the system exceptions part. Next is what we will configure the PIC to write IRQs to
+;IRQ0 - system timer
+mov edi, IReserved
+mov bl,0x0F
+xor cx,cx
+call CreateIA32IDTEntry
+;IRQ1 - keyboard
+mov edi, IKeyboard
+mov bl,0x0F
+xor cx,cx
+call CreateIA32IDTEntry
+mov dx, 14
+_irq_reserv_loop:
+mov edi, IReserved
+mov bl, 0x0F
+xor cx, cx
+call CreateIA32IDTEntry
+dec dx
+test dx, dx	;got to 0 yet?
+jnz _irq_reserv_loop
+
 
 
 ;Configure IDT pointer
@@ -343,13 +364,107 @@ lidt [IDTPtr]
 pop es
 
 ;configure the PIC to send IRQs to IDT 0x20+
+;using legacy 8259 PIC for time being
+%define PIC1	0x10	;IO base address for master PIC
+%define PIC2 	0xA0	;IO base address
+%define PIC1_CMD	PIC1	;command port for PIC1
+%define PIC1_DATA	PIC1+1	;data port for PIC1
+%define PIC2_CMD	PIC2
+%define PIC2_DATA	PIC2+1
+%define ICW1_ICW4	0x01	;ICW4 not needed
+%define ICW1_SINGLE	0x02	;Single mode (i.e. cascade)
+%define ICW1_INTERVAL4	0x04	;Call address interval 4
+%define ICW1_LEVEL	0x08	;Level triggered (edge) mode
+%define ICW1_INIT	0x10	;initialization command - required
+%define ICW4_8086	0x01	;8086/88 mode
+%define ICW4_AUTO	0x02	;Auto end-of-interrupt
+%define ICW4_BUF_SLAVE	0x08	;buffered mode slave
+%define ICW4_BUF_MASTER	0x0c	;buffered mode master
+%define ICW4_SFNM	0x10	;'special fully nested'
+%define PIC1_OFFSET 	0x20	;software int offset for PIC1
+%define PIC2_OFFSET	0x28	;software int offset for PIC2
+
+%define IRQ_SYSTEM_TIMER	PIC1_OFFSET+0
+%define IRQ_KEYBOARD		PIC1_OFFSET+1
+%define IRQ_CASCADE		PIC1_OFFSET+2
+%define IRQ_SERIAL2		PIC1_OFFSET+3
+%define IRQ_SERIAL1		PIC1_OFFSET+4
+%define IRQ_5			PIC1_OFFSET+5
+%define IRQ_FLOPPY		PIC1_OFFSET+6
+%define IRQ_PARALLEL1		PIC1_OFFSET+7
+%define IRQ_RTC			PIC2_OFFSET+0
+%define IRQ_ACPI_MAYBE		PIC2_OFFSET+1
+%define IRQ_MOUSE		PIC2_OFFSET+4
+%define IRQ_ATA1		PIC2_OFFSET+6
+%define IRQ_ATA2		PIC2_OFFSET+7
+
+;save existing mask state to stack as one word (PIC1 MSB, PIC2 LSB)
+xor ax, ax
+in al, PIC1_DATA
+shl ax, 8
+in al, PIC2_DATA
+push ax
+
+;start 3-byte initialization sequence
+xor ax,ax
+mov al, ICW1_INIT | ICW1_ICW4
+out PIC1_CMD, al
+call io_wait
+mov al, ICW1_INIT | ICW1_ICW4
+out PIC2_CMD, al
+call io_wait
+
+mov al, PIC1_OFFSET
+out PIC1_DATA, al
+call io_wait
+mov al, PIC2_OFFSET
+out PIC2_DATA, al
+call io_wait
+
+mov al, 0x04
+out PIC1_DATA, al	;ICW3: tell Master PIC that there is a slave PIC at IRQ2 (0000 0100)
+call io_wait
+mov al, 0x02
+out PIC2_DATA, al	;ICW3: tell Slave PIC its cascade identity (0000 0010)
+call io_wait
+
+mov al, ICW4_8086
+out PIC1_DATA, al
+call io_wait
+mov al, ICW4_8086
+out PIC2_DATA, al
+call io_wait
+
+;restore previous mask state
+pop ax
+out PIC2_DATA, al
+shr ax, 8
+and al, 0xFD	;clear bit 2 => enable keyboard interrupt
+out PIC1_DATA, al
+
+;PIC setup complete
 
 ;trigger the divide-by-zero interrupt to make sure everything is working
 mov ax, 5
 mov dx, 0
-;div dx
+div dx
 
 jmp $
+
+;Wait a very small amount of time (1 to 4 microseconds generally)
+;Provided by https://wiki.osdev.org/Inline_Assembly/Examples#I.2FO_access
+io_wait:
+	mov al, 0
+	out 0x80, al
+	ret
+
+;send end-of-interrupt to the master PIC ONLY
+PIC_Send_EOI:
+	push ax
+	mov al, 0x20	;end-of-interrupt command code
+	out PIC1_CMD, al
+	pop ax
+	ret
 
 ;Print a string in protected mode.
 ;Expects the string to print in ds:esi
@@ -397,6 +512,36 @@ PMPrintString:
 	pop edi
 	pop es
 	ret
+
+;Print a character in protected mode.
+;Expects the character to print in bl.
+PMPrintChar:
+	push es
+	push eax
+	push dx
+	mov ax, DisplayMemorySeg
+	mov es, ax
+	mov edi, TextConsoleOffset
+
+	xor eax,eax
+	mov al, byte [CursorRowPtr]
+	mov cx, 0x00a0
+	mul cx
+	xor dx, dx
+	mov dl, byte [CursorColPtr]
+	add ax, dx
+	add ax, dx
+	add edi, eax
+
+	mov al, bl
+	stosb
+	mov al, DefaultTextAttribute
+	stosb
+
+	inc byte [CursorColPtr]
+	pop dx
+	pop eax
+	pop es
 
 ;Scrolls the console down by 1 line.
 ;Destroys AX, CX
@@ -453,3 +598,4 @@ CreateIA32IDTEntry:
 	ret
 
 %include "exceptions.s"
+%include "irqs.s"
