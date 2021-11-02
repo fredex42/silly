@@ -41,6 +41,11 @@ PMPrintString:
 	mov al, DefaultTextAttribute
 	stosb	;only use default attribute at the moment
 
+	inc byte [CursorColPtr]
+	cmp byte [CursorColPtr], 0x50	;columns-per-row
+	jnz pm_next_char
+	mov byte [CursorColPtr], 0
+	inc byte [CursorRowPtr]
 	jmp pm_next_char
 
 	pm_string_done:

@@ -164,10 +164,8 @@ lidt [IDTPtr]
 
 pop es
 
-;test that the exceptions are working
-mov ax, 0x10
-mov cx, 0
-div cx
+extern test_c_entrypoint
+call test_c_entrypoint
 jmp $
 
 section .data
