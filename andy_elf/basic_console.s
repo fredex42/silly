@@ -1,5 +1,8 @@
 [BITS 32]
 section .text
+;this module contains a couple of very simple assembly routines
+;for putting text strings onto the console in standard text mode
+;it works by direct manipulation of the framebuffer at 0xB800
 global PMPrintString
 global PMPrintChar
 
@@ -20,7 +23,6 @@ PMPrintString:
 	mov es, ax
 	mov edi, TextConsoleOffset
 
-	reset_offset:
 	;calculate the correct display offset based on the cursor position
 	xor eax, eax
 	mov al, byte [CursorRowPtr]	;assume 80 columns per row = 0x50. Double this to 0xa0 because each char is 2 bytes (char, attribute)
@@ -36,7 +38,11 @@ PMPrintString:
 	lodsb
 	test al, al
 	jz pm_string_done	;if the next char is 0, then exit
-	
+	cmp al, 0x0d		;CR
+	jz pm_carraige_rtn
+	cmp al, 0x0a		;LF
+	jz pm_linefeed
+
 	stosb
 	mov al, DefaultTextAttribute
 	stosb	;only use default attribute at the moment
@@ -47,6 +53,19 @@ PMPrintString:
 	mov byte [CursorColPtr], 0
 	inc byte [CursorRowPtr]
 	jmp pm_next_char
+
+	pm_carraige_rtn:
+	mov byte [CursorColPtr], 0
+	jmp pm_next_char
+
+	pm_linefeed:
+	cmp byte [CursorRowPtr], 23	;24 rows on the screen
+	jge pm_linefeed_scroll
+	inc byte [CursorRowPtr]
+	jmp pm_next_char
+	
+	pm_linefeed_scroll:
+	call PMScrollConsole
 
 	pm_string_done:
 	popf

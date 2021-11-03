@@ -169,7 +169,7 @@ call test_c_entrypoint
 jmp $
 
 section .data
-HelloString: db 'Hello world', 0
+HelloString: db 'Hello world', 0x0a, 0x0d, 0
 
 ;basic GDT configuration. Each entry is 8 bytes long
 SimpleGDT:

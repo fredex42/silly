@@ -17,7 +17,7 @@ cfuncs.o: cfuncs.s
 	
 test.o: test.c
 	gcc -c -fno-pie -m32 test.c
-	#strip -g --keep-symbol=kputs -R* -R!.text -R!.text.* -R!.data -R!.rodata test.o
+
 test.elf: kickoff.o exceptions.o basic_console.o test.o cfuncs.o
 	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o test.o \
 		-Ttext 0x7E00 -Tdata 0xA000 -Trodata 0x9000 \
