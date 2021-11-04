@@ -11,7 +11,7 @@ _start:
 
 ;Now we need to re-set up the selectors as what we got from the bootloader was fairly minimal.
 ;The new one here has the code and data segments the same but adds in framebuffer ram and TSS
-mov ax, 0x10 
+mov ax, 0x10
 mov ds, ax
 mov es, ax
 mov ss, ax
@@ -186,7 +186,7 @@ db 0x00		;base bits 24-31
 ;entry 2 (segment 0x10): kernel DS
 dw 0xffff	;limit bits 0-15
 dw 0x0000	;base bits 0-15
-db 0x10		;base bits 16-23. Start from 1meg.
+db 0x00		;base bits 16-23. Start from 0meg.
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
 db 0x47		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
@@ -208,5 +208,3 @@ db 0x00		;base bits 24-31
 SimpleGDTPtr:
 dw 0x28		;length in bytes
 dd 0x0		;offset, filled in by code
-
-
