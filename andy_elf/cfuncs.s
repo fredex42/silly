@@ -5,6 +5,7 @@ section .text
 ;we expect a calling convention where the arguments are pushed onto the stack
 ;so the stack frame will be: [sp..sp+4] saved bp value [sp+4..sp+8] return addr [sp+8..sp+12] arg1 [sp+12..sp+16] arg2 .....
 global kputs
+global kputlen
 global longToString
 global __stack_chk_fail
 %include "basic_console.inc"
@@ -18,7 +19,7 @@ kputs:
 	push ds
 
 	push esi
-	mov esi, dword [ss:ebp+8]	;get the pointer to the string to print (arg1 is offset 12). This will be an absolute address,
+	mov esi, dword [ss:ebp+8]	;get the pointer to the string to print (arg1 is offset 8). This will be an absolute address,
 					;so we resolve it relative to DS which starts at 0
 	call PMPrintString
 	pop esi
@@ -28,9 +29,28 @@ kputs:
 	pop ebp
 	ret
 
+;Purpose: outputs a string to the console
+;Expects: 32-bit pointer to a string (in kernel DS) on the stack, followed by an unsigned 32-bit integer representing the length
+;Returns: Nothing
+kputlen:
+	push ebp
+	mov ebp, esp
+
+	push esi
+	mov esi, dword [ss:ebp+8] ;get the pointer to the string to print (arg1 is offset 8). This will be an absolute address,
+					;so we resolve it relative to DS which starts at 0
+	mov ecx, dword [ss:ebp+12]	;get the length value from the next argument
+	call PMPrintStringLen
+
+	pop esi
+	mov esp, ebp
+	pop ebp
+	ret
+
 ;Purpose: converts an integer into a string (in base 10). Preserves registers but not flags.
 ;Expects: 32-bit integer representing the number to convert on the stack, behind the return address
 ;	  32-bit pointer giving the location of an allocated string to push the result into
+;   32-bit number giving the base to convert with
 ;See: https://runestone.academy/runestone/books/published/pythonds/Recursion/pythondsConvertinganIntegertoaStringinAnyBase.html
 longToString:
 	push ebp
@@ -47,19 +67,19 @@ longToString:
 	mov eax, dword [ss:ebp+8]	;set eax to the number to be converted
 	xor bh,bh
 
-	mov ecx, 10	;number base
+	mov ecx, dword [ss:ebp+16]	;number base
 	div_loop:
 	xor edx, edx	;edx is the upper 32 bits of the numerator going in and the remained going out. Ensure it's 0 before we start
 	div ecx				;divide by the number base. Result is in EAX and remainder is in EDX. Remainder is our numeral
 	mov bl, byte [edx+numerals]	;set bl to the ascii code of the numeral
 	push bx				;push that result onto the stack
-	cmp eax, 10			;keep looping until out result is < the number base
+	cmp eax, dword [ss:ebp+16]	;keep looping until out result is < the number base
 	jge div_loop
 
 	;last digit is in EAX
 	mov bl, byte [eax+numerals]
 	push bx
-	
+
 	;now we have the characters pushed onto the stack, move them into the provided buffer
 	mov edi, dword [ss:ebp+12]	;set edi to the location
 	store_loop:
@@ -88,5 +108,5 @@ __stack_chk_fail:
 	jmp $
 
 section .data
-numerals: db '0123456789'
+numerals: db '0123456789abcdef'
 overflow: db 'PANIC - kernel stack overflow\r\n'

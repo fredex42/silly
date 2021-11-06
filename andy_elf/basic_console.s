@@ -5,10 +5,11 @@ section .text
 ;it works by direct manipulation of the framebuffer at 0xB800
 global PMPrintString
 global PMPrintChar
+global PMPrintStringLen
 
 %include "memlayout.inc"
 
-;Print a string in protected mode.
+;Print an ASCIIZ string in protected mode.
 ;Expects the string to print in ds:esi
 PMPrintString:
 	push es
@@ -76,6 +77,77 @@ PMPrintString:
 	pop es
 	ret
 
+;Print a substring of defined length in protected mode.
+;Expects the string to print in ds:esi and the length in ecx. No null check is performed.
+PMPrintStringLen:
+	push es
+	push edi
+	push eax
+	push edx
+	pushf
+	push ecx	;save the length from cx as we use it in the display offset calculation
+
+	;set up es:edi to point to where we want to write the characters
+	mov ax, DisplayMemorySeg
+	mov es, ax
+	mov edi, TextConsoleOffset
+
+	;calculate the correct display offset based on the cursor position
+	xor eax, eax
+	mov al, byte [CursorRowPtr]	;assume 80 columns per row = 0x50. Double this to 0xa0 because each char is 2 bytes (char, attribute)
+	mov cx, 0x00a0
+	mul cx
+	xor dx, dx
+	mov dl, byte [CursorColPtr]
+	add ax, dx			;AX is the offset
+	add ax, dx			;add again to double the offset
+	add edi, eax
+
+	pop ecx		;restore the length into cx...
+	push ecx	;and save it again as we'll be decrementing it over the next loop
+
+	pm_next_char_len:
+	lodsb
+	dec ecx
+	test ecx,ecx
+	jz pm_string_done_len	;if the next char is 0, then exit
+	cmp al, 0x0d		;CR
+	jz pm_carraige_rtn_len
+	cmp al, 0x0a		;LF
+	jz pm_linefeed_len
+
+	stosb
+	mov al, DefaultTextAttribute
+	stosb	;only use default attribute at the moment
+
+	inc byte [CursorColPtr]
+	cmp byte [CursorColPtr], 0x50	;columns-per-row
+	jnz pm_next_char_len
+	mov byte [CursorColPtr], 0
+	inc byte [CursorRowPtr]
+	jmp pm_next_char_len
+
+	pm_carraige_rtn_len:
+	mov byte [CursorColPtr], 0
+	jmp pm_next_char_len
+
+	pm_linefeed_len:
+	cmp byte [CursorRowPtr], 23	;24 rows on the screen
+	jge pm_linefeed_scroll_len
+	inc byte [CursorRowPtr]
+	jmp pm_next_char_len
+	
+	pm_linefeed_scroll_len:
+	call PMScrollConsole
+
+	pm_string_done_len:
+	pop ecx
+	popf
+	pop edx
+	pop eax
+	pop edi
+	pop es
+	ret
 ;Print a character in protected mode.
 ;Expects the character to print in bl.
 PMPrintChar:
