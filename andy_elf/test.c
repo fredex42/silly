@@ -11,7 +11,7 @@ void test_c_entrypoint(){
 	kputs(buf);
 
 	kputlen("ABCDEFG",7);
-	
+
 	kprintf("Hello again\r\n");
 
 	kprintf("Hello %x.", 0x42a);

@@ -64,7 +64,7 @@ PMPrintString:
 	jge pm_linefeed_scroll
 	inc byte [CursorRowPtr]
 	jmp pm_next_char
-	
+
 	pm_linefeed_scroll:
 	call PMScrollConsole
 
@@ -104,13 +104,12 @@ PMPrintStringLen:
 	add edi, eax
 
 	pop ecx		;restore the length into cx...
-	push ecx	;and save it again as we'll be decrementing it over the next loop
 
 	pm_next_char_len:
 	lodsb
 	dec ecx
 	test ecx,ecx
-	jz pm_string_done_len	;if the next char is 0, then exit
+	jz pm_string_done_len	;if we get to zero, then exit
 	cmp al, 0x0d		;CR
 	jz pm_carraige_rtn_len
 	cmp al, 0x0a		;LF
@@ -136,12 +135,11 @@ PMPrintStringLen:
 	jge pm_linefeed_scroll_len
 	inc byte [CursorRowPtr]
 	jmp pm_next_char_len
-	
+
 	pm_linefeed_scroll_len:
 	call PMScrollConsole
 
 	pm_string_done_len:
-	pop ecx
 	popf
 	pop edx
 	pop eax
@@ -208,5 +206,3 @@ PMScrollConsole:
 	pop esi
 	pop es
 	ret
-
-

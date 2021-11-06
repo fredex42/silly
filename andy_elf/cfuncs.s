@@ -37,11 +37,13 @@ kputlen:
 	mov ebp, esp
 
 	push esi
+	push ecx
 	mov esi, dword [ss:ebp+8] ;get the pointer to the string to print (arg1 is offset 8). This will be an absolute address,
 					;so we resolve it relative to DS which starts at 0
 	mov ecx, dword [ss:ebp+12]	;get the length value from the next argument
 	call PMPrintStringLen
 
+	pop ecx
 	pop esi
 	mov esp, ebp
 	pop ebp

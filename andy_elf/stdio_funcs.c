@@ -38,8 +38,8 @@ void kprintf(const char *fmt, ...)
     } else {
       int32_t value;
       int16_t svalue;
-      kputlen(&fmt[current_position], next_position-current_position);
-      
+      kputlen(&fmt[current_position], next_position-current_position+1);
+
       char format_specifier = fmt[next_position+1]; //the format should be the character after the %
       switch(format_specifier) {
         case 'd':
@@ -49,16 +49,16 @@ void kprintf(const char *fmt, ...)
           current_position = next_position + 2;
           ++arg_ctr;
           break;
-        case 'l':
+        case 'x':
           value = (int32_t)va_arg(ap, int32_t);
-          longToString(value, buf, 10);
+          longToString(value, buf, 16);
           kputs(buf);
           current_position = next_position + 2;
           ++arg_ctr;
           break;
-        case 'x':
+        case 'l':
           value = (int32_t)va_arg(ap, int32_t);
-          longToString(value, buf, 16);
+          longToString(value, buf, 10);
           kputs(buf);
           current_position = next_position + 2;
           ++arg_ctr;
