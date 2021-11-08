@@ -14,5 +14,5 @@ void test_c_entrypoint(){
 
 	kprintf("Hello again\r\n");
 
-	kprintf("Hello %x.", 0x42a);
+	kprintf("Hello %x with %d and %l.    ", 0x42a, 162, 8463524L);
 }

@@ -1,6 +1,9 @@
 [BITS 32]
 section .text
 
+;this function defines very basic handlers for standard intel exceptions,
+;which consist of printing a diagnostic message to the screen and then locking.
+
 %include "basic_console.inc"
 ;function exports
 global CreateIA32IDTEntry
@@ -26,6 +29,9 @@ global ISIMDFPExcept
 global IVirtExcept
 global ISecurityExcept
 global IKeyboard
+
+;function imports
+extern c_except_div0
 
 ;Create an IDT (Interrupt Descriptor Table) entry
 ;The entry is created at ds:esi. esi is incremented to point to the next entry
@@ -64,6 +70,7 @@ IReserved:
 
 ;Trap handlers
 IDivZero:
+	call c_except_div0	;helpfully, the CPU has already arranged a stack frame for us that is compatible with GCC
 	mov eax, DivZeroMsg
 	jmp FatalMsg
 
@@ -156,7 +163,7 @@ IKeyboard:	;keyboard interrupt handler
 	xor bx, bx
 	mov bl, '.'
 	call PMPrintChar
-	
+
 	;call PIC_Send_EOI
 	pop bx
 	popf
@@ -184,4 +191,3 @@ MachineCheckMsg db 'FATAL: Machine check failed', 0
 SIMFPExceptMsg db 'FATAL: SIMD floating-point exception', 0
 VirtExceptMsg db 'FATAL: Virtualization exception', 0
 SecExceptMsg db 'FATAL: Security exception', 0		;leaves error code
-

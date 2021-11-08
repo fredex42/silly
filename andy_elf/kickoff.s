@@ -166,6 +166,11 @@ pop es
 
 extern test_c_entrypoint
 call test_c_entrypoint
+
+mov eax, 1234567
+mov ecx, 0
+div ecx
+
 jmp $
 
 section .data
