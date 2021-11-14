@@ -27,8 +27,8 @@ mov es, ax
 mov ds, ax
 
 ; print "hello" message
-mov si, HelloString
-call PrintString
+;mov si, HelloString
+;call PrintString
 
 ; locate and load in ANDY.SYS. It's assumed that this is the first entry in the FAT.
 
@@ -188,23 +188,26 @@ next_entry:
 	cmp al, 0x0f
 	add si, 0x20
 	jz next_entry
-	
+
 	;si now points to the attribute byte of the first entry that is not LFN. Subtract to get to the start of the record and check it's not null.
 	sub si, 0x0b
 	mov al, byte [si]
 	test al, al	;sets Z flag if ax is zero
 	jz fat_load_err
 
-	add si, 0x1a	;file size is 4 bytes at offset 1c of the record. Assume it's <64k for the time being.
+	add si, 0x1a	;file size is 4 bytes at offset 1c of the record. Assume it's <64k for the time being. break 00007d48
 	mov ax, word [si+2]	;file size location
 	mov bx, 0x200
-	mul bx			;0x200 = 512, size of a sector in bytes
-	mov bx, ax		;MUL result always in AX, with high word in DX
+	xor dx,dx	;make sure dx is 0 as divide source is dx:ax
+	div bx			;0x200 = 512, size of a sector in bytes
+	push ax		;DIV result always in AX, with high word in DX. Save it for later
 	mov ax, word [si]	;file start cluster. Assume that cluster size is 1800
 	mov bx, 0x0c
 	mul bx		;0x12=16 sectors per cluster
 	add ax, 0x44		;data area starts at 0x8800
 	mov cx, ax
+	pop bx		;set bx to the number of sectors to load. We saved this earlier from ax.
+	add bx,1	;bx is the lower bound of integer division, so there is probably a partial sector afterwards. Load this in too.
 	call LoadDiskSectors
 	ret
 
@@ -235,7 +238,7 @@ db 0x0000	;base bits 16-23
 db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
 db 0x43		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
-;entry 2 (segment 0x10): kernel DS. Overlaps the kernel CS and occupies the whole first meg. 
+;entry 2 (segment 0x10): kernel DS. Overlaps the kernel CS and occupies the whole first meg.
 dw 0xFFFF	;limit bits 0-15
 dw 0x0000	;base bits 0-15
 db 0x00		;base bits 16-23.
