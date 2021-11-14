@@ -19,11 +19,12 @@ typedef unsigned int uint32_t;
 typedef signed long int __int64_t;
 typedef unsigned long int __uint64_t;
 typedef unsigned long int size_t;
-
+typedef uint64_t vaddr;
 #else
 __extension__ typedef signed long long int __int64_t;
 __extension__ typedef unsigned long long int __uint64_t;
 typedef uint32_t size_t;
+typedef uint32_t vaddr;
 #endif
 
 #endif

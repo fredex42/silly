@@ -25,7 +25,10 @@ stdio_funcs.o: stdio_funcs.c
 c_exceptions.o: c_exceptions.c
 	gcc -c ${CFLAGS} c_exceptions.c
 
-test.elf: kickoff.o exceptions.o basic_console.o test.o cfuncs.o stdio_funcs.o c_exceptions.o
-	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o test.o stdio_funcs.o c_exceptions.o \
+mmgr.o: mmgr.c
+	gcc -c ${CFLAGS} mmgr.c
+
+test.elf: kickoff.o exceptions.o basic_console.o test.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o
+	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o test.o stdio_funcs.o c_exceptions.o mmgr.o \
 		-Ttext 0x7E00 -Tdata 0xA000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
