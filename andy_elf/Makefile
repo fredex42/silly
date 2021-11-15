@@ -1,6 +1,6 @@
 all: test.elf
 
-CFLAGS=-fno-pie -m32 -Iinclude
+CFLAGS=-fno-pie -m32 -Iinclude -march=i486
 clean:
 	rm -f *.o test.elf
 

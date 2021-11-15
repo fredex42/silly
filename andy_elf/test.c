@@ -10,9 +10,9 @@ void test_c_entrypoint(){
 	longToString(number, &buf, 10);
 	kputs(buf);
 
-	kputlen("ABCDEFG",7);
+	//kputlen("ABCDEFG",7);
 
-	kprintf("Hello again\r\n");
+	//kprintf("Hello again\r\n");
 
-	kprintf("Hello %x with %d and %l.    ", 0x42a, 162, 8463524L);
+	//kprintf("Hello %x with %d and %l.    ", 0x42a, 162, 8463524L);
 }

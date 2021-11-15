@@ -70,6 +70,9 @@ longToString:
 	xor bh,bh
 
 	mov ecx, dword [ss:ebp+16]	;number base
+	test ecx,ecx
+	jz longToStringEnd					;don't try to divide by zero
+
 	div_loop:
 	xor edx, edx	;edx is the upper 32 bits of the numerator going in and the remained going out. Ensure it's 0 before we start
 	div ecx				;divide by the number base. Result is in EAX and remainder is in EDX. Remainder is our numeral
@@ -93,6 +96,7 @@ longToString:
 
   mov byte [edi], 0		;null-terminate
 
+	longToStringEnd:
 	pop esi
 	pop edi
 	pop ebx

@@ -29,8 +29,10 @@ void kprintf(const char *fmt, ...)
   size_t current_position=0;
   size_t next_position;
   int arg_ctr=0;
+  size_t safety_limit=1024;
 
   do {
+    if(current_position>=safety_limit) break;
     next_position = find_next_token(fmt, current_position);
     if(next_position==-1) { //we ran out of tokens
       kputs(&fmt[current_position]);

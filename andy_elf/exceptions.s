@@ -32,6 +32,8 @@ global IKeyboard
 
 ;function imports
 extern c_except_div0
+extern c_except_gpf
+extern c_except_invalidop
 
 ;Create an IDT (Interrupt Descriptor Table) entry
 ;The entry is created at ds:esi. esi is incremented to point to the next entry
@@ -95,6 +97,7 @@ IBoundRange:
 	jmp FatalMsg
 
 IOpcodeInval:
+  call c_except_invalidop
 	mov eax, InvalidOpcodeMsg
 	jmp FatalMsg
 
@@ -123,7 +126,7 @@ IStackSegFault: ;leaves error code
 	jmp FatalMsg
 
 IGPF:		;leaves error code
-	pop edx
+	call c_except_gpf
 	mov eax, GPFMsg
 	jmp FatalMsg
 

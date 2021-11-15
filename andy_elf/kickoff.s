@@ -164,6 +164,10 @@ lidt [IDTPtr]
 
 pop es
 
+;still needs debug
+extern setup_paging
+call setup_paging
+
 extern test_c_entrypoint
 call test_c_entrypoint
 
