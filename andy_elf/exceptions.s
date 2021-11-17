@@ -34,6 +34,7 @@ global IKeyboard
 extern c_except_div0
 extern c_except_gpf
 extern c_except_invalidop
+extern c_except_pagefault
 
 ;Create an IDT (Interrupt Descriptor Table) entry
 ;The entry is created at ds:esi. esi is incremented to point to the next entry
@@ -64,6 +65,8 @@ CreateIA32IDTEntry:
 FatalMsg:
 	mov esi, eax
 	call PMPrintString
+	nop
+	nop
 	jmp $				;don't return yet
 
 ;do-nothing handler for reserved interrupts
@@ -131,7 +134,9 @@ IGPF:		;leaves error code
 	jmp FatalMsg
 
 IPageFault:	;leaves error code
-	pop edx
+	mov eax, cr2
+	push eax
+	call c_except_pagefault
 	mov eax, PageFaultMsg
 	jmp FatalMsg
 

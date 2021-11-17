@@ -156,7 +156,6 @@ test dx, dx	;got to 0 yet?
 jnz _irq_reserv_loop
 
 
-
 ;Configure IDT pointer
 mov word [IDTPtr],  IDTSize	;IDT length
 mov dword [IDTPtr+2], IDTOffset	;IDT offset
@@ -168,13 +167,19 @@ pop es
 extern setup_paging
 call setup_paging
 
+;Configure IDT pointer
+mov word [IDTPtr],  IDTSize	;IDT length
+mov dword [IDTPtr+2], IDTOffset	;IDT offset
+lidt [IDTPtr]
+
 extern test_c_entrypoint
 call test_c_entrypoint
 
-mov eax, 1234567
-mov ecx, 0
-div ecx
 
+;With memory paging enabled, we should be unable to write into our own code.
+;Therefore this should trigger a page fault
+mov edi, 0x7E00
+mov [edi], word 0xF00F
 jmp $
 
 section .data
