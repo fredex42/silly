@@ -1,5 +1,5 @@
 #include <types.h>
-#include "mmgr.h"
+#include <sys/mmgr.h>
 
 static uint32_t __attribute__ ((aligned(4096))) kernel_paging_directory[1024];  //root paging directory
 static uint32_t __attribute__ ((aligned(4096))) first_pagedir_entry[1024];    //first entry in the page table, this covers the first 4Mb
@@ -71,5 +71,71 @@ void setup_paging() {
     "or $0x80010001, %%eax\n\t" //enable paging and write-protect in ring 0. See sys/x86_control_registers.h for bitfield details.
     "mov %%eax, %%cr0\n\t"
     : : "m" (kernel_paging_directory) : "%eax");
+}
 
+/**
+map a page of physical memory into the kernel's memory space.
+this is a basic low-level function and no checks are performed, careful!
+Arguments:
+- phys_addr - physical memory address to map from. Must be on a 4k boundary or it will be truncated.
+- pagedir_idx - index in the page directory to map it to (the 4Mb block)
+- pageent_idx - index in the relevant page index to map it to (the 4Kb block)
+- flags - MP_ flags to indicate requested protection
+Returns:
+- the virtual memory location of the first byte of the page that the physical memory was mapped to
+*/
+void * k_map_page(void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags)
+{
+  if(pagedir_idx!=0) return NULL; //not currently supported!
+  if(pageent_idx>1023) return NULL; //out of bounds
+  first_pagedir_entry[pageent_idx] = ((vaddr)phys_addr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
+
+  return (void *)(pageent_idx*4096);
+}
+
+/**
+finds the index of the next page not marked "present"
+*/
+int16_t k_find_next_unallocated_page(uint16_t start_from)
+{
+  for(register uint16_t i=start_from; i<1024; i++) {
+    if((first_pagedir_entry[i] & MP_PRESENT)==0) return i;
+  }
+  return -1;
+}
+
+/**
+unmap a page of physical memory by removing it from the page table and setting the
+page to "not present"
+*/
+void k_unmap_page(uint16_t pagedir_idx, uint16_t pageent_idx)
+{
+  if(pagedir_idx!=0) return;  //not currently supported!
+  if(pageent_idx>1023) return; //out of bounds
+
+  first_pagedir_entry[pageent_idx] = 0;
+}
+
+/**
+if the given physical address is already mapped, then returns the virtual address
+that it is mapped to.  If not then it finds an unallocated page, maps it and
+returns that.
+*/
+void* k_map_if_required(void *phys_addr, uint32_t flags)
+{
+  //save the offset within the page
+  uint32_t page_offset = (uint32_t) phys_addr & ~MP_ADDRESS_MASK;
+  //now search the page directory to try and find the physical address
+  uint32_t page_value = (uint32_t) phys_addr & MP_ADDRESS_MASK;
+
+  for(register int i=0;i<1023;i++) {
+    if(first_pagedir_entry[i] & MP_ADDRESS_MASK == page_value && first_pagedir_entry[i] & MP_PRESENT) {
+      vaddr v_addr = (vaddr)i*4096 + page_offset;
+      return (void *)v_addr;
+    }
+  }
+
+  int16_t page_to_allocate = k_find_next_unallocated_page(0);
+  void *mapped_page_addr = k_map_page(page_value, 0, page_to_allocate, flags);
+  return &mapped_page_addr[page_offset];
 }

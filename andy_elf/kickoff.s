@@ -172,6 +172,10 @@ mov word [IDTPtr],  IDTSize	;IDT length
 mov dword [IDTPtr+2], IDTOffset	;IDT offset
 lidt [IDTPtr]
 
+;need to reprogram the PIC before enabling interrupts or a double-fault happens
+;specifically, the timer needs somewhere to go
+;sti
+
 extern test_c_entrypoint
 call test_c_entrypoint
 
@@ -194,12 +198,12 @@ db 0x0000	;base bits 16-23
 db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
 db 0x47		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
-;entry 2 (segment 0x10): kernel DS
+;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
 dw 0xffff	;limit bits 0-15
 dw 0x0000	;base bits 0-15
 db 0x00		;base bits 16-23. Start from 0meg.
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0x4f		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
 ;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
 dw 0xFFFF	; limit bits 0-15.

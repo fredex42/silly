@@ -11,3 +11,7 @@
 
 #define MP_OSBITS_MASK 0xF00  //bitmask for the 3 os-dependent bits
 #define MP_ADDRESS_MASK 0xFFFFF000
+
+void * k_map_page(void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags);
+void k_unmap_page(uint16_t pagedir_idx, uint16_t pageent_idx);
+void* k_map_if_required(void *phys_addr, uint32_t flags);
