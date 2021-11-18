@@ -176,10 +176,7 @@ extern test_c_entrypoint
 call test_c_entrypoint
 
 
-;With memory paging enabled, we should be unable to write into our own code.
-;Therefore this should trigger a page fault
-mov edi, 0x7E00
-mov [edi], word 0xF00F
+hlt
 jmp $
 
 section .data
@@ -202,7 +199,7 @@ dw 0xffff	;limit bits 0-15
 dw 0x0000	;base bits 0-15
 db 0x00		;base bits 16-23. Start from 0meg.
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0x47		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x4f		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
 ;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
 dw 0xFFFF	; limit bits 0-15.

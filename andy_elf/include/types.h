@@ -27,4 +27,7 @@ typedef uint32_t size_t;
 typedef uint32_t vaddr;
 #endif
 
+typedef __uint64_t uint64_t;
+typedef __int64_t __int64_t;
+#define NULL (void *)0
 #endif
