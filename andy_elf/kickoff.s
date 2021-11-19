@@ -1,4 +1,4 @@
-[BITS 32]
+[BITS 16]
 section .text
 global _start
 
@@ -8,18 +8,50 @@ global _start
 
 ;assuming that DH is still the cursor row and DL is still the cursor position
 _start:
+;Try to enter protected mode - https://wiki.osdev.org/Protected_Mode
+;Disable interrupts
+cli
+;Disable NMI - https://wiki.osdev.org/Non_Maskable_Interrupt
+in AL, 0x70
+or al, 0x80
+out 0x70, al
+in al, 0x71
 
+in al, 0x92	;a20 not enabled, do it now
+or al, 2
+out 0x92, al
+a20_enabled:
+
+;Now set up Global Descriptor Table
+mov ax, cs
+mov ds, ax
+xor eax, eax
+mov eax, SimpleGDT		;get the location of the GDT, add the absolute location of our data segment
+mov si, SimpleGDTPtr
+sub si, 0x7E00
+mov [si+2], eax	;set the GDT location into the pointer structure
+lgdt [si]
+
+;Get the current cursor position
+mov ax, 0x0300
+mov bx, 0
+int 0x10
+;DH is row and DL is column
+
+;now we are ready!
+mov eax, cr0
+or al, 1
+mov cr0, eax	;hello protected mode
+jmp 0x08:_pm_start	;Here goes nothing! break 0x00007cb4
+
+[BITS 32]
+_pm_start:
 ;Now we need to re-set up the selectors as what we got from the bootloader was fairly minimal.
-;The new one here has the code and data segments the same but adds in framebuffer ram and TSS
 mov ax, 0x10
 mov ds, ax
 mov es, ax
 mov ss, ax
 mov esp, 0x7fff0	;set stack pointer to the end of conventional RAM
-xor ax, ax
-mov ax, SimpleGDT
-mov [SimpleGDTPtr+2], ax
-lgdt [SimpleGDTPtr]
 
 mov byte [CursorColPtr], dl
 mov byte [CursorRowPtr], dh
@@ -193,10 +225,10 @@ dd 0
 dd 0
 ;entry 1 (segment 0x08): kernel CS
 dw 0xffff	;limit bits 0-15
-dw 0x7E00	;base bits 0-15
+dw 0x0000	;base bits 0-15
 db 0x0000	;base bits 16-23
 db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
-db 0x47		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
 ;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
 dw 0xffff	;limit bits 0-15

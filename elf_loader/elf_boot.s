@@ -54,47 +54,11 @@ call LoadElfBase
 test dx, dx	;break 0x00007c68
 jnz load_err
 
-; again in theory, we have now loaded the ELF code section at 0x7E00. But we need to get into PM before we can call it.
-;Try to enter protected mode - https://wiki.osdev.org/Protected_Mode
-;Disable interrupts
-cli
-;Disable NMI - https://wiki.osdev.org/Non_Maskable_Interrupt
-in AL, 0x70
-or al, 0x80
-out 0x70, al
-in al, 0x71
-mov si, TestA20
-call PrintString
+call detect_memory
 
-in al, 0x92	;a20 not enabled, do it now
-or al, 2
-out 0x92, al
-a20_enabled:
-mov si, A20En
-call PrintString
-;Now set up Global Descriptor Table
-mov ax,cs
-mov ds,ax
-mov es,ax
-xor eax, eax
-mov eax, SimpleGDT		;get the location of the GDT, add the absolute location of our data segment
-mov [SimpleGDTPtr+2], ax	;set the GDT location into the pointer structure
-lgdt [SimpleGDTPtr]
+; again in theory, we have now loaded the ELF code section at 0x7E00. So off we go...
+jmp 0x7e0:0000
 
-mov si, GdtDone
-call PrintString
-
-;Get the current cursor position
-mov ax, 0x0300
-mov bx, 0
-int 0x10
-;DH is row and DL is column
-
-;now we are ready!
-mov eax, cr0
-or al, 1
-mov cr0, eax	;hello protected mode
-jmp 0x08:0x0000	;Here goes nothing! break 0x00007cb4
 
 
 fat_load_err:
@@ -124,7 +88,32 @@ call PrintCharacter
 jmp _hang
 
 _hang:
+hlt
 jmp $
+
+detect_memory:
+	mov ax, 0xF00
+	mov es, ax
+	mov di, 2
+	xor si, si	;use si as a counter
+	xor ebx,ebx
+	mem_det_loop:
+	mov edx, 0x534d4150
+	mov eax, 0xe820
+  mov ecx, 24
+
+	inc si
+	int 0x15
+	jc mem_det_done
+	test ebx, ebx
+	jz mem_det_done
+
+	add di, 24
+	jmp mem_det_loop
+
+	mem_det_done:
+	mov word [es:000], si
+	ret
 
 ; uses BIOS int10 to output the character in AL to the screen
 PrintCharacter:
@@ -225,30 +214,6 @@ LoadErr db 'BadELF', 0
 ;ErrCodes db '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'
 TimeoutErr db 'T!', 0
 NoExtErr db 'B!', 0
-
-;basic GDT configuration. Each entry is 8 bytes long
-SimpleGDT:
-;entry 0: null entry
-dd 0
-dd 0
-;entry 1 (segment 0x08): kernel CS. Make this the first half of 480k conventional RAM above the bootloader (0x3C0FF length
-dw 0xCfff	;limit bits 0-15
-dw 0x7E00	;base bits 0-15
-db 0x0000	;base bits 16-23
-db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
-db 0x43		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 2 (segment 0x10): kernel DS. Overlaps the kernel CS and occupies the whole first meg.
-dw 0xFFFF	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x00		;base bits 16-23.
-db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0x4F		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-
-SimpleGDTPtr:
-dw 0x18		;length in bytes
-dd 0x0		;offset, filled in by code
 
 ;Fill the rest of the bootsector with nulls
 TIMES 510 - ($ - $$) db 0
