@@ -56,11 +56,6 @@ void setup_paging() {
   */
   idpaging((uint32_t *)&first_pagedir_entry, 0x0, 0x100000);
 
-
-  kprintf("Page 0x00 value is %x\r\n", first_pagedir_entry[0x0]);
-  kprintf("Page 0x7F value is %x\r\n", first_pagedir_entry[0x7F]);
-  kprintf("Page 0x80 value is %x\r\n", first_pagedir_entry[0x80]);
-  kprintf("Page 0xBE value is %x\r\n", first_pagedir_entry[0xBE]);
   /*
   enter paged mode. See https://wiki.osdev.org/Paging
   NOTE! operands are the other way around to nasm! (i.e. mov src, dest)
@@ -138,4 +133,44 @@ void* k_map_if_required(void *phys_addr, uint32_t flags)
   int16_t page_to_allocate = k_find_next_unallocated_page(0);
   void *mapped_page_addr = k_map_page(page_value, 0, page_to_allocate, flags);
   return &mapped_page_addr[page_offset];
+}
+
+/**
+parses the memory map obtained from BIOS INT 0x15, EAX = 0xE820
+by the bootloader.
+Params:
+  - ptr - pointer to where the bootloader left the map. This is expected
+  to start with a 1-byte word containing the number of records and then a number
+  of 24-byte records conforming to struct MemoryMapEntry
+*/
+void parse_memory_map(struct BiosMemoryMap *ptr)
+{
+  uint8_t entry_count = ptr->entries;
+
+  kprintf("Detected memory map has %d entries:\r\n", entry_count);
+  for(register int i=0;i<entry_count;i++){
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+    uint32_t page_count = e->length / 4096;
+    kprintf("%x | %x | %d: ", (uint32_t)e->base_addr, (uint32_t)e->length, page_count);
+    switch (e->type) {
+      case MMAP_TYPE_USABLE:
+        kputs("Free Memory (1)\r\n");
+        break;
+      case MMAP_TYPE_RESERVED:
+        kputs("Reserved (2)\r\n");
+        break;
+      case MMAP_TYPE_ACPI_RECLAIMABLE:
+        kputs("Reclaimable (3)\r\n");
+        break;
+      case MMAP_TYPE_ACPI_NONVOLATILE:
+        kputs("Nonvolatile (4)\r\n");
+        break;
+      case MMAP_TYPE_BAD:
+        kputs("Faulty (5)\r\n");
+        break;
+      default:
+        kputs("Unknown\r\n");
+        break;
+    }
+  }
 }

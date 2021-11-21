@@ -65,6 +65,8 @@ void kprintf(const char *fmt, ...)
           current_position = next_position + 2;
           ++arg_ctr;
           break;
+        case 's':
+          kputs((const char *)va_arg(ap, char *));
         default:
           current_position = next_position + 2;
           ++arg_ctr;

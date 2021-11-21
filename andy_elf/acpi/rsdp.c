@@ -25,6 +25,7 @@ int8_t validate_rsdp_checksum(const struct RSDPDescriptor* rsdp)
 
 void acpi_setup_shortcuts(const struct RSDT *rsdt)
 {
+  uint8_t valid;
   int entries = (rsdt->h.Length - sizeof(struct ACPISDTHeader)) / 4;
   kprintf("RSDT has %d entries with total length of %d bytes.\r\n", entries, rsdt->h.Length);
   ShortcutTableLength = (uint8_t) entries;
@@ -36,15 +37,21 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt)
 
   acpi_shortcuts[0].ptr = rsdt;
 
-  for(int i=1; i< entries+1; i++) {
+  for(register int i=0; i<entries; i++) {
     struct ACPISDTHeader *h = (struct ACPISDTHeader *) k_map_if_required(rsdt->PointerToOtherSDT[i], 0);
-    acpi_shortcuts[i].sig[0] = h->Signature[0];
-    acpi_shortcuts[i].sig[1] = h->Signature[1];
-    acpi_shortcuts[i].sig[2] = h->Signature[2];
-    acpi_shortcuts[i].sig[3] = h->Signature[3];
-
-    acpi_shortcuts[i].ptr = h;
+    valid = validate_sdt_header(h);
+    kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, h->Signature, h->OEMID, h->Length, (uint32_t)valid);
+    if(i>10) break;
   }
+  // for(int i=1; i< entries+1; i++) {
+  //   struct ACPISDTHeader *h = (struct ACPISDTHeader *) k_map_if_required(rsdt->PointerToOtherSDT[i], 0);
+  //   acpi_shortcuts[i].sig[0] = h->Signature[0];
+  //   acpi_shortcuts[i].sig[1] = h->Signature[1];
+  //   acpi_shortcuts[i].sig[2] = h->Signature[2];
+  //   acpi_shortcuts[i].sig[3] = h->Signature[3];
+  //
+  //   acpi_shortcuts[i].ptr = h;
+  // }
 }
 
 void load_acpi_data() {
@@ -61,13 +68,13 @@ void load_acpi_data() {
       return;
     }
 
-    //this is probably outside our current mapped area (on bochs it is up around the 3.5MByte mark)
+    //this is probably outside our current mapped area (on bochs it is up around the end of provisioned ram)
     //so map it into somewhere we can access.  We want read-only for kernel so don't set MP_READWRITE or MP_USER.
     //choosing page 256 (=1Mbyte) because I know it has not yet been mapped.
     const struct RSDT* rsdt = (const struct RSDT *)k_map_page(rsdp->RsdtAddress, 0, 256, MP_PRESENT);
     kprintf("DEBUG mapped location of 0x%x is 0x%x\r\n", rsdp->RsdtAddress, rsdt);
 
     acpi_setup_shortcuts(rsdt);
-    kprintf("ACPI shortcut table at 0x%x has %d entries\r\n",acpi_shortcuts, ShortcutTableLength);
+    //kprintf("ACPI shortcut table at 0x%x has %d entries\r\n",acpi_shortcuts, ShortcutTableLength);
   }
 }

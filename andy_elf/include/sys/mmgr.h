@@ -1,3 +1,5 @@
+#include <types.h>
+
 #define MP_PRESENT    1 << 0  //if this is 0 then accessing the page raises a page fault for swap-in
 #define MP_READWRITE  1 << 1  //if this is 0 then page is read-only, if it's 1 then read-write
 #define MP_USER       1 << 2  //if this is 0 then supervisor access only, if it's 1 then any ring
@@ -15,3 +17,25 @@
 void * k_map_page(void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags);
 void k_unmap_page(uint16_t pagedir_idx, uint16_t pageent_idx);
 void* k_map_if_required(void *phys_addr, uint32_t flags);
+
+/**
+data structure for a memory region obtained from INT 0x15, EAX = 0xE820
+See https://wiki.osdev.org/Detecting_Memory_(x86)#Getting_an_E820_Memory_Map
+*/
+struct MemoryMapEntry {
+  uint64_t base_addr;
+  uint64_t length;      //if this is 0 then ignore
+  uint32_t type;        //see type defines below
+  uint32_t acpi_extended_attributes;  //this is probably blank.
+};
+
+#define MMAP_TYPE_USABLE            1
+#define MMAP_TYPE_RESERVED          2
+#define MMAP_TYPE_ACPI_RECLAIMABLE  3
+#define MMAP_TYPE_ACPI_NONVOLATILE  4
+#define MMAP_TYPE_BAD               5
+
+struct BiosMemoryMap {
+  uint8_t entries;
+  //this is followed by `entries` x MemoryMapEntry structures
+};

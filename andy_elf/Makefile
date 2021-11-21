@@ -1,5 +1,5 @@
 .PHONY: acpi
-	
+
 all: test.elf
 
 CFLAGS=-fno-pie -m32 -Iinclude -march=i486
@@ -35,6 +35,6 @@ acpi:
 	make -C acpi/
 
 test.elf: kickoff.o exceptions.o basic_console.o test.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o acpi
-	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o test.o stdio_funcs.o c_exceptions.o mmgr.o acpi/rsdp.o acpi/search_mem.o \
+	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o test.o stdio_funcs.o c_exceptions.o mmgr.o acpi/rsdp.o acpi/search_mem.o acpi/sdt_header.o \
 		-Ttext 0x7E00 -Tdata 0xA000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
