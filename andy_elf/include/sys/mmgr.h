@@ -40,3 +40,10 @@ struct BiosMemoryMap {
   uint8_t entries;
   //this is followed by `entries` x MemoryMapEntry structures
 };
+
+/** our own physical memory map, unconstrained by hardware requirements
+*/
+struct PhysMapEntry {
+  int present:1;
+  int in_use:1;
+} __attribute__((packed));
