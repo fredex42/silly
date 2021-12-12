@@ -205,9 +205,11 @@ mov dword [IDTPtr+2], IDTOffset	;IDT offset
 lidt [IDTPtr]
 
 extern parse_memory_map
+extern allocate_physical_map
 mov eax, 0xf000  ;location of the memory map passed by the bootloader
 push eax
 call parse_memory_map
+call allocate_physical_map
 add esp, 4
 
 ;need to reprogram the PIC before enabling interrupts or a double-fault happens

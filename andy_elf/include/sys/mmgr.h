@@ -17,6 +17,7 @@
 void * k_map_page(void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags);
 void k_unmap_page(uint16_t pagedir_idx, uint16_t pageent_idx);
 void* k_map_if_required(void *phys_addr, uint32_t flags);
+void setup_paging();
 
 /**
 data structure for a memory region obtained from INT 0x15, EAX = 0xE820

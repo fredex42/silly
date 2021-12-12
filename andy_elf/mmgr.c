@@ -1,8 +1,18 @@
 #include <types.h>
 #include <sys/mmgr.h>
+#include <stdio.h>
+#include "cfuncs.h"
+#include "panic.h"
 
 static uint32_t __attribute__ ((aligned(4096))) kernel_paging_directory[1024];  //root paging directory
-static uint32_t __attribute__ ((aligned(4096))) first_pagedir_entry[1024];    //first entry in the page table, this covers the first 4Mb
+static uint32_t __attribute__ ((aligned(4096))) first_pagedir_entry[1024];      //first entry in the page table, this covers the first 4Mb
+
+static uint32_t __attribute__ ((aligned(4096))) physical_page_directory[1024];  //"inverse" memory map describing which pages are in use
+
+/** gets the page directory index for the given address (either virtual or physical) */
+#define ADDR_TO_PAGEDIR_IDX(addr) (size_t)vaddr / 0x400000;
+/** gets the page index within the page directory for the given address */
+#define ADDR_TO_PAGEDIR_OFFSET(addr) (vaddr - ((size_t)vaddr % 0x400000) ) / 0x1000
 
 void idpaging(uint32_t *first_pte, vaddr from, int size);
 
@@ -69,6 +79,56 @@ void setup_paging() {
 }
 
 /**
+Searches the physical memory map to find the requested number of free pages.
+Found pages are marked as "allocated" before returning.
+Returns (physical) memory pointers to each in the array pointed to by the "blocks" argument.
+This must be large enough to accomodate `page_count` pointers.
+Return value is the number of pages found. If this is < page_count it indicates an
+out-of-memory condition.
+*/
+uint32_t find_free_physical_pages(uint32_t page_count, void **blocks)
+{
+  register int i,j;
+  uint32_t current_entry;
+  uint32_t * current_page;
+
+  uint32_t found_pages = 0;
+
+  for(i=0;i<1024;i++) {
+    current_entry = physical_page_directory[i];
+    current_page = (uint32_t *)(current_entry & MP_ADDRESS_MASK);
+
+    if(!current_page & MP_PRESENT) continue;  //if the page is not present then don't enumerate
+
+    for(j=0;j<1024;j++) {
+      if(physical_page_directory[i] & MP_DIRTY) continue; //if there are no free pages in this directory entry then go straight to the next one
+      if(! ((uint32_t)current_page & MP_DIRTY) ) {
+        blocks[found_pages] = (void *)(i*0x400000 + j*4096);
+        ++found_pages;
+        if(found_pages==page_count) return found_pages;
+      }
+    }
+  }
+  return found_pages; //we ran out of memory. Return the number of pages that we managed to get.
+}
+
+/**
+Marks the provided list of pages as "free".
+First argument is the number of pages in the list to free.
+Second argument is a pointer to a list of blocks to free. This must have the same
+number of entries as page_count.
+*/
+uint32_t unmark_physical_pages(uint32_t page_count, void **blocks)
+{
+  register uint32_t i;
+  vaddr phys_addr;
+
+  for(i=0;i<page_count;i++) {
+    phys_addr = (vaddr)blocks[i];
+
+  }
+}
+/**
 map a page of physical memory into the kernel's memory space.
 this is a basic low-level function and no checks are performed, careful!
 Arguments:
@@ -131,8 +191,8 @@ void* k_map_if_required(void *phys_addr, uint32_t flags)
   }
 
   int16_t page_to_allocate = k_find_next_unallocated_page(0);
-  void *mapped_page_addr = k_map_page(page_value, 0, page_to_allocate, flags);
-  return &mapped_page_addr[page_offset];
+  void *mapped_page_addr = k_map_page((void *)page_value, 0, page_to_allocate, flags);
+  return mapped_page_addr +page_offset;
 }
 
 /**
@@ -151,7 +211,7 @@ void parse_memory_map(struct BiosMemoryMap *ptr)
   for(register int i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
     uint32_t page_count = e->length / 4096;
-    kprintf("%x | %x | %d: ", (uint32_t)e->base_addr, (uint32_t)e->length, page_count);
+    kprintf("%x | %x | %d: ", (size_t)e->base_addr, (size_t)e->length, page_count);
     switch (e->type) {
       case MMAP_TYPE_USABLE:
         kputs("Free Memory (1)\r\n");
@@ -172,5 +232,94 @@ void parse_memory_map(struct BiosMemoryMap *ptr)
         kputs("Unknown\r\n");
         break;
     }
+  }
+}
+
+struct BiosMemoryMap * allocate_physical_map(struct BiosMemoryMap *ptr)
+{
+  register int i;
+  //find the highest value in the physical memory map. We must allocate up to here.
+  uint8_t entry_count = ptr->entries;
+
+  size_t highest_value = 0;
+
+  for(register int i=0;i<entry_count;i++){
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+    size_t entry_limit = (size_t) e->base_addr + (size_t)e->length;
+    if(entry_limit>highest_value) highest_value = entry_limit;
+  }
+
+  kprintf("Detected %d Mb of physical RAM\r\n", highest_value/1048576);
+
+  //each page directory covers 1024 4kb pages, i.e. 4Mb.
+  size_t directories_to_allocate = highest_value / 4194304;
+  kprintf("Allocating %d pages to physical ram map\r\n", directories_to_allocate);
+  /**
+  initialise the physical memory map.
+  */
+  for(i=0;i<1024;i++) physical_page_directory[i] = 0;
+
+  //since we don't have a physical map yet, we are going to have to rely on some
+  //intuition and prerequisites here.....
+  //1. We assume that the whole first Mb is identity-mapped
+  //2. We assume that the kernel itself (code and static data) fits within 16 pages (64k)
+  //3. We assume a standard memory layout, i.e. the kernel is loaded from 0x7e00 (page 0x07)
+  //and that there is a memory hole at 0x80000 (page 0x80=128)
+  //Therefore, we can start out pseudo-allocation from page 24 (=0x18) but can't go beyond 0x80 - limit of 0x5c = 92 pages
+  if(directories_to_allocate>92) k_panic("Exceeded physical ram directory allocation\r\n"); //this won't return
+
+  size_t current_alloc_ptr = 0x18000;  //start of page 0x18. We assume that this is identity-mamped
+  for(register int i=0;i<directories_to_allocate;i++){
+    physical_page_directory[i] = (current_alloc_ptr & MP_ADDRESS_MASK) | MP_PRESENT | MP_READWRITE | MP_GLOBAL;
+    current_alloc_ptr += 0x1000;
+  }
+
+  /**
+  initial populate of the physical memory map. We use the "dirty" flag in the physical memory
+  map to indicate "in use".
+  Page  0         (0x0     -> 0x1000) contains our code and data.
+  Pages 0x7->0xa  (0x7000  -> 0xa000) are reserved
+  Pages 0x80->0xff(0x80000 -> 0x100000) are reserved
+  */
+  uint32_t *first_physdir_entry = (uint32_t *)(physical_page_directory[0] & MP_ADDRESS_MASK);
+
+  for(i=7;i<0x0a;i++) first_physdir_entry[i] = MP_PRESENT | MP_READWRITE | MP_DIRTY;
+  for(i=0x80;i<0xFF;i++) first_physdir_entry[i] = MP_PRESENT | MP_READWRITE | MP_DIRTY;
+  for(i=0x18;i<directories_to_allocate+0x18;i++) first_physdir_entry[i] = MP_PRESENT | MP_READWRITE | MP_DIRTY;
+}
+
+/**
+sets the "readonly" and "dirty" flag on the protected memory regions
+*/
+void apply_memory_map_protections(struct BiosMemoryMap *ptr)
+{
+  uint8_t entry_count = ptr->entries;
+  kputs("Applying memory protections\r\n");
+
+  for(register int i=0;i<entry_count;i++){
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+    uint32_t page_count = e->length / 4096;
+    switch(e->type) {
+      case MMAP_TYPE_RESERVED:
+      case MMAP_TYPE_ACPI_RECLAIMABLE:
+      case MMAP_TYPE_ACPI_NONVOLATILE:
+      case MMAP_TYPE_BAD:
+        _reserve_memory_block(e->base_addr, page_count);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+/**
+internal function called from apply_memory_map_protections to protect a given
+memory block
+*/
+void _reserve_memory_block(void *base_addr, uint32_t page_count) {
+  size_t base_phys_page = ADDR_TO_PAGEDIR_IDX(base_addr);
+
+  for(register size_t i=0;i<page_count;i++) {
+
   }
 }
