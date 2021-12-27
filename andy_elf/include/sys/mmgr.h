@@ -1,4 +1,9 @@
+#ifdef __BUILDING_TESTS
+#include <stdint.h>
+#include <sys/types.h>
+#else
 #include <types.h>
+#endif
 
 #define MP_PRESENT    1 << 0  //if this is 0 then accessing the page raises a page fault for swap-in
 #define MP_READWRITE  1 << 1  //if this is 0 then page is read-only, if it's 1 then read-write
@@ -14,9 +19,12 @@
 #define MP_OSBITS_MASK 0xF00  //bitmask for the 3 os-dependent bits
 #define MP_ADDRESS_MASK 0xFFFFF000
 
-void * k_map_page(void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags);
+#define PAGE_SIZE     0x1000  //4k pages
+
+void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags);
 void k_unmap_page(uint16_t pagedir_idx, uint16_t pageent_idx);
-void* k_map_if_required(void *phys_addr, uint32_t flags);
+void* k_map_if_required(uint32_t *base_directory, void *phys_addr, uint32_t flags);
+uint8_t find_next_unallocated_page(uint32_t *base_directory, int16_t *dir, int16_t *off);
 void setup_paging();
 
 /**

@@ -2,9 +2,11 @@
 
 all: test.elf
 
+tests: test_mmgr
+
 CFLAGS=-fno-pie -m32 -Iinclude -march=i486
 clean:
-	rm -f *.o test.elf
+	rm -f *.o test.elf test_mmgr
 	make -C acpi clean
 
 kickoff.o: kickoff.s
@@ -19,8 +21,6 @@ exceptions.o: exceptions.s
 cfuncs.o: cfuncs.s
 	nasm -f elf32 cfuncs.s
 
-test.o: test.c
-	gcc -c ${CFLAGS} test.c
 
 stdio_funcs.o: stdio_funcs.c
 	gcc -c ${CFLAGS} stdio_funcs.c
@@ -37,7 +37,10 @@ panic.o: panic.c
 acpi:
 	make -C acpi/
 
-test.elf: kickoff.o exceptions.o basic_console.o test.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o acpi
-	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o test.o stdio_funcs.o c_exceptions.o mmgr.o panic.o acpi/rsdp.o acpi/search_mem.o acpi/sdt_header.o \
+test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o acpi
+	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o acpi/rsdp.o acpi/search_mem.o acpi/sdt_header.o \
 		-Ttext 0x7E00 -Tdata 0xA000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
+
+test_mmgr: test_mmgr.c test_stubs.c mmgr.c include/sys/mmgr.h
+	gcc -o test_mmgr -g test_mmgr.c test_stubs.c mmgr.c -D__BUILDING_TESTS -m32

@@ -31,3 +31,5 @@ typedef __uint64_t uint64_t;
 typedef __int64_t __int64_t;
 #define NULL (void *)0
 #endif
+
+typedef size_t pid_t; //temporary

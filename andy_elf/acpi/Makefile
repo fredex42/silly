@@ -9,7 +9,7 @@ clean:
 search_mem.o: search_mem.asm
 	nasm -f elf32 search_mem.asm
 
-rsdp.o: rsdp.c
+rsdp.o: rsdp.c ../include/sys/mmgr.h
 	gcc -c ${CFLAGS} rsdp.c
 
 sdt_header.o: sdt_header.c

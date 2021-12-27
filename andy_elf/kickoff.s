@@ -195,31 +195,24 @@ lidt [IDTPtr]
 
 pop es
 
-;still needs debug
-extern setup_paging
-call setup_paging
-
 ;Configure IDT pointer
 mov word [IDTPtr],  IDTSize	;IDT length
 mov dword [IDTPtr+2], IDTOffset	;IDT offset
 lidt [IDTPtr]
 
-extern parse_memory_map
-extern allocate_physical_map
-extern apply_memory_map_protections
+extern initialise_mmgr
+
 mov eax, 0xf000  ;location of the memory map passed by the bootloader
 push eax
-call parse_memory_map
-call allocate_physical_map
-call apply_memory_map_protections
+call initialise_mmgr  ;initialise memory management
 add esp, 4
 
 ;need to reprogram the PIC before enabling interrupts or a double-fault happens
 ;specifically, the timer needs somewhere to go
 ;sti
 
-extern test_c_entrypoint
-call test_c_entrypoint
+extern load_acpi_data
+call load_acpi_data
 
 
 hlt

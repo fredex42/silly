@@ -38,7 +38,8 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt)
   acpi_shortcuts[0].ptr = rsdt;
 
   for(register int i=0; i<entries; i++) {
-    struct ACPISDTHeader *h = (struct ACPISDTHeader *) k_map_if_required(rsdt->PointerToOtherSDT[i], 0);
+    //passing NULL as the base_directory uses the static kernel one
+    struct ACPISDTHeader *h = (struct ACPISDTHeader *) k_map_if_required(NULL, rsdt->PointerToOtherSDT[i], 0);
     valid = validate_sdt_header(h);
     kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, h->Signature, h->OEMID, h->Length, (uint32_t)valid);
     if(i>10) break;
