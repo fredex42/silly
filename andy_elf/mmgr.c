@@ -126,11 +126,15 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks)
 {
   uint32_t current_entry;
   uint32_t * current_page;
-
+  uint8_t temp = 0;
   uint32_t found_pages = 0;
 
-  for(register size_t i=0;i<physical_page_count;i++) {
+  for(register size_t i=0x100;i<physical_page_count;i++) {
     if(physical_memory_map[i].in_use==0) {
+      if(temp<5) {
+        kprintf("  DEBUG Physical page 0x%x is available, taking it\r\n", i);
+        temp++;
+      }
       physical_memory_map[i].in_use=1;
       blocks[found_pages] = (void *)(i*PAGE_SIZE);
       found_pages+=1;
@@ -233,9 +237,9 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //discontinues phys_addr pointers onto them with the given flags.
   //then, return the vmem ptr to the first one.
   for(i=0;i<1024;i++) {
-    kprintf("    DEBUG page %d entry is 0x%x\r\n", i, (uint32_t) root_page_dir[i]);
+    //kprintf("    DEBUG page %d entry is 0x%x\r\n", i, (uint32_t) root_page_dir[i]);
     if(!((vaddr)root_page_dir[i] & MP_PRESENT)) {
-      kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
+      //kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
       vm_add_dir(root_page_dir, i, flags);  //if we don't have a virtual memory directory then add one
     }
     pagedir_entry = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
@@ -243,12 +247,14 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
 
     for(j=0;j<1024;j++) {
       //FIXME: this only works if pagedir_entry is identity-mapped. We should map the page to read it.
-      if(!(pagedir_entry[j] & MP_PRESENT)) {
+      if( ! (pagedir_entry[j] & MP_PRESENT) ) {
+        // kprintf("    DEBUG entry %d of page %d value is 0x%x\r\n", j, i, pagedir_entry[j]);
         if(starting_page_dir==0xFFFF) starting_page_dir = i;
         if(starting_page_off==0xFFFF) starting_page_off = j;
         continuous_page_count++;
         if(continuous_page_count>=pages) break;
       } else {
+        //kprintf("    DEBUG entry %d of page %d value is 0x%x\r\n", j, i, pagedir_entry[j]);
         starting_page_dir==0xFFFF;
         starting_page_off==0xFFFF;
         continuous_page_count=0;
@@ -256,7 +262,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     }
     if(continuous_page_count>=pages) break;
   }
-  kprintf("    DEBUG found %d continous pages from %d,%d\r\n", continuous_page_count, i, j);
+  kprintf("    DEBUG found %d continous pages from %d,%d to %d,%d\r\n", continuous_page_count, starting_page_dir, starting_page_off, i, j);
   if(continuous_page_count<pages) return NULL;
 
   //now map the pages
@@ -318,11 +324,16 @@ void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *vmem_ptr, size_
   if(root_page_dir==NULL) root_page_dir = (uint32_t *)kernel_paging_directory;
 
   _resolve_vptr(vmem_ptr, &dir, &off);
-  kprintf("DEBUG vm_deallocate_physical_pages for 0x%x deallocating %d pages from dir %d off %d\r\n", vmem_ptr, page_count, dir, off);
+  kprintf("DEBUG vm_deallocate_physical_pages for 0x%x deallocating %d pages\r\n",vmem_ptr, page_count);
+  kprintf("DEBUG starting from dir %d off %d\r\n", dir, off);
   pagedir_ent = root_page_dir[dir];
   for(register size_t i=0; i<page_count; i++) {
     phys_ptr = (vaddr)pagedir_ent[off] & MP_ADDRESS_MASK;
-    kprintf("DEBUG vm_deallocate_physical_pages physical pointer for %d,%d is 0x%x\r\n", dir, off, phys_ptr);
+    if(phys_ptr==0) {
+      kprintf("ERROR deallocating ptr 0x%x from root dir 0x%x page %d phys_ptr is null\r\n", vmem_ptr, root_page_dir, i);
+      continue;
+    }
+    //kprintf("DEBUG vm_deallocate_physical_pages physical pointer for %d,%d is 0x%x\r\n", dir, off, phys_ptr);
     k_unmap_page(dir,off);
     phys_page_idx = phys_ptr / PAGE_SIZE;
     physical_memory_map[phys_page_idx].in_use = 0;
@@ -571,6 +582,11 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
 
   kprintf("DEBUG %d map entries per 4k page\r\n", entries_per_page);
   kprintf("Allocating %d pages to physical ram map\r\n", pages_to_allocate);
+  if(pages_to_allocate>92) {
+    kprintf("Needed to allocate %d pages for physical memory map but have a limit of 92\r\n");
+    k_panic("Unable to allocate physical memory map\r\n");
+  }
+
   physical_memory_map = (struct PhysMapEntry *)0x18000;
   for(i=0;i<physical_page_count;i++) {
     physical_memory_map[i].present=1;
