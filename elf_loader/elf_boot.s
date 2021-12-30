@@ -54,7 +54,6 @@ call LoadElfBase
 test dx, dx	;break 0x00007c68
 jnz load_err
 
-call detect_memory
 
 ; again in theory, we have now loaded the ELF code section at 0x7E00. So off we go...
 jmp 0x7e0:0000
@@ -91,29 +90,6 @@ _hang:
 hlt
 jmp $
 
-detect_memory:
-	mov ax, 0xF00
-	mov es, ax
-	mov di, 2
-	xor si, si	;use si as a counter
-	xor ebx,ebx
-	mem_det_loop:
-	mov edx, 0x534d4150
-	mov eax, 0xe820
-  mov ecx, 24
-
-	inc si
-	int 0x15
-	jc mem_det_done
-	test ebx, ebx
-	jz mem_det_done
-
-	add di, 24
-	jmp mem_det_loop
-
-	mem_det_done:
-	mov word [es:000], si
-	ret
 
 ; uses BIOS int10 to output the character in AL to the screen
 PrintCharacter:

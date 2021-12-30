@@ -40,7 +40,7 @@ LoadElfBase:
 	pop si
 
 
-	;now the code is loaded, load in the data from 0xa000
+	;now the code is loaded, load in the data from 0xc000
 	;we have to assume that the .data section is immediately after the .text section
 	mov di, word [ds:si+0x20]	;start of the section header table. break 00007d94
 	add di, si			;add it to the base offset
@@ -52,7 +52,7 @@ LoadElfBase:
 	add dx, si
 	mov si, dx
 
-	mov ax, 0xA00			;COPY DEST move to conventional memoty at 0xA000
+	mov ax, 0xC00			;COPY DEST move to conventional memory at 0xc000
 	mov es, ax
 	mov di, 0
 	rep movsw			;break 00007db3
