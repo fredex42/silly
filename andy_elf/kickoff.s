@@ -8,9 +8,13 @@ global _start
 
 ;assuming that DH is still the cursor row and DL is still the cursor position
 _start:
+;before we go to PM, retrieve the bios memory map
+call detect_memory
+
 ;Try to enter protected mode - https://wiki.osdev.org/Protected_Mode
 ;Disable interrupts
 cli
+
 ;Disable NMI - https://wiki.osdev.org/Non_Maskable_Interrupt
 in AL, 0x70
 or al, 0x80
@@ -43,6 +47,33 @@ mov eax, cr0
 or al, 1
 mov cr0, eax	;hello protected mode
 jmp 0x08:_pm_start	;Here goes nothing! break 0x00007cb4
+
+;retrieve the BIOS memory map. This must be compiled and run in 16-bit mode, easiest way
+;is to call it before the switch to PM.
+detect_memory:
+	mov ax, TemporaryMemInfoBufferSeg  ;target location is 0x250:000
+	mov es, ax
+	mov di, 2
+	xor si, si	;use si as a counter
+	xor ebx,ebx
+	mem_det_loop:
+	mov edx, 0x534d4150
+	mov eax, 0xe820
+  mov ecx, 24
+
+	inc si
+	int 0x15
+	jc mem_det_done
+	test ebx, ebx
+	jz mem_det_done
+
+	add di, 24
+	jmp mem_det_loop
+
+	mem_det_done:
+	mov word [es:000], si
+	ret
+
 
 [BITS 32]
 _pm_start:
@@ -195,14 +226,9 @@ lidt [IDTPtr]
 
 pop es
 
-;Configure IDT pointer
-mov word [IDTPtr],  IDTSize	;IDT length
-mov dword [IDTPtr+2], IDTOffset	;IDT offset
-lidt [IDTPtr]
-
 extern initialise_mmgr
 
-mov eax, 0xf000  ;location of the memory map passed by the bootloader
+mov eax, TemporaryMemInfoLocation  ;location of the memory map passed by the bootloader
 push eax
 call initialise_mmgr  ;initialise memory management
 add esp, 4
@@ -214,6 +240,8 @@ add esp, 4
 extern load_acpi_data
 call load_acpi_data
 
+extern run_inkernel_memory_tests
+call run_inkernel_memory_tests
 
 hlt
 jmp $

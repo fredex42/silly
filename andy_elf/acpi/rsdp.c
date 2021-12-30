@@ -72,7 +72,7 @@ void load_acpi_data() {
     //this is probably outside our current mapped area (on bochs it is up around the end of provisioned ram)
     //so map it into somewhere we can access.  We want read-only for kernel so don't set MP_READWRITE or MP_USER.
     //choosing page 256 (=1Mbyte) because I know it has not yet been mapped.
-    const struct RSDT* rsdt = (const struct RSDT *)k_map_page(rsdp->RsdtAddress, 0, 256, MP_PRESENT);
+    const struct RSDT* rsdt = (const struct RSDT *)k_map_page(NULL, rsdp->RsdtAddress, 0, 256, MP_PRESENT);
     kprintf("DEBUG mapped location of 0x%x is 0x%x\r\n", rsdp->RsdtAddress, rsdt);
 
     acpi_setup_shortcuts(rsdt);

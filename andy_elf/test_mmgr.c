@@ -2,6 +2,12 @@
 #include "include/sys/mmgr.h"
 #include <string.h>
 
+#if __WORDSIZE == 64
+typedef uint64_t vaddr;
+#else
+typedef uint32_t vaddr;
+#endif
+
 /**
 Tests for the mmgr module. Note that this MUST be compiled with -m32 in order for the
 pointer arithmetic to work.
@@ -49,6 +55,33 @@ int main(int argc, char *argv[]) {
 
   puts("k_map_if_required should return the existing mapping if the given physical block is present");
   if(test_k_map_if_required_present()==0) {
+    puts("FAILED\n");
+    ++failures;
+  } else {
+    puts("SUCCESS\n");
+    ++successes;
+  }
+
+  puts("vm_map_next_unallocated_pages should map the first available continuous block to the given list of pointers");
+  if(test_vm_map_next_unallocated_pages()==0) {
+    puts("FAILED\n");
+    ++failures;
+  } else {
+    puts("SUCCESS\n");
+    ++successes;
+  }
+
+  puts("vm_map_next_unallocated_pages should return null of not enough pages could be found to the given list of pointers");
+  if(test_vm_map_next_unallocated_pages_nomem()==0) {
+    puts("FAILED\n");
+    ++failures;
+  } else {
+    puts("SUCCESS\n");
+    ++successes;
+  }
+
+  puts("vm_map_next_unallocated_pages should return null if pages=0");
+  if(test_vm_map_next_unallocated_pages_inval()==0) {
     puts("FAILED\n");
     ++failures;
   } else {
@@ -248,6 +281,150 @@ int test_k_map_if_required_present() {
 
   if(first_entry[123] != (phys_ptr|MP_PRESENT|MP_READWRITE)) {
     printf("k_map_if_required corrupted the memory map, got %x expected %x\n", first_entry[123], phys_ptr|MP_PRESENT|MP_READWRITE);
+    return 0;
+  }
+
+  return 1;
+}
+
+/*
+vm_map_next_unallocated_pages should map the first available continuous block
+to the given list of pointers
+*/
+int test_vm_map_next_unallocated_pages() {
+  uint32_t __attribute__ ((aligned(4096))) fake_directory[1024];
+  uint32_t __attribute__ ((aligned(4096))) pages[1024][1024];
+
+  vaddr ptr_list[255];
+  for(register int i=0; i<255; i++) {
+    ptr_list[i] = (vaddr) (0xFF000000 | (i*2*0x1000));  //set up a discontinuous set of physical pointers
+  }
+
+  memset(fake_directory, 0, 4096);
+
+  for(register int i=0; i<1024; i++) {
+    fake_directory[i] = ((vaddr)&pages[i] & MP_ADDRESS_MASK) | MP_PRESENT | MP_READWRITE;
+  }
+
+  //fill most of the directory
+  for(register int i=0; i<1024; i++) {
+    for(register int j=0; j<1024; j++) {
+      if(i!=j) pages[i][j]= MP_PRESENT | MP_READWRITE;  //put some empty blocks in if i=j
+    }
+  }
+
+  const int target_page=482;
+  const int target_start_entry=86;
+
+  for(register int i=0; i<258; i++) {
+    pages[target_page][i+target_start_entry] = 0;     //empty a block of 255 pages from entry 86 of dir 482
+  }
+
+  vaddr returned_ptr = (vaddr) vm_map_next_unallocated_pages(&fake_directory, MP_READWRITE, (void **)&ptr_list, 255);
+  vaddr expected_ptr = (target_page * 0x400000) + (target_start_entry * 0x1000);
+
+  if(returned_ptr != expected_ptr) {
+    printf("vm_map_next_unallocated_pages returned unexpected pointer value, expected 0x%x got 0x%x\n", expected_ptr, returned_ptr);
+    return 0;
+  }
+
+  uint8_t did_fail=0;
+  for(register int i=0; i<255; i++) {
+    if( (pages[target_page][i+target_start_entry] & MP_ADDRESS_MASK) != ptr_list[i]) {
+      printf("vm_map_next_unallocated_pages mapped page %d incorrectly, expected address 0x%x got 0x%x\n", i, ptr_list[i], (pages[target_page][i+target_start_entry] & MP_ADDRESS_MASK) );
+      did_fail = 1;
+    }
+    if( ! (pages[target_page][i+target_start_entry] & MP_PRESENT)) {
+      printf("vm_map_next_unallocated_pages mapped page %d incorrectly, 'present' flag not set\n", i);
+      did_fail = 1;
+    }
+    if( ! (pages[target_page][i+target_start_entry] & MP_READWRITE)) {
+      printf("vm_map_next_unallocated_pages mapped page %d incorrectly, 'read-write' flag not set\n", i);
+      did_fail = 1;
+    }
+    if(did_fail) break;
+  }
+
+  return !did_fail;
+}
+
+/*
+vm_map_next_unallocated_pages should return null of not enough pages could be found
+to the given list of pointers
+*/
+int test_vm_map_next_unallocated_pages_nomem() {
+  uint32_t __attribute__ ((aligned(4096))) fake_directory[1024];
+  uint32_t __attribute__ ((aligned(4096))) pages[1024][1024];
+
+  vaddr ptr_list[255];
+  for(register int i=0; i<255; i++) {
+    ptr_list[i] = (vaddr) (0xFF000000 | (i*2*0x1000));  //set up a discontinuous set of physical pointers
+  }
+
+  memset(fake_directory, 0, 4096);
+
+  for(register int i=0; i<1024; i++) {
+    fake_directory[i] = ((vaddr)&pages[i] & MP_ADDRESS_MASK) | MP_PRESENT | MP_READWRITE;
+  }
+
+  //fill most of the directory
+  for(register int i=0; i<1024; i++) {
+    for(register int j=0; j<1024; j++) {
+      if(i!=j) pages[i][j]= MP_PRESENT | MP_READWRITE;  //put some empty blocks in if i=j
+    }
+  }
+
+  const int target_page=482;
+  const int target_start_entry=86;
+
+  vaddr returned_ptr = (vaddr) vm_map_next_unallocated_pages(&fake_directory, MP_READWRITE, (void **)&ptr_list, 255);
+  vaddr expected_ptr = 0;
+
+  if(returned_ptr != expected_ptr) {
+    printf("vm_map_next_unallocated_pages returned unexpected pointer value, expected 0x%x got 0x%x\n", expected_ptr, returned_ptr);
+    return 0;
+  }
+
+  return 1;
+}
+
+/*
+vm_map_next_unallocated_pages should return null if pages=0
+*/
+int test_vm_map_next_unallocated_pages_inval() {
+  uint32_t __attribute__ ((aligned(4096))) fake_directory[1024];
+  uint32_t __attribute__ ((aligned(4096))) pages[1024][1024];
+
+  vaddr ptr_list[255];
+  for(register int i=0; i<255; i++) {
+    ptr_list[i] = (vaddr) (0xFF000000 | (i*2*0x1000));  //set up a discontinuous set of physical pointers
+  }
+
+  memset(fake_directory, 0, 4096);
+
+  for(register int i=0; i<1024; i++) {
+    fake_directory[i] = ((vaddr)&pages[i] & MP_ADDRESS_MASK) | MP_PRESENT | MP_READWRITE;
+  }
+
+  //fill most of the directory
+  for(register int i=0; i<1024; i++) {
+    for(register int j=0; j<1024; j++) {
+      if(i!=j) pages[i][j]= MP_PRESENT | MP_READWRITE;  //put some empty blocks in if i=j
+    }
+  }
+
+  const int target_page=482;
+  const int target_start_entry=86;
+
+  for(register int i=0; i<258; i++) {
+    pages[target_page][i+target_start_entry] = 0;     //empty a block of 255 pages from entry 86 of dir 482
+  }
+
+  vaddr returned_ptr = (vaddr) vm_map_next_unallocated_pages(&fake_directory, MP_READWRITE, (void **)&ptr_list, 0);
+  vaddr expected_ptr = 0;
+
+  if(returned_ptr != expected_ptr) {
+    printf("vm_map_next_unallocated_pages returned unexpected pointer value, expected 0x%x got 0x%x\n", expected_ptr, returned_ptr);
     return 0;
   }
 

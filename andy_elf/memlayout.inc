@@ -9,7 +9,7 @@
 %define DefaultTextAttribute 0x07	;light-grey-on-black https://wiki.osdev.org/Printing_To_Screen
 
 ;real-mode segment pointers for place to store bios ram information
-%define TemporaryMemInfoBufferSeg 0xF00
+%define TemporaryMemInfoBufferSeg 0x250
 %define TemporaryMemInfoBufferOffset 0x0
 ;protected-mode pointer to the same thing
-%define TemporaryMemInfoLocation 0xF000
+%define TemporaryMemInfoLocation 0x2500

@@ -4,7 +4,8 @@ all: test.elf
 
 tests: test_mmgr
 
-CFLAGS=-fno-pie -m32 -Iinclude -march=i486
+CFLAGS=-fno-pie -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables
+
 clean:
 	rm -f *.o test.elf test_mmgr
 	make -C acpi clean
@@ -34,12 +35,15 @@ mmgr.o: mmgr.c
 panic.o: panic.c
 	gcc -c ${CFLAGS} panic.c
 
+inkernel_memory_tests.o: inkernel_memory_tests.c include/sys/mmgr.h include/types.h
+	gcc -c ${CFLAGS} inkernel_memory_tests.c
+
 acpi:
 	make -C acpi/
 
-test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o acpi
-	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o acpi/rsdp.o acpi/search_mem.o acpi/sdt_header.o \
-		-Ttext 0x7E00 -Tdata 0xA000 -Trodata 0x9000 \
+test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o acpi
+	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o acpi/rsdp.o acpi/search_mem.o acpi/sdt_header.o \
+		-Ttext 0x7E00 -Tdata 0xC000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
 
 test_mmgr: test_mmgr.c test_stubs.c mmgr.c include/sys/mmgr.h
