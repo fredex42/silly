@@ -225,6 +225,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   size_t continuous_page_count = 0;
   uint16_t starting_page_dir = 0xFFFF;
   uint16_t starting_page_off = 0xFFFF;
+  size_t *pagedir_entry = 0;
 
   if(pages==0) return NULL; //don't try and map no Memory
 
@@ -232,8 +233,13 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //discontinues phys_addr pointers onto them with the given flags.
   //then, return the vmem ptr to the first one.
   for(i=0;i<1024;i++) {
-    if(!((vaddr)root_page_dir[i] & MP_PRESENT)) vm_add_dir(root_page_dir, i, flags);  //if we don't have a virtual memory directory then add one
-    size_t *pagedir_entry = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
+    kprintf("    DEBUG page %d entry is 0x%x\r\n", i, (uint32_t) root_page_dir[i]);
+    if(!((vaddr)root_page_dir[i] & MP_PRESENT)) {
+      kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
+      vm_add_dir(root_page_dir, i, flags);  //if we don't have a virtual memory directory then add one
+    }
+    pagedir_entry = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
+    kprintf("    DEBUG page %d entry is at 0x%x\r\n", i, (vaddr)pagedir_entry);
 
     for(j=0;j<1024;j++) {
       //FIXME: this only works if pagedir_entry is identity-mapped. We should map the page to read it.
@@ -250,6 +256,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     }
     if(continuous_page_count>=pages) break;
   }
+  kprintf("    DEBUG found %d continous pages from %d,%d\r\n", continuous_page_count, i, j);
   if(continuous_page_count<pages) return NULL;
 
   //now map the pages
@@ -284,7 +291,7 @@ uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off)
   size_t dir_idx = (size_t) vmem_ptr / (PAGE_SIZE*1024);
   size_t dir_remain = (size_t) vmem_ptr % (PAGE_SIZE*1024);
   kprintf("DEBUG _resolve_vptr for ptr 0x%x idx is 0x%x and remainder is 0x%x\r\n", vmem_ptr, dir_idx, dir_remain);
-  size_t dir_off = dir_remain / 1024;
+  size_t dir_off = dir_remain / PAGE_SIZE;
   kprintf("DEBUG _resolve_vptr for ptr 0x%x offset is 0x%x\r\n", vmem_ptr, dir_off);
 
   *dir = (uint16_t)dir_idx;
@@ -315,7 +322,7 @@ void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *vmem_ptr, size_
   pagedir_ent = root_page_dir[dir];
   for(register size_t i=0; i<page_count; i++) {
     phys_ptr = (vaddr)pagedir_ent[off] & MP_ADDRESS_MASK;
-    kprintf("DEBUG vm_deallocate_physical_pages physical pointer is 0x%x\r\n", phys_ptr);
+    kprintf("DEBUG vm_deallocate_physical_pages physical pointer for %d,%d is 0x%x\r\n", dir, off, phys_ptr);
     k_unmap_page(dir,off);
     phys_page_idx = phys_ptr / PAGE_SIZE;
     physical_memory_map[phys_page_idx].in_use = 0;
@@ -348,16 +355,21 @@ void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
 {
   if(page_count>512) return NULL; //for the time being only allow block allocation up to 512 pages.
 
+  if(root_page_dir==NULL) root_page_dir = &kernel_paging_directory;
   void *phys_ptrs[512];
 
   uint32_t allocd = allocate_free_physical_pages(page_count, (void **)&phys_ptrs);
+  kprintf("  DEBUG allocated %d free physical pages\r\n", allocd);
   if(allocd<page_count) {
+    kputs("  DEBUG insufficient pages allocd, deallocating and removing\r\n");
     deallocate_physical_pages(allocd,(void **) &phys_ptrs);
     return NULL;
   }
 
+  kprintf("  DEBUG mapping pages into vram\r\n");
   void* vmem_ptr = vm_map_next_unallocated_pages(root_page_dir, flags, phys_ptrs, page_count);
   if(vmem_ptr==NULL) {
+    kprintf("  DEBUG mapping failed, deallocating physical pages and returning\r\n");
     deallocate_physical_pages(allocd, (void **)&phys_ptrs);
     return NULL;
   }
