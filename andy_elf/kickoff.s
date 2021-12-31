@@ -240,8 +240,8 @@ add esp, 4
 extern load_acpi_data
 call load_acpi_data
 
-extern run_inkernel_memory_tests
-call run_inkernel_memory_tests
+; extern run_inkernel_memory_tests
+; call run_inkernel_memory_tests
 
 hlt
 jmp $

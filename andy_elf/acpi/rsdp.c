@@ -42,6 +42,9 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt)
     struct ACPISDTHeader *h = (struct ACPISDTHeader *) k_map_if_required(NULL, rsdt->PointerToOtherSDT[i], 0);
     valid = validate_sdt_header(h);
     kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, h->Signature, h->OEMID, h->Length, (uint32_t)valid);
+    if(h->Signature[0]=='A' && h->Signature[1]=='P' && h->Signature[2]=='I' && h->Signature[3]=='C') {
+      read_madt_info((char *)h);
+    }
     if(i>10) break;
   }
   // for(int i=1; i< entries+1; i++) {

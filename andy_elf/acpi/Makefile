@@ -1,7 +1,7 @@
 
 CFLAGS=-fno-pie -m32 -I../include -march=i486
 
-all: search_mem.o rsdp.o sdt_header.o
+all: search_mem.o rsdp.o sdt_header.o apic.o
 
 clean:
 	rm -f *.o
@@ -14,3 +14,6 @@ rsdp.o: rsdp.c ../include/sys/mmgr.h
 
 sdt_header.o: sdt_header.c
 	gcc -c ${CFLAGS} sdt_header.c
+
+apic.o: apic.h
+	gcc -c ${CFLAGS} apic.c
