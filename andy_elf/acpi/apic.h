@@ -31,7 +31,6 @@ typedef struct {
   uint8_t _reserved;
   uint32_t io_apic_phys_address;  //this is provided by acpi
   uint32_t global_system_interrupt_base;  // the first interrupt number that this I/O APIC handles
-  //uint32_t io_apic_vm_address;    //this is not provided by acpi and is NULL until we map the apic into our memory space.
 } IOAPIC; //type 1
 
 typedef struct {

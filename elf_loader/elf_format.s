@@ -11,7 +11,7 @@
 ;returns an exit code in dx:
 ; 0x00 - success
 ; 0x01 - not an elf header
-LoadElfBase:
+LoadElfBase:		;break 0x7d24
 	cmp word [ds:si], 0x457F	;header bytes reversed as we are little-endian
 	jnz not_elf
 	cmp word [ds:si+2], 0x464C
@@ -35,14 +35,14 @@ LoadElfBase:
 	mov ax, 0x7E0			;COPY DEST - move to the start of conventional memory (es:di 0x07E0:0)
 	mov es, ax
 	mov di,	0
-	rep movsw			;copy the block of memory over. break 0x7d91
+	rep movsw			;copy the block of memory over.
 
 	pop si
 
 
 	;now the code is loaded, load in the data from 0xc000
 	;we have to assume that the .data section is immediately after the .text section
-	mov di, word [ds:si+0x20]	;start of the section header table. break 00007d94
+	mov di, word [ds:si+0x20]	;start of the section header table. break 0x7d52
 	add di, si			;add it to the base offset
 	add di, 0x50			;we are making an assumption here that the structure of the file has the .data section here
 	mov cx, word [ds:di+0x14]	;size, in bytes of the section
@@ -55,7 +55,7 @@ LoadElfBase:
 	mov ax, 0xC00			;COPY DEST move to conventional memory at 0xc000
 	mov es, ax
 	mov di, 0
-	rep movsw			;break 00007db3
+	rep movsw
 
 	mov dx,0
 	ret

@@ -515,7 +515,7 @@ memory block
 void _reserve_memory_block(size_t base_addr, uint32_t page_count) {
   size_t base_phys_page = ADDR_TO_PAGEDIR_IDX(base_addr);
 
-  kprintf("     Protecting %d pages from %x\r\n", page_count, base_phys_page);
+  //kprintf("     Protecting %d pages from %x\r\n", page_count, base_phys_page);
 
   for(register size_t i=0;i<page_count;i++) {
     physical_memory_map[i+base_phys_page].in_use=1;
@@ -528,7 +528,7 @@ sets the "readonly" and "dirty" flag on the protected memory regions
 void apply_memory_map_protections(struct BiosMemoryMap *ptr)
 {
   uint8_t entry_count = ptr->entries;
-  kputs("Applying memory protections\r\n");
+  //kputs("Applying memory protections\r\n");
 
   for(register int i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];

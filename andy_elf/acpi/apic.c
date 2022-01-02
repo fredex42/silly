@@ -85,6 +85,19 @@ asm volatile ("mov $0xff, %%al\n\t"
  : : : "%eax");
 }
 
+/*
+Create an identity page mapping for the APIC io mapped memory range.
+According to the specs, this should be on the memory page 0xFEE00xxx
+*/
+void* apic_io_identity_mapping(vaddr apic_base)
+{
+  vaddr directory_number = apic_base / 0x400000;
+  vaddr entry_number = (apic_base % 400000);
+  kprintf("DEBUG pointer 0x%x is at 0x%x,0x%x\r\n", apic_base, directory_number, entry_number);
+
+  //the memory pointer 0xFEC00000 should be on the page 0x0 of directory 0x3FB (1019)
+  return k_map_page(NULL, (void *)apic_base, directory_number, entry_number, MP_READWRITE);
+}
 
 /*
 Reads information in from the MADT to a form we can work with
@@ -95,6 +108,7 @@ void read_madt_info(char *madt_ptr)
   uint16_t i=0;
   ProcessorLocalAPIC *apic;
   IOAPIC *ioapic;
+  IOAPICInterruptSourceOverride *ovr;
 
   ACPISDTHeader *table_header = (ACPISDTHeader *) madt_ptr;
   size_t pages_needed = bytes_to_pages(table_header->Length);
@@ -119,13 +133,25 @@ void read_madt_info(char *madt_ptr)
       case 0:
         apic = (ProcessorLocalAPIC *)&madt_ptr[ctr+2];  //skip over the type and length fields
         kprintf("      Processor ID %d with apic ID %d flags 0x%x\r\n", apic->acpi_processor_id, apic->apic_id, apic->apic_flags);
+        if(apic_io_identity_mapping(0xFEE00000)==NULL){
+          kputs("    ERROR unable to memory-map processor-local APIC\r\n");
+        }; //processor-local APIC defaults to this range, always local to the prcoessor you're running on
         break;
       case 1:
         ioapic = (IOAPIC *)&madt_ptr[ctr+2]; //skip over the type and length fields
         kprintf("      IOAPIC with ID %d at address 0x%x with interrupt base %d\r\n", (uint32_t)ioapic->io_apic_id, ioapic->io_apic_phys_address, (uint32_t)ioapic->global_system_interrupt_base);
+        if(apic_io_identity_mapping(ioapic->io_apic_phys_address)==NULL) {
+          kputs("    ERROR unable to memory-map io apic\r\n");
+        }
+
         break;
       case 2:
-        //ctr += sizeof(IOAPICInterruptSourceOverride);
+        ovr = (IOAPICInterruptSourceOverride *)&madt_ptr[ctr+2];
+        kprintf("      IOAPIC Interrupt source override with bus source %d, irq source %d at global system interrupt %d with flags 0x%x\r\n",
+          (uint32_t)ovr->bus_source,
+          (uint32_t)ovr->irq_source,
+          (uint32_t)ovr->global_system_interrupt,
+          (uint32_t)ovr->flags);
         break;
       case 3:
         //ctr += sizeof(IOAPICNonMaskableInterruptSource);
@@ -147,23 +173,3 @@ void read_madt_info(char *madt_ptr)
     i++;
   }
 }
-
-// /*
-// Sums up all the "length" fields and returns the total amount of data in the
-// table entries.
-// Arguments:
-// - madt_ptr - pointer to the _start_ of the MADT (i.e. the ACPI signature), as a byte buffer
-// Returns:
-// - the total size in bytes
-// */
-// uint32_t total_madt_size(char *madt_ptr)
-// {
-//   register uint32_t total = 0;
-//
-//   ACPISDTHeader *table_header = (ACPISDTHeader *) madt_ptr;
-//   kprintf("MADT header is %d bytes long\r\n", table_header->length);
-//   total += sizeof(ACPISDTHeader) + 8; //the main header and
-//   while(total<table_header->length) {
-//
-//   }
-// }

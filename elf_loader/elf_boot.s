@@ -22,7 +22,7 @@ mov ss, ax
 mov sp, 0x1000
 
 ; set up data segment registers
-mov ax, 0x0250	;area above our stack and below our code, which is at 0x7C00 (seg. 0x7C0)
+mov ax, 0x4000	;area below our stack and well above our code, which is at 0x7C00 (seg. 0x7C0) and the loading area at 0x7E00. Gives 192k of load space.
 mov es, ax
 mov ds, ax
 
@@ -111,19 +111,24 @@ PrintString:
 	exit_function:
 	ret
 
-LoadDiskSectors:
+LoadDiskSectors: ;break 0x7cb2
 	;Loads disk sectors into memory, at 0x0250(ds):0000. Overwrites this memory and clobbers registers.
 	;Arguments: bx = number of sectors to read in, cx = (16-bit) sector offset. Assume 1 sector = 512 bytes.
 	;set up a disk address packet structure at 0x07E0:800. stos* stores at es:di and increments. int13 needs struct in ds:si
 	cld		;make sure we are writing forwards
+	push es
+	push ds
+	mov ax, 0x250
+	mov es, ax
+
 	mov di, 0x800
 	mov al, 0x0F	;16 byte packet
 	stosb
 	xor al,al	;field always 0
 	stosb
-	mov ax, bx	;transfer 16 sectors
+	mov ax, bx	;transfer sector count in bx
 	stosw
-	xor ax,ax	;write to 0x07E0:0000. Offset first.
+	xor ax,ax	;write to sector origin
 	stosw
 	mov ax, ds	;segment to write
 	stosw
@@ -133,10 +138,16 @@ LoadDiskSectors:
 	stosw
 	stosw
 	stosw		;now we are ready
+	mov ax, es
+	mov ds, ax
+	xor ax, ax
+
 	mov si, 0x800
 	mov ah, 0x42
 	mov dl, 0x80
 	int 0x13
+	pop ds
+	pop es
 	jc fat_load_err
 	ret
 
@@ -181,11 +192,10 @@ next_entry:
 ;Data
 HelloString db ':x', 0
 CouldNotLoadErr db 'DE', 0
-LoadingStart db 'L', 0
-LoadingDone db '+', 0
+LoadingStart db 'Loading...', 0
+LoadingDone db 'done.', 0
 TestA20 db 'A', 0
 A20En db '+', 0
-GdtDone db ':D', 0x0a, 0x0d, 0
 LoadErr db 'BadELF', 0
 ;ErrCodes db '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'
 TimeoutErr db 'T!', 0
