@@ -5,7 +5,7 @@ display_library: sdl
 memory: host=32, guest=32
 romimage: file="/usr/share/bochs/BIOS-bochs-latest"
 vgaromimage: file="/usr/share/bochs/VGABIOS-lgpl-latest"
-boot: disk 
+boot: disk
 floppy_bootsig_check: disabled=0
 # no floppya
 # no floppyb
