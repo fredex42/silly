@@ -44,7 +44,7 @@ extern c_except_pagefault
 ;bl : gate type. 0x05 32-bit task gate, 0x0E 32-bit interrupt gate, 0x0F 32-bit trap gate
 ;cl : ring level required to call. Only 2 bits are used.
 CreateIA32IDTEntry:
-	sub edi, 0x7E00		;the passed pointer is the absolute memory address but we need the segment-relative address
+	;sub edi, 0x7E00		;the passed pointer is the absolute memory address but we need the segment-relative address
 	mov word [ds:esi], di	;lower 4 bytes of offset
 	mov word [ds:esi+2], es	;selector
 	mov byte [ds:esi+4], 0x00	;reserved

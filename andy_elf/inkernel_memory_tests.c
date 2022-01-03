@@ -18,7 +18,8 @@ void simple_alloc_fill_dealloc(size_t page_count) {
       if(j>9) j=1;
       x++;
       if(x>=PAGE_SIZE) {
-        kputs("P");
+        if(y<10) kprintf("%d %x  \r\n", i, &ptr[i]);
+        //kputs("P");
         x=0;
         y++;
       }

@@ -12,7 +12,7 @@
   #include <sys/mmgr.h>
 #endif
 
-
+#include <memops.h>
 #include <stdio.h>
 #include "cfuncs.h"
 #include "panic.h"
@@ -129,7 +129,7 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks)
   uint8_t temp = 0;
   uint32_t found_pages = 0;
 
-  for(register size_t i=0x100;i<physical_page_count;i++) {
+  for(register size_t i=0x30;i<physical_page_count;i++) {
     if(physical_memory_map[i].in_use==0) {
       if(temp<5) {
         kprintf("  DEBUG Physical page 0x%x is available, taking it\r\n", i);
@@ -184,10 +184,15 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
   }
   if(pagedir_idx>1023 || pageent_idx>1023) return NULL; //out of bounds
 
+  if(! (actual_root[pagedir_idx] & MP_PRESENT)){
+    vm_add_dir(actual_root, pagedir_idx, MP_READWRITE);
+  }
+
   uint32_t *pagedir_phys = (uint32_t *)(actual_root[pagedir_idx] & MP_ADDRESS_MASK);
+  uint32_t *pagedir = (uint32_t *)k_map_if_required(NULL, pagedir_phys, MP_READWRITE);
 
   //FIXME: we should map the physical pagedir pointer to a temporary location
-  pagedir_phys[pageent_idx] = ((vaddr)phys_addr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
+  pagedir[pageent_idx] = ((vaddr)phys_addr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
 
   return (void *)(pagedir_idx*0x400000 + pageent_idx*0x1000);
 }
@@ -203,12 +208,15 @@ Returns:
 */
 void vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags)
 {
-  void *phys_ptr; //only one entry
+  void *phys_ptr=NULL; //only one entry
 
   size_t allocd = allocate_free_physical_pages(1, &phys_ptr);
 
   if(allocd!=1) k_panic("Could not allocate physical ram for directory");
-  root_page_dir[idx] = (size_t) phys_ptr | MP_ADDRESS_MASK | MP_PRESENT | flags;
+  void *allocd_page_content = k_map_if_required(NULL, phys_ptr, MP_READWRITE);  //even if we are allocating for another process, it's the kernel that needs visibility of this.
+  memset(allocd_page_content, 0, PAGE_SIZE);  //ensure that the page content is blanked
+
+  root_page_dir[idx] = ((size_t) phys_ptr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
 }
 
 /**
@@ -260,7 +268,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
         continuous_page_count=0;
       }
     }
-    if(continuous_page_count>=pages) break;
+    if(continuous_page_count>pages) break;
   }
   kprintf("    DEBUG found %d continous pages from %d,%d to %d,%d\r\n", continuous_page_count, starting_page_dir, starting_page_off, i, j);
   if(continuous_page_count<pages) return NULL;
@@ -294,11 +302,9 @@ Arguments:
 */
 uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off)
 {
-  size_t dir_idx = (size_t) vmem_ptr / (PAGE_SIZE*1024);
-  size_t dir_remain = (size_t) vmem_ptr % (PAGE_SIZE*1024);
-  kprintf("DEBUG _resolve_vptr for ptr 0x%x idx is 0x%x and remainder is 0x%x\r\n", vmem_ptr, dir_idx, dir_remain);
-  size_t dir_off = dir_remain / PAGE_SIZE;
-  kprintf("DEBUG _resolve_vptr for ptr 0x%x offset is 0x%x\r\n", vmem_ptr, dir_off);
+  size_t dir_idx = (size_t)vmem_ptr >> 22;
+  size_t dir_off = (size_t)vmem_ptr >> 12 & 0x03FF;
+  kprintf("DEBUG _resolve_vptr for ptr 0x%x idx is 0x%x and offset is 0x%x\r\n", vmem_ptr, dir_idx, dir_off);
 
   *dir = (uint16_t)dir_idx;
   *off = (uint16_t)dir_off;
@@ -417,7 +423,7 @@ void* k_map_if_required(uint32_t *base_directory, void *phys_addr, uint32_t flag
     }
     for(register int j=0;j<1023;j++) {
       if( (pagedir_entry[j] & MP_ADDRESS_MASK) == page_value) {
-        vaddr v_addr = (vaddr)(i*400000 + j*4096) + (vaddr)page_offset;
+        vaddr v_addr = (vaddr)(i*0x400000 + j*4096) + (vaddr)page_offset;
         return (void *)v_addr;
       }
     }
@@ -600,7 +606,8 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   Pages 0x80->0xff(0x80000 -> 0x100000) are reserved for bios
   */
   physical_memory_map[0].in_use=1;                        //always protect first page
-  for(i=7;i<0x10;i++) physical_memory_map[i].in_use=1;    //kernel memory
-  for(i=0x80;i<0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
+  for(i=7;i<=0x10;i++) physical_memory_map[i].in_use=1;    //kernel memory
+  for(i=0x70;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
+  for(i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
   for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
 }
