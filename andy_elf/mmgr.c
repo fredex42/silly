@@ -268,7 +268,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
         continuous_page_count=0;
       }
     }
-    if(continuous_page_count>pages) break;
+    if(continuous_page_count>=pages) break;
   }
   kprintf("    DEBUG found %d continous pages from %d,%d to %d,%d\r\n", continuous_page_count, starting_page_dir, starting_page_off, i, j);
   if(continuous_page_count<pages) return NULL;
@@ -311,6 +311,7 @@ uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off)
   return 1;
 }
 
+#define __invalidate_vptr(vptr_to_invalidate) asm inline volatile("invlpg (%0)" : : "r" (vptr_to_invalidate) : "memory")
 /**
 unmaps the given pages, and marks them as free.
 FIXME: should also wipe the contents for security.
@@ -324,45 +325,64 @@ void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *vmem_ptr, size_
 {
   int16_t dir,off;
   vaddr phys_ptr;
-  uint32_t *pagedir_ent;
   size_t phys_page_idx;
 
   if(root_page_dir==NULL) root_page_dir = (uint32_t *)kernel_paging_directory;
 
   _resolve_vptr(vmem_ptr, &dir, &off);
-  kprintf("DEBUG vm_deallocate_physical_pages for 0x%x deallocating %d pages\r\n",vmem_ptr, page_count);
-  kprintf("DEBUG starting from dir %d off %d\r\n", dir, off);
-  pagedir_ent = root_page_dir[dir];
+  //kprintf("DEBUG vm_deallocate_physical_pages for 0x%x deallocating %d pages\r\n",vmem_ptr, page_count);
+  //kprintf("DEBUG starting from dir %d off %d\r\n", dir, off);
+  volatile uint32_t *pagedir_ent_phys = root_page_dir[dir] & MP_ADDRESS_MASK;
+  //kprintf("DEBUG pagedir ent physical ptr is 0x%x\r\n", pagedir_ent_phys);
+  volatile uint32_t *pagedir_ent = k_map_if_required(root_page_dir, pagedir_ent_phys, MP_READWRITE);
+  //kprintf("DEBUG pagedir ent virtual ptr ix 0x%x\r\n", pagedir_ent);
+
   for(register size_t i=0; i<page_count; i++) {
+    mb();
     phys_ptr = (vaddr)pagedir_ent[off] & MP_ADDRESS_MASK;
     if(phys_ptr==0) {
-      kprintf("ERROR deallocating ptr 0x%x from root dir 0x%x page %d phys_ptr is null\r\n", vmem_ptr, root_page_dir, i);
+      kprintf("ERROR deallocating ptr 0x%x from root dir 0x%x page %l phys_ptr is null\r\n", vmem_ptr, root_page_dir, i+off);
       continue;
     }
     //kprintf("DEBUG vm_deallocate_physical_pages physical pointer for %d,%d is 0x%x\r\n", dir, off, phys_ptr);
-    k_unmap_page(dir,off);
-    phys_page_idx = phys_ptr / PAGE_SIZE;
+    //k_unmap_page(root_page_dir, dir ,off);
+    pagedir_ent[off] = (uint32_t)0;
+    vaddr vptr_to_invalidate = dir*0x400000 + off*0x1000;
+
+    __invalidate_vptr(vptr_to_invalidate);
+
+    phys_page_idx = phys_ptr >> 12;
     physical_memory_map[phys_page_idx].in_use = 0;
     off++;
     if(off>=1024) {
       off = 0;
       dir++;
-      pagedir_ent = root_page_dir[dir];
+      pagedir_ent_phys = root_page_dir[dir];
+      pagedir_ent = k_map_if_required(root_page_dir, pagedir_ent_phys, MP_READWRITE);
     }
   }
-  kprintf("DEBUG vm_deallocate_physical_pages for 0x%x completed.\r\n", vmem_ptr);
+//  mb();
+  //kprintf("DEBUG vm_deallocate_physical_pages for 0x%x completed.\r\n", vmem_ptr);
 }
 
 /**
 unmap a page of physical memory by removing it from the page table and setting the
 page to "not present"
 */
-void k_unmap_page(uint16_t pagedir_idx, uint16_t pageent_idx)
+void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageent_idx)
 {
-  if(pagedir_idx!=0) return;  //not currently supported!
+  if(pagedir_idx>1023) return;  //not currently supported!
   if(pageent_idx>1023) return; //out of bounds
 
-  first_pagedir_entry[pageent_idx] = 0;
+  if(root_page_dir==NULL) root_page_dir = &kernel_paging_directory;
+
+  uint32_t *pagedir_ent_phys = (vaddr)root_page_dir[pagedir_idx] & MP_ADDRESS_MASK;
+  if(pagedir_ent_phys==NULL) {
+    kprintf("ERROR cannot unmap page %d-%d from root dir 0x%x as it is not present\r\n",pagedir_idx, pageent_idx, root_page_dir);
+    return;
+  }
+  uint32_t *pagedir_ent = k_map_if_required(root_page_dir, pagedir_ent_phys, MP_READWRITE);
+  pagedir_ent[pageent_idx] = 0;
 }
 
 /**
@@ -382,6 +402,8 @@ void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
     deallocate_physical_pages(allocd,(void **) &phys_ptrs);
     return NULL;
   }
+
+  mb();
 
   kprintf("  DEBUG mapping pages into vram\r\n");
   void* vmem_ptr = vm_map_next_unallocated_pages(root_page_dir, flags, phys_ptrs, page_count);

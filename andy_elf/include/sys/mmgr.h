@@ -79,9 +79,7 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
 /*
 remove the given page mapping
 */
-void k_unmap_page(uint16_t pagedir_idx, uint16_t pageent_idx);
-
-
+void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageent_idx);
 
 /* internal functions */
 void setup_paging();
