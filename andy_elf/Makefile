@@ -1,4 +1,4 @@
-.PHONY: acpi
+.PHONY: 8259pic
 
 all: test.elf
 
@@ -43,12 +43,19 @@ memops.o: memops.asm
 
 ioports.o: ioports.asm
 	nasm -f elf32 ioports.asm
+#
+# acpi:
+# 	make -C acpi/
 
-acpi:
-	make -C acpi/
+8259pic:
+	make -C 8259pic/
 
-test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o acpi
-	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o acpi/rsdp.o acpi/search_mem.o acpi/sdt_header.o acpi/apic.o \
+test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
+		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o \
+		8259pic
+	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
+		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o \
+		-L 8259pic/ -l8259pic \
 		-Ttext 0x7E00 -Tdata 0xC000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
 
