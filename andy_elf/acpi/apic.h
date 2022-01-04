@@ -68,3 +68,20 @@ typedef struct {
 //values for interrupt_flags
 #define INTERRUPT_ACTIVE_LOW    1<<1
 #define INTERRUPT_LEVEL_TRIGGER 1<<3
+
+//values for Loval Vector Table registers (LAPIC timer, LINT0, LINT1)
+#define LVT_VECTOR_MASK 0xff          //mask for vector number
+#define LVT_INTERRUPT_PENDING   1<<12
+#define LVT_INTERRUPT_POLARITY  1<<13 //reserved for timer. "set"=>low trigger "unset"=>high trigger
+#define LVT_REMOTE_IRR          1<<14 //reserved for timer
+#define LVT_INTERRUPT_TRIGGER   1<<15 //"set"=>level "unset"=>edge
+#define LVT_INTERRUPT_MASK      1<<16 //"set"=>masked
+
+//values for Spurious Interrupt Vector register
+#define SPV_VECTOR_MASK         0xff
+#define SPV_APIC_ENABLED        1<<8  //set this to enable the whole apic
+#define SPV_DISABLE_EOI_BCAST   1<<12 //if set, end-of-interrupt won't be broadcast
+
+#define LAPIC_TIMER_CHOSEN_VECTOR 0x20
+
+#define PLAPIC_DEFAULT_ADDRESS  0xFEE00000

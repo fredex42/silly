@@ -237,11 +237,13 @@ add esp, 4
 ;specifically, the timer needs somewhere to go
 ;sti
 
-;extern load_acpi_data
-;call load_acpi_data
+extern load_acpi_data
+call load_acpi_data
 
-extern run_inkernel_memory_tests
-call run_inkernel_memory_tests
+;extern run_inkernel_memory_tests
+;call run_inkernel_memory_tests
+
+sti
 
 hlt
 jmp $

@@ -91,14 +91,60 @@ According to the specs, this should be on the memory page 0xFEE00xxx
 */
 void* apic_io_identity_mapping(vaddr apic_base)
 {
-  vaddr directory_number = apic_base / 0x400000;
-  vaddr entry_number = (apic_base % 400000);
-  kprintf("DEBUG pointer 0x%x is at 0x%x,0x%x\r\n", apic_base, directory_number, entry_number);
+  uint16_t directory_number;
+  uint16_t entry_number;
+  _resolve_vptr((void *)apic_base, &directory_number, & entry_number);
+
+  kprintf("      DEBUG pointer 0x%x is at 0x%x,0x%x\r\n", apic_base, directory_number, entry_number);
 
   //the memory pointer 0xFEC00000 should be on the page 0x0 of directory 0x3FB (1019)
   return k_map_page(NULL, (void *)apic_base, directory_number, entry_number, MP_READWRITE);
 }
 
+/*
+Writes the given 32-bit value to the given memory-mapped register
+*/
+void _write_mmapped_reg(vaddr apic_base, uint16_t reg, uint32_t value)
+{
+  volatile uint32_t* regptr = (uint32_t *)(apic_base + reg);
+  *regptr = value;
+  mb(); //use a memory barrier to ensure that the write is ordered
+}
+
+/*
+Read a 32-bit value from the given memory-mapped register and return it
+*/
+uint32_t _read_mmapped_reg(vaddr apic_base, uint16_t reg)
+{
+  volatile uint32_t* regptr = (uint32_t *)(apic_base + reg);
+  register uint32_t v = *regptr;
+  mb();
+  return v;
+}
+
+void plapic_send_eoi()
+{
+  k_panic("plapic_send_eoi not implemented yet");
+}
+/*
+Enables the processor-local apic on this processor.
+Arguments:
+- apic_base      - pointer to the APIC mapped base address to use for communication
+- apic_id        - uint8_t APIC id
+- interrupt_base - software interrupt number onto which we should map plapic #0
+Returns:
+- the number of interrupts mapped
+*/
+int16_t enable_plapic(vaddr apic_base, uint8_t apic_id, uint16_t interrupt_base)
+{
+  //set up lapic timer
+  _write_mmapped_reg(apic_base, 0x320, (LAPIC_TIMER_CHOSEN_VECTOR & LVT_VECTOR_MASK));
+
+  //set up spurious interrupt to 0xFF
+  _write_mmapped_reg(apic_base, 0xF0, 0xFF | SPV_APIC_ENABLED);
+
+  return 1;
+}
 /*
 Reads information in from the MADT to a form we can work with
 */
@@ -109,6 +155,7 @@ void read_madt_info(char *madt_ptr)
   ProcessorLocalAPIC *apic;
   IOAPIC *ioapic;
   IOAPICInterruptSourceOverride *ovr;
+  uint32_t *temp;
 
   ACPISDTHeader *table_header = (ACPISDTHeader *) madt_ptr;
   size_t pages_needed = bytes_to_pages(table_header->Length);
@@ -133,14 +180,20 @@ void read_madt_info(char *madt_ptr)
       case 0:
         apic = (ProcessorLocalAPIC *)&madt_ptr[ctr+2];  //skip over the type and length fields
         kprintf("      Processor ID %d with apic ID %d flags 0x%x\r\n", apic->acpi_processor_id, apic->apic_id, apic->apic_flags);
-        if(apic_io_identity_mapping(0xFEE00000)==NULL){
+        if(apic_io_identity_mapping(PLAPIC_DEFAULT_ADDRESS)==NULL){
           kputs("    ERROR unable to memory-map processor-local APIC\r\n");
+        } else {
+          enable_plapic(PLAPIC_DEFAULT_ADDRESS, apic->apic_id, 0x20);
         }; //processor-local APIC defaults to this range, always local to the prcoessor you're running on
         break;
       case 1:
         ioapic = (IOAPIC *)&madt_ptr[ctr+2]; //skip over the type and length fields
-        kprintf("      IOAPIC with ID %d at address 0x%x with interrupt base %d\r\n", (uint32_t)ioapic->io_apic_id, ioapic->io_apic_phys_address, (uint32_t)ioapic->global_system_interrupt_base);
-        if(apic_io_identity_mapping(ioapic->io_apic_phys_address)==NULL) {
+        kprintf("      0x%x: IOAPIC with ID %d at address 0x%x with interrupt base %d\r\n", (vaddr)ioapic, (uint32_t)ioapic->io_apic_id, ioapic->io_apic_phys_address, (uint32_t)ioapic->global_system_interrupt_base);
+
+        temp = (uint32_t *)&madt_ptr[ctr+4];
+        kprintf("    IOAPIC id %d address should be 0x%x\r\n", (uint32_t)ioapic->io_apic_id, *temp);
+
+        if(apic_io_identity_mapping(*temp)==NULL) {
           kputs("    ERROR unable to memory-map io apic\r\n");
         }
 
