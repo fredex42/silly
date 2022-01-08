@@ -14,5 +14,8 @@ picroutines.o: picroutines.asm
 interrupts.o: interrupts.asm
 	nasm -f elf32 interrupts.asm
 
-lib8259pic.a: 8259pic.o picroutines.o interrupts.o
-	ar rcs lib8259pic.a 8259pic.o picroutines.o interrupts.o
+ioapic.o: ioapic.c ioapic.h interrupts.h
+	gcc -c ${CFLAGS} ioapic.c
+
+lib8259pic.a: 8259pic.o picroutines.o interrupts.o ioapic.o
+	ar rcs lib8259pic.a 8259pic.o picroutines.o interrupts.o ioapic.o

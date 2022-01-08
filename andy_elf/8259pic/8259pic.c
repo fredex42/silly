@@ -1,5 +1,7 @@
 #include <types.h>
 #include "8259pic.h"
+#include "../cpuid.h"
+#include "picroutines.h"
 
 /*
 arguments:
@@ -47,4 +49,21 @@ asm volatile ("mov $0xff, %%al\n\t"
   "out %%al, $0xa1\n\t"
   "out %%al, $0x21\n\t"
  : : : "%eax");
+}
+
+void setup_pic()
+{
+  uint32_t cpuflags_dx = cpuid_edx_features();
+  if( (cpuflags_dx & CPUID_FEAT_EDX_APIC) && (cpuflags_dx & CPUID_FEAT_EDX_MSR)) {
+    // kputs("Detected APIC, disabling...");
+    // disable_lapic();
+    // kputs("done.\r\n");
+
+    kputs("Configuring IOAPIC...");
+    configure_ioapic();
+    kputs("done.\r\n");
+  }
+  legacy_pic_remap(0x20, 0x28);
+  configure_pic_interrupts();
+
 }

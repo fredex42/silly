@@ -233,13 +233,13 @@ push eax
 call initialise_mmgr  ;initialise memory management
 add esp, 4
 
-extern legacy_pic_remap
-mov eax, 0x20
-push eax
-mov eax, 0x28
-push eax
-call legacy_pic_remap
-add esp, 8
+; extern load_acpi_data
+; call load_acpi_data
+
+extern setup_pic
+call setup_pic
+
+
 
 ;need to reprogram the PIC before enabling interrupts or a double-fault happens
 ;specifically, the timer needs somewhere to go
