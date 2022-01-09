@@ -16,7 +16,7 @@ inb:
 
 	xor edx,edx
 	xor eax, eax
-	mov dx, word [ebp+4]	;first argument - port number to read.
+	mov dx, word [ebp+8]	;first argument - port number to read.
 	in al, dx
 
 	pop edx
@@ -36,8 +36,8 @@ outb:
 
 	xor edx, edx
 	xor eax, eax
-	mov dx, word [ebp+4]
-	mov al, byte [ebp+8]
+	mov dx, word [ebp+8]
+	mov al, byte [ebp+12]
 	out dx, al
 
 	pop eax

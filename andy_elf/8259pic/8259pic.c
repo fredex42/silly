@@ -55,13 +55,13 @@ void setup_pic()
 {
   uint32_t cpuflags_dx = cpuid_edx_features();
   if( (cpuflags_dx & CPUID_FEAT_EDX_APIC) && (cpuflags_dx & CPUID_FEAT_EDX_MSR)) {
-    // kputs("Detected APIC, disabling...");
-    // disable_lapic();
-    // kputs("done.\r\n");
-
-    kputs("Configuring IOAPIC...");
-    configure_ioapic();
+    kputs("Detected APIC, disabling...");
+    disable_lapic();
     kputs("done.\r\n");
+
+    // kputs("Configuring IOAPIC...");
+    // configure_ioapic(NULL);
+    // kputs("done.\r\n");
   }
   legacy_pic_remap(0x20, 0x28);
   configure_pic_interrupts();
