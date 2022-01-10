@@ -51,44 +51,44 @@ configure_pic_interrupts:
   call CreateIA32IDTEntry ;IRQ1
   mov edi, IDummy
   xor ecx, ecx
-  call CreateIA32IDTEntry ;IRQ2
-  mov edi, IDummy
+  call CreateIA32IDTEntry ;IRQ2 - this is the cascade and never raised, so kept as Dummy
+  mov edi, ISerial2
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ3
-  mov edi, IDummy
+  mov edi, ISerial1
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ4
-  mov edi, IDummy
+  mov edi, IParallel2
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ5
-  mov edi, IDummy
+  mov edi, IFloppy1
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ6
   mov edi, ISpurious
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ7
-  mov edi, IDummy
+  mov edi, ICmosRTC
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ8
-  mov edi, IDummy
+  mov edi, IRQ9
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ9
-  mov edi, IDummy
+  mov edi, IRQ10
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ10
-  mov edi, IDummy
+  mov edi, IRQ11
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ11
-  mov edi, IDummy
+  mov edi, IMouse
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ12
-  mov edi, IDummy
+  mov edi, IFPU
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ13
-  mov edi, IDummy
+  mov edi, IPrimaryATA
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ14
-  mov edi, IDummy
+  mov edi, ISecondaryATA
   xor ecx, ecx
   call CreateIA32IDTEntry ;IRQ15
 
@@ -134,7 +134,51 @@ IKeyboard:	;keyboard interrupt handler
 	popf
 	iret
 
-ISpurious:  ;spurious interrupt handler
+ISerial2:             ;IRQ3 serial port 2 interrupt handler. Just sends EOI at present
+  pushf
+  push bx
+  mov ebx, 3
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+ISerial1:             ;IRQ4 serial port 1 interrupt handler. Just sends EOI at present
+  pushf
+  push bx
+  mov ebx, 4
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IParallel2:             ;IRQ5 parallel port 2 interrupt handler. Just sends EOI at present
+  pushf
+  push bx
+  mov ebx, 5
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IFloppy1:             ;IRQ6 floppy disk 1 interrupt handler. Just sends EOI at present
+  pushf
+  push bx
+  mov ebx, 6
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+ISpurious:  ;IRQ7 spurious interrupt handler (also parallel port 1)
   pushf
   push ax
 
@@ -150,6 +194,94 @@ ISpurious:  ;spurious interrupt handler
 
   no_eoi_reqd:
   pop ax
+  popf
+  iret
+
+ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler. Just sends EOI at present
+  pushf
+  push bx
+  mov ebx, 8
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IRQ9:             ;IRQ9
+  pushf
+  push bx
+  mov ebx, 9
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IRQ10:             ;IRQ10
+  pushf
+  push bx
+  mov ebx, 10
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IRQ11:             ;IRQ11
+  pushf
+  push bx
+  mov ebx, 11
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IMouse:             ;IRQ12 PS/2 mouse
+  pushf
+  push bx
+  mov ebx, 12
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IFPU:             ;IRQ13 FPU/Coprocessor/inter-processor
+  pushf
+  push bx
+  mov ebx, 13
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+IPrimaryATA:             ;IRQ14 Primary IDE
+  pushf
+  push bx
+  mov ebx, 14
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
+  popf
+  iret
+
+ISecondaryATA:             ;IRQ15 Secondary IDE
+  pushf
+  push bx
+  mov ebx, 15
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+  pop bx
   popf
   iret
 

@@ -125,6 +125,8 @@ void read_madt_info(char *madt_ptr)
         temp = (uint32_t *)&madt_ptr[ctr+4];
         kprintf("    IOAPIC id %d address should be 0x%x\r\n", (uint32_t)ioapic->io_apic_id, *temp);
 
+        configure_ioapic((vaddr)temp);
+
         if(apic_io_identity_mapping(*temp)==NULL) {
           kputs("    ERROR unable to memory-map io apic\r\n");
         }
