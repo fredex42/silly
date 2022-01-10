@@ -1,4 +1,4 @@
-.PHONY: 8259pic
+.PHONY: 8259pic acpi
 
 all: test.elf
 
@@ -9,6 +9,7 @@ CFLAGS=-fno-pie -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables
 clean:
 	rm -f *.o test.elf test_mmgr
 	make -C acpi clean
+	make -C 8259pic clean
 
 kickoff.o: kickoff.s
 	nasm -f elf32 kickoff.s
@@ -48,10 +49,10 @@ cpuid.o: cpuid.asm
 	nasm -f elf32 cpuid.asm
 
 acpi:
-	make -C acpi/
+	make -C acpi
 
 8259pic:
-	make -C 8259pic/
+	make -C 8259pic
 
 test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o \

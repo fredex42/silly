@@ -106,8 +106,6 @@ ITimer:     ;timer interrupt handler
   pushf
   push bx
   xor bx, bx
-  mov bl, '+'
-  call PMPrintChar
 
   mov ebx, 0
   push ebx

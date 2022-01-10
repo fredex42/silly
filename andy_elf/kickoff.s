@@ -245,11 +245,12 @@ call setup_pic
 ;specifically, the timer needs somewhere to go
 sti
 
-;extern run_inkernel_memory_tests
-;call run_inkernel_memory_tests
+; extern run_inkernel_memory_tests
+; call run_inkernel_memory_tests
 
-hlt
-jmp $
+idle_loop:
+hlt							;pause processor until an interrupt comes along or we have something to do
+jmp idle_loop
 
 section .data
 HelloString: db 'Hello world', 0x0a, 0x0d, 0
