@@ -1,10 +1,10 @@
 
 CFLAGS=-fno-pie -m32 -I../include -march=i486
 
-all: search_mem.o rsdp.o sdt_header.o apic.o
+all: libacpi.a
 
 clean:
-	rm -f *.o
+	rm -f *.o *.a
 
 search_mem.o: search_mem.asm
 	nasm -f elf32 search_mem.asm
@@ -17,3 +17,6 @@ sdt_header.o: sdt_header.c
 
 apic.o: apic.h
 	gcc -c ${CFLAGS} apic.c
+
+libacpi.a: apic.o sdt_header.o rsdp.o search_mem.o
+	ar rcs libacpi.a apic.o sdt_header.o rsdp.o search_mem.o

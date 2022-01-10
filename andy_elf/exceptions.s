@@ -28,7 +28,6 @@ global IMachineCheck
 global ISIMDFPExcept
 global IVirtExcept
 global ISecurityExcept
-global IKeyboard
 
 ;function imports
 extern c_except_div0
@@ -52,7 +51,7 @@ CreateIA32IDTEntry:
 	or bl, 0x80	;set present bit
 	clc
 	xor ch, ch
-	shl cl, 5	;DPL value, shift this to the right position then add it on
+	shl cx, 5	;DPL value, shift this to the right position then add it on
 	or bl, cl
 	mov byte [ds:esi+5], bl
 	shr edi, 16
@@ -164,18 +163,6 @@ IVirtExcept:
 ISecurityExcept:
 	mov eax, SecExceptMsg
 	jmp FatalMsg
-
-IKeyboard:	;keyboard interrupt handler
-	pushf
-	push bx
-	xor bx, bx
-	mov bl, '.'
-	call PMPrintChar
-
-	;call PIC_Send_EOI
-	pop bx
-	popf
-	iret
 
 section .data
 ;all these errors are fatal if the occur in the kernel. see https://wiki.osdev.org/Exceptions
