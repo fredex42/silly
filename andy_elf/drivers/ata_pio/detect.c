@@ -3,6 +3,7 @@
 #include <sys/ioports.h>
 #include <sys/mmgr.h>
 #include <memops.h>
+#include <stdio.h>
 
 #include "ata_pio.h"
 
@@ -126,23 +127,27 @@ void initialise_ata_driver()
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Master, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[0] = info;
+      print_drive_info(0);
     }
     info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Slave, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[1] = info;
+      print_drive_info(1);
     }
   }
   if(master_driver_state->active_bus_mask & 0x2) {
     info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_MASTER);
     if(info!=NULL) {
       kputs("\tFound ATA Secondary Master\r\n");
-      master_driver_state->disk_identity[0] = info;
+      master_driver_state->disk_identity[2] = info;
+      print_drive_info(2);
     }
     info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
       kputs("\tFound ATA Secondary Slave\r\n");
-      master_driver_state->disk_identity[1] = info;
+      master_driver_state->disk_identity[3] = info;
+      print_drive_info(3);
     }
   }
 
@@ -150,4 +155,85 @@ void initialise_ata_driver()
     kputs("\tWARNING - did not detect any hard disks!\r\n");
   }
   kputs("done.\r\n");
+}
+
+/*
+Checks if the given drive supports LBA48 mode.
+Arguments: drive_nr is 0 for PRI MASTER, 1 for PRI SLAVE, 2 for SEC MASTER, 3 for SEC SLAVE etc.
+Returns: 1 if the drive is present and supports LBA48 or 0 otherwise.
+
+See: "Interesting information returned from IDENTITY", https://wiki.osdev.org/ATA_PIO_Mode
+*/
+uint8_t ata_drive_supports_lba48(uint8_t drive_nr)
+{
+  if(drive_nr>7) return 0;  //only 8 items in the array
+  uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
+  if(drive_info == NULL) return 0;
+
+  if(drive_info[83] & 0x400) return 1; else return 0; //0x400=> bit 10 set
+}
+
+/*
+Checks the highest supported UDMA mode for the drive
+*/
+uint8_t ata_max_udma_mode(uint8_t drive_nr)
+{
+  if(drive_nr>7) return 0;  //only 8 items in the array
+  uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
+  if(drive_info == NULL) return 0;
+
+  return drive_info[88] & 0xFF; //low byte gives max the supported UDMA mode
+}
+
+/*
+Checks the current UDMA mode for the drive
+*/
+uint8_t ata_current_udma_mode(uint8_t drive_nr)
+{
+  if(drive_nr>7) return 0;  //only 8 items in the array
+  uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
+  if(drive_info == NULL) return 0;
+
+  return (drive_info[88] >> 8) & 0xFF; //high byte gives the active mode
+}
+
+/*
+Returns the LBA sector limit for the given drive number.
+If this returns 0, then LBA28 mode is not supported.
+*/
+uint32_t ata_lba28_sector_limit(uint8_t drive_nr)
+{
+  if(drive_nr>7) return 0;  //only 8 items in the array
+  uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
+  if(drive_info == NULL) return 0;
+
+  return ((uint32_t)drive_info[61] <<16 ) | (uint32_t)drive_info[60]; //take these two words together to get the sector limit
+}
+
+/*
+Returns the LBA48 sector limit for the given drive number.
+If this returns 0, then LBA48 mode is not supported.
+*/
+uint64_t ata_lba48_sector_limit(uint8_t drive_nr)
+{
+  if(drive_nr>7) return 0;  //only 8 items in the array
+  uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
+  if(drive_info == NULL) return 0;
+
+  return ((uint64_t)drive_info[103] <<48 ) | ((uint64_t)drive_info[102] <<32 ) | ((uint64_t)drive_info[101] <<16 ) | (uint64_t)drive_info[100]; //take these two words together to get the sector limit
+}
+
+void print_drive_info(uint8_t drive_nr)
+{
+  kprintf("Drive %d max UDMA %d current UDMA %d. LBA28 sector limit is %l, LBA48 sector limit low dword is %l.  ",
+   (uint16_t)drive_nr,
+    (uint16_t)ata_current_udma_mode(drive_nr),
+    (uint16_t)ata_max_udma_mode(drive_nr),
+    (uint32_t)ata_lba28_sector_limit(drive_nr),
+    (uint32_t)ata_lba48_sector_limit(drive_nr));
+  if(ata_drive_supports_lba48(drive_nr)) {
+    kputs("LBA48 mode supported.\r\n");
+  } else {
+    kputs("LBA48 mode not supported.\r\n");
+  }
 }

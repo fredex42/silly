@@ -32,4 +32,5 @@ typedef struct ata_driver_state {
 
 } ATADriverState;
 
+void print_drive_info(uint8_t drive_nr);
 #endif
