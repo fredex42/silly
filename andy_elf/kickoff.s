@@ -239,11 +239,12 @@ add esp, 4
 extern setup_pic
 call setup_pic
 
-
-
 ;need to reprogram the PIC before enabling interrupts or a double-fault happens
 ;specifically, the timer needs somewhere to go
 sti
+
+extern initialise_ata_driver
+call initialise_ata_driver
 
 ; extern run_inkernel_memory_tests
 ; call run_inkernel_memory_tests
