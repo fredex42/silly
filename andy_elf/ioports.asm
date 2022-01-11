@@ -8,7 +8,17 @@ global outb
 global outw
 global outd
 global io_wait
+global cli
+global sti
 
+cli:
+	cli
+	ret
+
+sti:
+	sti
+	ret
+	
 ;Purpose: reads in a byte from the given IO port and returns the value
 ;Expects: 16-bit integer representing the port to request
 ;Returns: 8-bit integer representing the value from the port

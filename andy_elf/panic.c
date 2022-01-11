@@ -1,5 +1,5 @@
 #include "panic.h"
-#include "cfuncs.h"
+#include <cfuncs.h>
 
 void k_panic(char *msg) {
   kputs("KERNEL PANIC: ");

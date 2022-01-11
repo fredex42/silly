@@ -1,7 +1,7 @@
 #include <sys/mmgr.h>
 #include <types.h>
 #include <stdio.h>
-#include "cfuncs.h"
+#include <cfuncs.h>
 
 void simple_alloc_fill_dealloc(size_t page_count, size_t times) {
     register uint32_t i,j;

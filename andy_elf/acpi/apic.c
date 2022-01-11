@@ -1,7 +1,7 @@
 #include <types.h>
 #include <sys/mmgr.h>
 #include <acpi/sdt_header.h>
-#include "../cfuncs.h"
+#include <cfuncs.h>
 #include <stdio.h>
 #include <memops.h>
 #include "apic.h"

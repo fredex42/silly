@@ -13,4 +13,7 @@ void outd(uint16_t port, uint32_t value);
 
 void io_wait();
 
+void cli();
+void sti();
+
 #endif

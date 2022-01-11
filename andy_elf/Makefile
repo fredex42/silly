@@ -1,4 +1,4 @@
-.PHONY: 8259pic acpi drivers
+.PHONY: 8259pic acpi drivers scheduler
 
 all: test.elf
 
@@ -58,12 +58,15 @@ acpi:
 drivers:
 	make -C drivers
 
+scheduler:
+	make -C scheduler
+
 test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o 8259pic acpi drivers
+		cpuid.o 8259pic acpi drivers scheduler
 	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o \
-		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio\
+		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
 		-Ttext 0x7E00 -Tdata 0xC000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
 
