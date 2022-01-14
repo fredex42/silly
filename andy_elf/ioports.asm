@@ -18,7 +18,7 @@ cli:
 sti:
 	sti
 	ret
-	
+
 ;Purpose: reads in a byte from the given IO port and returns the value
 ;Expects: 16-bit integer representing the port to request
 ;Returns: 8-bit integer representing the value from the port
@@ -120,6 +120,7 @@ outd:
 	pop edx
 	pop ebp
 	ret
+	
 ;Purpose: Wait a very small amount of time (1 to 4 microseconds, generally).
 ; Useful for implementing a small delay for PIC remapping on old hardware or
 ; generally as a simple but imprecise wait.
@@ -127,9 +128,8 @@ outd:
 ; uses port 0x80, which is often used during POST to log information on the
 ; motherboard's hex display but almost always unused after boot.
 ; https://wiki.osdev.org/Inline_Assembly/Examples#I.2FO_access
+;Returns: 0
 io_wait:
-	push eax
 	xor eax, eax
 	out 0x80, al
-	pop eax
 	ret

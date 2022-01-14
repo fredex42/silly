@@ -260,10 +260,34 @@ void print_drive_info(uint8_t drive_nr)
   }
 }
 
+void test_write_cb(uint8_t status, void *buffer)
+{
+  kprintf("Completed test write from 0x%x with status %d\r\n", buffer, (uint16_t) status);
+  vm_deallocate_physical_pages(NULL, buffer, 1);
+}
+
 void test_read_cb(uint8_t status, void *buffer)
 {
   kprintf("Received data from test read with status %d at 0x%x\r\n", (uint16_t) status, buffer);
   vm_deallocate_physical_pages(NULL, buffer, 1);
+
+  kputs("Testing disk write from HDD0...\r\n");
+
+  uint16_t *newbuffer = (uint16_t *)vm_alloc_pages(NULL, 1, MP_READWRITE);
+  for(register uint16_t i=0;i<PAGE_SIZE/2;i++) {  //fill the page with a number sequence
+    newbuffer[i] = i;
+  }
+  uint8_t err = ata_pio_start_write(1, 0, 7, (void *)newbuffer, &test_write_cb);
+  switch(err) {
+    case E_OK:
+      break;
+    case E_BUSY:
+      kputs("Disk subsystem was busy\r\n");
+      break;
+    case E_PARAMS:
+      kputs("Invalid parameters\r\n");
+      break;
+  }
 }
 
 

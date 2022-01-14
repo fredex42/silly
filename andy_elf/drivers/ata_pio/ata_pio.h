@@ -23,6 +23,8 @@
 
 #define ATA_CMD_IDENTIFY      0xEC
 #define ATA_CMD_READ_SECTORS  0x20
+#define ATA_CMD_WRITE_SECTORS 0x30
+#define ATA_CMD_CACHE_FLUSH   0xE7
 
 #define ATA_SELECT_MASTER   0xA0
 #define ATA_SELECT_SLAVE    0xB0
@@ -66,11 +68,13 @@ typedef struct ata_pending_operation {
   uint8_t sectors_read;
   uint16_t base_addr;     //base IO port to do the read from/write to
 
+  uint8_t device;         //0=>master 1=>slave
   void (*completed_func)(uint8_t status, void *buffer);
 } ATAPendingOperation;
 
 void print_drive_info(uint8_t drive_nr);
 int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer));
+int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer));
 
 //ATA error codes
 #define ATA_E_AMNF    1<<0  //address mark not found
