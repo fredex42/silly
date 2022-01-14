@@ -23,26 +23,24 @@ void scheduler_tick()
 {
   SchedulerTask *to_run;
 
-  // //we don't want the scheduler to tick again while we are processing
-  // cli();
-  // mask_irq(0);
-  // sti();
-
   ++global_scheduler_state->ticks_elapsed;
   //FIXME: run deadline tasks first
   //FIXME: run after-time tasks second
+
+  if(global_scheduler_state->tasks_in_progress>0) {
+    //we have not finished processing the last run yet!
+    return;
+  }
 
   //run scheduler state tasks
   if(global_scheduler_state->task_asap_list!=NULL) {
     to_run = global_scheduler_state->task_asap_list;
     global_scheduler_state->task_asap_list = global_scheduler_state->task_asap_list->next;
 
+    ++global_scheduler_state->tasks_in_progress;
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
+    --global_scheduler_state->tasks_in_progress;
   }
-  // cli();
-  // unmask_irq(0);
-  // sti();
-
 }
 
 uint64_t get_scheduler_ticks()

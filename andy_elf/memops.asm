@@ -98,8 +98,10 @@ switch_paging_directory_if_required:
   mov ebx, dword [ebp+8]
   mov cr3, ebx
   pop ebx
+  pop ebp
   ret                       ;eax (return value) is still the old cr3 value
 
   _pg_switch_not_reqd:
   xor eax,eax               ;return zero
+  pop ebp
   ret

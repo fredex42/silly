@@ -32,6 +32,8 @@ typedef struct scheduler_state {
 
   struct scheduler_task_buffer *buffers[BUFFER_COUNT];
   uint32_t current_buffer;
+  uint32_t tasks_in_progress;
+
 } SchedulerState;
 
 void initialise_scheduler();

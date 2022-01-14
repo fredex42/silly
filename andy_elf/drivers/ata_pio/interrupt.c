@@ -58,12 +58,12 @@ void complete_read_lowerhalf(SchedulerTask *t)
 {
   ATAPendingOperation *op = (ATAPendingOperation *)t->data;
 
-  kprintf("DEBUG in disk read lower-half. buffer offset is 0x%x\r\n", op->buffer);
+  kprintf("DEBUG in disk read lower-half. Requested paging dir is 0x%x\r\n", op->paging_directory);
 
-  //vaddr old_pd = switch_paging_directory_if_required((vaddr)op->paging_directory);
+  vaddr old_pd = switch_paging_directory_if_required((vaddr)op->paging_directory);
+
   //need to make sure interrupts are disabled, otherwise we trigger the next data packet
   //before we stored the last word of this one, meaning that we miss data.
-
   cli();
   //each sector is 512 bytes (or 256 words)
   uint16_t *buf = (uint16_t *)op->buffer;
@@ -81,7 +81,8 @@ void complete_read_lowerhalf(SchedulerTask *t)
     memset((void *)op, 0, sizeof(ATAPendingOperation));
   }
 
-
-  sti()
+  if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
+  
+  sti();
 
 }

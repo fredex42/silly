@@ -263,6 +263,7 @@ void print_drive_info(uint8_t drive_nr)
 void test_read_cb(uint8_t status, void *buffer)
 {
   kprintf("Received data from test read with status %d at 0x%x\r\n", (uint16_t) status, buffer);
+  vm_deallocate_physical_pages(NULL, buffer, 1);
 }
 
 
