@@ -252,9 +252,13 @@ call initialise_ata_driver
 ; extern run_inkernel_memory_tests
 ; call run_inkernel_memory_tests
 
+extern test_read
+call test_read
+
 extern scheduler_tick
 
 idle_loop:
+sti
 call scheduler_tick	;check if we have any work to do
 hlt									;pause processor until an interrupt comes along. We will be regularly woken by the timer interrupt.
 jmp idle_loop

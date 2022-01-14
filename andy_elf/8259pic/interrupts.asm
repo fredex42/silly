@@ -261,27 +261,47 @@ IFPU:             ;IRQ13 FPU/Coprocessor/inter-processor
   popf
   iret
 
+extern ata_service_interrupt  ;this is defined in the ata_pio driver for servicing IDE interrupts
+
 IPrimaryATA:             ;IRQ14 Primary IDE
   pushf
+  push ebx
+
+  mov ebx, 0
   push bx
+  call ata_service_interrupt  ;tell the ATA driver that this cane from bus 0 (primary)
+  add esp, 2
+
   mov ebx, 14
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+
+  pop ebx
   popf
   iret
 
 ISecondaryATA:             ;IRQ15 Secondary IDE
   pushf
+  push ebx
+
+  mov ebx, 1
   push bx
+  call ata_service_interrupt ;tell the ATA driver that this cane from bus 1 (secondary)
+  add esp, 2
+
   mov ebx, 15
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+
+  pop ebx
   popf
   iret
 
 IDummy:   ;generic dummy interrupt handler
+  mov ebx, 2
+  push ebx
+  call pic_send_eoi
+  add esp, 4
   iret

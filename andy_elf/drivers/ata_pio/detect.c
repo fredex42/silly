@@ -4,10 +4,11 @@
 #include <sys/mmgr.h>
 #include <memops.h>
 #include <stdio.h>
-
+#include <panic.h>
+#include <errors.h>
 #include "ata_pio.h"
 
-static ATADriverState *master_driver_state = NULL;
+ATADriverState *master_driver_state = NULL;
 
 /*
 Returns 1 if the bus status is 0xFF, i.e. open-circuit (nothing connected to it) or 0 otherwise
@@ -54,6 +55,15 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
   outb(ATA_DRIVE_HEAD(base_addr), drive_nr);
   outb(ATA_COMMAND(base_addr), ATA_CMD_IDENTIFY);
 
+  kprintf("INFO identify_drive drive_nr is %d\r\n", (uint16_t)drive_nr);
+  uint8_t bus_nr = (drive_nr & 0xF) >> 1;
+  if(bus_nr>4) {
+    kprintf("ERROR identify_drive bus_nr %d is out of range\r\n", (uint16_t) bus_nr);
+    return NULL;
+  }
+
+  //tell the interrupt handler to ignore, as we are polling
+  master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_IGNORE;
   while(1) {
     st = inb(ATA_STATUS(base_addr));
     if(st==0) return NULL;  //zero status => nothing here, move on
@@ -65,17 +75,19 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
   st = inb(ATA_LBA_MID(base_addr));
   if(st!=0) {
     kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
+    master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
     return NULL;
   }
   st = inb(ATA_LBA_HI(base_addr));
   if(st!=0) {
     kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
+    master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
     return NULL;
   }
 
   //Still here? Good. We've got a drive, now poll for success or failure.
 
-  kprintf("DEBUG sizeof(ATADriverState) is %l, active drive count is %d\r\n", sizeof(ATADriverState), (uint16_t) master_driver_state->active_drive_count);
+  //kprintf("DEBUG sizeof(ATADriverState) is %l, active drive count is %d\r\n", sizeof(ATADriverState), (uint16_t) master_driver_state->active_drive_count);
 
   //on success, we want to save the data into the same ram page as the master_driver_state immediately following that structure
   uint16_t *buffer = (uint16_t *)((vaddr)master_driver_state + (vaddr)sizeof(ATADriverState) + ((vaddr)master_driver_state->active_drive_count * 256));
@@ -92,6 +104,7 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
     }
     if((st & 0x1)) {  //ERR, bit 1 was set => error
       kprintf("\tWARNING Disk error trying to identify drive 0x%x on 0x%x, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
+      master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
       return NULL;
     }
   }
@@ -120,6 +133,11 @@ void initialise_ata_driver()
   memset((void *)master_driver_state, 0, sizeof(master_driver_state));
 
   kprintf("\tDEBUG ATA driver state ptr is 0x%x\r\n", master_driver_state);
+  for(register int i=0;i<4; i++) {
+    //these area already initialised to 0
+    master_driver_state->pending_disk_operation[i] = (ATAPendingOperation *)( (vaddr)master_driver_state + sizeof(ATADriverState) + i*sizeof(ATAPendingOperation));
+  }
+
   ata_detect_active_buses();
   kputs("\tDetecting drives...\r\n");
   if(master_driver_state->active_bus_mask & 0x1) {
@@ -127,13 +145,13 @@ void initialise_ata_driver()
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Master, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[0] = info;
-      print_drive_info(0);
+      //print_drive_info(0);
     }
     info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Slave, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[1] = info;
-      print_drive_info(1);
+      //print_drive_info(1);
     }
   }
   if(master_driver_state->active_bus_mask & 0x2) {
@@ -141,18 +159,22 @@ void initialise_ata_driver()
     if(info!=NULL) {
       kputs("\tFound ATA Secondary Master\r\n");
       master_driver_state->disk_identity[2] = info;
-      print_drive_info(2);
+      //print_drive_info(2);
     }
     info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
       kputs("\tFound ATA Secondary Slave\r\n");
       master_driver_state->disk_identity[3] = info;
-      print_drive_info(3);
+      //print_drive_info(3);
     }
   }
 
   if(master_driver_state->active_drive_count==0) {
     kputs("\tWARNING - did not detect any hard disks!\r\n");
+  }
+
+  for(register int i=0;i<4; i++) {
+    master_driver_state->pending_disk_operation[i]->type = ATA_OP_NONE;
   }
   kputs("done.\r\n");
 }
@@ -235,5 +257,30 @@ void print_drive_info(uint8_t drive_nr)
     kputs("LBA48 mode supported.\r\n");
   } else {
     kputs("LBA48 mode not supported.\r\n");
+  }
+}
+
+void test_read_cb(uint8_t status, void *buffer)
+{
+  kprintf("Received data from test read with status %d at 0x%x\r\n", (uint16_t) status, buffer);
+}
+
+
+void test_read()
+{
+  void* buffer = vm_alloc_pages(NULL, 1, MP_READWRITE);
+
+  kputs("Testing disk read from HDD0...\r\n");
+  //read in 8 sectors (=4kb) from block 0 of the disk
+  uint8_t err = ata_pio_start_read(0, 0, 2, buffer, &test_read_cb);
+  switch(err) {
+    case E_OK:
+      break;
+    case E_BUSY:
+      kputs("Disk subsystem was busy\r\n");
+      break;
+    case E_PARAMS:
+      kputs("Invalid parameters\r\n");
+      break;
   }
 }

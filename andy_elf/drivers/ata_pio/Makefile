@@ -11,5 +11,11 @@ detect.o: detect.c ata_pio.h
 basic_routines.o: basic_routines.asm
 	nasm -f elf32 basic_routines.asm
 
-libata_pio.a: detect.o basic_routines.o
-	ar rcs libata_pio.a detect.o basic_routines.o
+readwrite.o: readwrite.c ata_pio.h
+	gcc -c ${CFLAGS} readwrite.c
+
+interrupt.o: interrupt.c ata_pio.h
+	gcc -c ${CFLAGS} interrupt.c
+
+libata_pio.a: detect.o basic_routines.o interrupt.o readwrite.o
+	ar rcs libata_pio.a detect.o basic_routines.o readwrite.o interrupt.o

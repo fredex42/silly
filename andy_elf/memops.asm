@@ -4,6 +4,8 @@ section .text
 global memset
 global memcpy
 global mb       ;memory barrier
+global get_current_paging_directory
+global switch_paging_directory_if_required
 ;this module contains basic memset, memcpy implementations.
 
 mb:
@@ -73,4 +75,31 @@ memcpy:
   pop esi
   pop edi
   pop ebp
+  ret
+
+;Purpose: returns the current paging directory pointer. This should be stored in CR3.
+get_current_paging_directory:
+  mov eax, cr3
+  ret
+
+;Purpose: switches the paging directory if the current one is not the given one.
+; Arguments: the paging directory pointer to check (32-bit)
+; Returns: 0 if the paging directory did not change, or the old paging directory value if it did
+switch_paging_directory_if_required:
+  push ebp
+  mov ebp, esp
+
+  mov eax, cr3
+  cmp eax, dword [ebp+8]  ;first arg - requested directory pointer
+  jz _pg_switch_not_reqd
+
+  ;switch the paging directory over
+  push ebx
+  mov ebx, dword [ebp+8]
+  mov cr3, ebx
+  pop ebx
+  ret                       ;eax (return value) is still the old cr3 value
+
+  _pg_switch_not_reqd:
+  xor eax,eax               ;return zero
   ret

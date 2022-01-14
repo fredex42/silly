@@ -5,6 +5,7 @@
 #include <sys/ioports.h>
 #include "scheduler_task_internals.h"
 #include <cfuncs.h>
+#include "../8259pic/picroutines.h"
 
 static SchedulerState *global_scheduler_state;
 
@@ -22,7 +23,11 @@ void scheduler_tick()
 {
   SchedulerTask *to_run;
 
-  cli();
+  // //we don't want the scheduler to tick again while we are processing
+  // cli();
+  // mask_irq(0);
+  // sti();
+
   ++global_scheduler_state->ticks_elapsed;
   //FIXME: run deadline tasks first
   //FIXME: run after-time tasks second
@@ -34,7 +39,9 @@ void scheduler_tick()
 
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
   }
-  sti();
+  // cli();
+  // unmask_irq(0);
+  // sti();
 
 }
 
@@ -49,14 +56,21 @@ Creates a new SchedulerTask object in our buffer and returns it
 SchedulerTask *new_scheduler_task(uint8_t task_type, void (*task_proc)(struct scheduler_task *t), void *data)
 {
   SchedulerTask *task_ptr;
+  unsigned int iterations = 0;
 
-  cli();
   SchedulerTaskBuffer *current_buffer = global_scheduler_state->buffers[global_scheduler_state->current_buffer];
-  if(current_buffer->buffer_idx + sizeof(SchedulerTaskBuffer) > PAGE_SIZE*TASK_BUFFER_SIZE_IN_PAGES) {
+
+  kputs("creating new scheduler task\r\n");
+  while(current_buffer->buffer_idx + sizeof(SchedulerTaskBuffer) > PAGE_SIZE*TASK_BUFFER_SIZE_IN_PAGES) {
     ++current_buffer->buffer_idx;
     if(current_buffer->buffer_idx > BUFFER_COUNT) {
-      k_panic("Ran out of buffer space for scheduling tasks\r\n");
-      return NULL;
+      if(iterations>0) {  //if we have already looped back to the beginning once in order to check for space there, and not found any, we ran out :(
+        k_panic("Ran out of mem for scheduling tasks\r\n");
+        return NULL;
+      } else {
+        ++iterations;
+        current_buffer->buffer_idx=0;
+      }
     }
 
     current_buffer = global_scheduler_state->buffers[global_scheduler_state->current_buffer];
@@ -70,7 +84,6 @@ SchedulerTask *new_scheduler_task(uint8_t task_type, void (*task_proc)(struct sc
   task_ptr->task_proc = task_proc;
   task_ptr->data = data;
 
-  sti();
   return task_ptr;
 }
 
@@ -86,12 +99,22 @@ void schedule_task(SchedulerTask *t)
       kputs("ERROR Tried to schedule an invalid task with type TASK_NONE\r\n");
       return;
     case TASK_ASAP:
-      cli();
-      //find the end of the linked list
-      for(task_list=global_scheduler_state->task_asap_list;task_list!=NULL;task_list=task_list->next);
-      //task_list now points to the last item on the linked list
-      task_list->next = t;
-      sti();
+      //cli();
+      kputs("scheduling asap task\r\n");
+      if(global_scheduler_state->task_asap_list==NULL) {
+        global_scheduler_state->task_asap_list = t;
+      } else {
+        //find the end of the linked list
+        //for(task_list=global_scheduler_state->task_asap_list;task_list!=NULL;task_list=task_list->next);
+        task_list = global_scheduler_state->task_asap_list;
+        while(task_list->next!=NULL) {
+          task_list = task_list->next;
+        }
+        //task_list now points to the last item on the linked list
+        task_list->next = t;
+      }
+      kputs("done.\r\n");
+      //sti();
       return;
     case TASK_DEADLINE:
       kputs("ERROR Deadline tasks not implemented yet\r\n");
