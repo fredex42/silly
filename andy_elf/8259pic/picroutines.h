@@ -6,5 +6,7 @@ uint16_t pic_get_irq_reg(uint8_t cmd_word); //internal routine used for getting 
 uint16_t pic_get_irr(); //gets the Interrupt Request Register for both PICs. Upper 8 bytes is PIC1 lower is PIC2.
 uint16_t pic_get_isr(); //gets the In-Service Register for both PICs. Upper 8 bytes is PIC1 lower is PIC2
 void disable_lapic();
+void mask_irq(uint8_t irq_number);
+void unmask_irq(uint8_t irq_number);
 
 #endif

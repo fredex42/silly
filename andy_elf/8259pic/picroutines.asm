@@ -4,6 +4,9 @@ global pic_send_eoi
 global pic_get_isr
 global pic_get_irr
 global pic_get_irq_reg
+global mask_irq
+global unmask_irq
+global disable_lapic
 
 ;Purpose: Sends the end-of-interrupt message to the PIC
 ;Arguments: irq number (uint8_t)
@@ -13,11 +16,12 @@ pic_send_eoi:
   mov ebp, esp
   push eax
   xor eax, eax
-  cmp byte [ebp+4], 8
+  cmp byte [ebp+8], 8
   jl _eoi_pic_master
 
   mov al, 0x20          ;end-of-interrupt commend number
   out 0xA0, al          ;send EOI to slave pic command port
+
   _eoi_pic_master:
   mov al, 0x20
   out 0x20, al          ;send EOI to the master pic command port
@@ -36,7 +40,7 @@ pic_get_irq_reg:
   mov ebp, esp
 
   xor eax, eax
-  mov al, byte [ebp+4]
+  mov al, byte [ebp+8]
   out 0x20, al  ;write the provided command byte
   out 0xA0, al
 
@@ -67,7 +71,6 @@ pic_get_isr:
 ;Purpose: use model-specific register to disable the local APIC.
 ;This will cause an Undefined Opcode exception if the msr functions are not supported.
 ;Use the cpuid functions to detect whether MSRs are actually supported before calling this.
-global disable_lapic
 disable_lapic:
   push eax
   push ecx
@@ -81,4 +84,84 @@ disable_lapic:
   pop edx
   pop ecx
   pop eax
+  ret
+
+;Purpose: temporarily disable (mask) a given IRQ line.
+;Arguments: (uint8_t) IRQ line to mask
+;Returns: The updated mask value
+mask_irq:
+  push ebp
+  mov ebp, esp
+
+  push ebx
+  push ecx
+
+  xor eax, eax
+  xor ebx, ebx
+  xor ecx, ecx
+
+  mov cl, byte [ebp+8]
+  cmp cl, 0x8
+  jl _mask_secondary_pic
+
+  mov bx, 1
+  shl bx, cl    ;create the mask by shifting to the left cl times (1 in the bit place of interrupt nr)
+
+  in al, 0x21   ;PIC1 data port
+  or al, bl
+  out 0x21, al  ;Output the updated mask
+
+  _mask_secondary_pic:  ;mask the secondary pic, subtract 8 from the irq number and send to port 0xA1
+  sub cl, 0x8
+  mov bx, 1
+  shl bx, cl    ;create the mask by shifting to the left cl times (1 in the bit place of interrupt nr)
+
+  in al, 0xA1   ;PIC2 data port
+  or al, bl
+  out 0xA1, al  ;Output the updated mask
+
+  pop ecx
+  pop ebx
+  pop ebp
+  ret
+
+;Purpose: re-enable an IRQ that was previously disabled by mask_irq
+;Arguments: (uint8_t) IRQ line to mask
+;Returns: The updated mask value
+unmask_irq:
+  push ebp
+  mov ebp, esp
+
+  push ebx
+  push ecx
+
+  xor eax, eax
+  xor ebx, ebx
+  xor ecx, ecx
+
+  mov cl, byte [ebp+8]
+  cmp cl, 0x8
+  jl _unmask_secondary_pic
+
+  mov bx, 1
+  shl bx, cl    ;create the mask by shifting to the left cl times (1 in the bit place of interrupt nr)
+  xor bx, 0xFF  ;invert the mask by XORING with all 1s
+
+  in al, 0x21   ;PIC1 data port
+  and al, bl
+  out 0x21, al  ;Output the updated mask
+
+  _unmask_secondary_pic:  ;mask the secondary pic, subtract 8 from the irq number and send to port 0xA1
+  sub cl, 0x8
+  mov bx, 1
+  shl bx, cl    ;create the mask by shifting to the left cl times (1 in the bit place of interrupt nr)
+  xor bx, 0xFF  ;invert the mask by XORING with all 1s
+
+  in al, 0xA1   ;PIC2 data port
+  and al, bl
+  out 0xA1, al  ;Output the updated mask
+
+  pop ecx
+  pop ebx
+  pop ebp
   ret

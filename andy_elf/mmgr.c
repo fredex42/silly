@@ -14,7 +14,7 @@
 
 #include <memops.h>
 #include <stdio.h>
-#include "cfuncs.h"
+#include <cfuncs.h>
 #include "panic.h"
 
 static uint32_t __attribute__ ((aligned(4096))) kernel_paging_directory[1024];  //root paging directory

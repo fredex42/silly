@@ -239,17 +239,29 @@ add esp, 4
 extern setup_pic
 call setup_pic
 
-
+extern initialise_scheduler
+call initialise_scheduler
 
 ;need to reprogram the PIC before enabling interrupts or a double-fault happens
 ;specifically, the timer needs somewhere to go
 sti
 
-;extern run_inkernel_memory_tests
-;call run_inkernel_memory_tests
+extern initialise_ata_driver
+call initialise_ata_driver
 
-hlt
-jmp $
+; extern run_inkernel_memory_tests
+; call run_inkernel_memory_tests
+
+extern test_read
+call test_read
+
+extern scheduler_tick
+
+idle_loop:
+sti
+call scheduler_tick	;check if we have any work to do
+hlt									;pause processor until an interrupt comes along. We will be regularly woken by the timer interrupt.
+jmp idle_loop
 
 section .data
 HelloString: db 'Hello world', 0x0a, 0x0d, 0

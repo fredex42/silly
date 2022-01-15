@@ -1,4 +1,4 @@
-.PHONY: 8259pic
+.PHONY: 8259pic acpi drivers scheduler
 
 all: test.elf
 
@@ -9,6 +9,8 @@ CFLAGS=-fno-pie -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables
 clean:
 	rm -f *.o test.elf test_mmgr
 	make -C acpi clean
+	make -C 8259pic clean
+	make -C drivers clean
 
 kickoff.o: kickoff.s
 	nasm -f elf32 kickoff.s
@@ -48,18 +50,24 @@ cpuid.o: cpuid.asm
 	nasm -f elf32 cpuid.asm
 
 acpi:
-	make -C acpi/
+	make -C acpi
 
 8259pic:
-	make -C 8259pic/
+	make -C 8259pic
+
+drivers:
+	make -C drivers
+
+scheduler:
+	make -C scheduler
 
 test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o 8259pic acpi
+		cpuid.o 8259pic acpi drivers scheduler
 	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o \
-		-L 8259pic/ -l8259pic -Lacpi/ -lacpi \
-		-Ttext 0x7E00 -Tdata 0xC000 -Trodata 0x9000 \
+		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
+		-Ttext 0x7E00 -Tdata 0xE000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
 
 test_mmgr: test_mmgr.c test_stubs.c mmgr.c include/sys/mmgr.h

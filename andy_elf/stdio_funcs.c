@@ -1,6 +1,6 @@
 #include "include/stdarg.h"
 #include "include/types.h"
-#include "cfuncs.h"
+#include <cfuncs.h>
 
 void kprintf(const char *fmt, ...);
 size_t strlen(const char *str);
