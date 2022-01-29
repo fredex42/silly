@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include "ucs_conv.h"
 #include "vfat.h"
-
+#include "cluster_map.h"
 /**
 Return the index of the first occurrence of the character c in the string buf.
 Returns -1 if the character is not present.
@@ -52,6 +52,7 @@ int read_fs_information_sector(int fd, BIOSParameterBlock *bpb, uint16_t sector_
   read(fd, *sec, sizeof(FSInformationSector));
   return 0;
 }
+
 
 int first_dir_entry(int fd, BIOSParameterBlock *bpb, uint32_t rootdir_cluster, uint32_t reserved_sectors, DirectoryEntry **entry)
 {
@@ -241,6 +242,8 @@ int main(int argc, char *argv[]) {
   FSInformationSector *infosector = NULL;
   uint32_t reserved_sectors;
 
+  VFatClusterMap *cluster_map = NULL;
+
   if(argc<2) {
     puts("You must specify a disk image to read\n");
     exit(2);
@@ -261,6 +264,9 @@ int main(int argc, char *argv[]) {
     read_fs_information_sector(fd, bpb, f32bpb->fs_information_sector, &infosector);
   }
 
+  cluster_map = vfat_load_cluster_map(fd, bpb, f32bpb);
+  printf("Found a FAT%d filesystem\n", cluster_map->bitsize);
+
   //FIXME: why is our calculation 128 sectors (2 clusters) out?
   //because the root directory starts at cluster 2 of the data area which is the same as the end of reserved_sectors?
   size_t root_dir_size=0;
@@ -270,15 +276,7 @@ int main(int argc, char *argv[]) {
     char decoded_attrs[12];
 
     printf("Looking for entry called %s...\n", argv[2]);
-    // DirectoryContentsList *subdir_entry = vfat_find_dir_entry(root_dir, argv[2]);
-    // if(subdir_entry) {
-    //   decode_attributes(subdir_entry->entry->attributes, &decoded_attrs);
-    //   printf("Found it, with attributes %s\n", decoded_attrs);
-    //   if(subdir_entry->entry->attributes & VFAT_ATTR_SUBDIR) {
-    //     DirectoryContentsList *subdir_content = scan_root_dir(fd, bpb, reserved_sectors, FAT32_CLUSTER_NUMBER(subdir_entry->entry)-2,  &root_dir_size);
-    //     abort();
-    //   }
-    // }
+
     DirectoryEntry *entry = vfat_recursive_scan(fd, bpb, reserved_sectors,f32bpb->root_directory_entry_cluster-2 , argv[2], strlen(argv[2]));
     if(entry==NULL) {
       puts("Found nothing.\n");
