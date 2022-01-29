@@ -234,6 +234,54 @@ DirectoryEntry *vfat_recursive_scan(int fd, BIOSParameterBlock *bpb, uint32_t re
   }
 }
 
+void load_cluster_data(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, uint32_t cluster_num, void *buffer)
+{
+  size_t reserved_sectors = bpb->reserved_logical_sectors + (f32bpb->logical_sectors_per_fat * bpb->fat_count);
+  size_t sector_of_cluster = (cluster_num-2) * bpb->logical_sectors_per_cluster;
+  size_t byte_offset = (reserved_sectors + sector_of_cluster) * bpb->bytes_per_logical_sector;
+
+  size_t cluster_length = bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector;
+
+  lseek(fd, byte_offset, SEEK_SET);
+  read(fd, buffer, cluster_length);
+}
+
+void *retrieve_file_content(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, VFatClusterMap *m, DirectoryEntry *entry)
+{
+  uint32_t next_cluster_num;
+  size_t ctr;
+  char *buf = (char *)malloc(entry->file_size);
+  if(buf==NULL) return NULL;
+
+  next_cluster_num = FAT32_CLUSTER_NUMBER(entry) & 0x0FFFFFFF;
+  ctr = 0;
+  do {
+      printf("retrieve_file_content: loading next cluster number 0x%x\n", next_cluster_num);
+      load_cluster_data(fd, bpb, f32bpb, next_cluster_num, &buf[ctr]);
+      ctr += bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector;
+      next_cluster_num = vfat_cluster_map_next_cluster(m, next_cluster_num);
+  } while(next_cluster_num<0x0FFFFFFF);
+
+  return (void *)buf;
+}
+
+#define WRITE_BLOCK_SIZE  512
+
+void write_buffer(void *buffer, size_t length, char *filename)
+{
+  int out = open(filename, O_CREAT|O_WRONLY);
+  if(out==-1) {
+    printf("ERROR Could not open %s for writing\n", filename);
+    return;
+  }
+
+  for(size_t ctr=0; ctr<length; ctr+=WRITE_BLOCK_SIZE) {
+    size_t size_to_write = ctr+WRITE_BLOCK_SIZE>length ? length-ctr : WRITE_BLOCK_SIZE;
+    write(out, &buffer[ctr], size_to_write);
+  }
+  close(out);
+}
+
 int main(int argc, char *argv[]) {
   BootSectorStart *start = NULL;
   BIOSParameterBlock *bpb = NULL;
@@ -287,6 +335,10 @@ int main(int argc, char *argv[]) {
           DirectoryContentsList *contents = scan_root_dir(fd, bpb, reserved_sectors, FAT32_CLUSTER_NUMBER(entry)-2, &subdir_size);
           printf("Subdirectory contained %d items\n", subdir_size);
           vfat_dispose_directory_contents_list(contents);
+      } else {
+          void *buffer = retrieve_file_content(fd, bpb, f32bpb, cluster_map, entry);
+          write_buffer(buffer, entry->file_size, "file.out");
+          free(buffer);
       }
 
       printf("Found an entry: ");
