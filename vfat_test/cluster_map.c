@@ -60,7 +60,7 @@ uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_clust
       return -1;
     case 16:
       offset = current_cluster_num*2;
-      uint16_t wvalue = (uint16_t)m->buffer[offset];
+      uint16_t wvalue = ((uint16_t *)m->buffer)[current_cluster_num];
       if(wvalue=0xFFFF) {
         return 0x0FFFFFFF;
       } else {
@@ -68,7 +68,11 @@ uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_clust
       }
     case 32:
       offset = current_cluster_num*4;
-      uint32_t dvalue = (uint32_t)m->buffer[offset];
-      return dvalue & 0x0FFFFFFF;  //upper 4 bits are reserved and must be masked off, apparently
+      uint32_t dvalue = ((uint32_t *)m->buffer)[current_cluster_num] & 0x0FFFFFFF; //upper 4 bits are reserved and must be masked off, apparently
+      if(dvalue>=0x0FFFFFF8) {
+        return 0x0FFFFFFF;
+      } else {
+        return dvalue;
+      }
   }
 }
