@@ -175,7 +175,6 @@ DirectoryContentsList * scan_root_dir(int fd, BIOSParameterBlock *bpb, uint32_t 
       }
       vfat_dump_directory_entry(current->entry);
     }
-    //free(entry);
     current->next = (DirectoryContentsList *)malloc(sizeof(DirectoryContentsList));
     next_dir_entry(fd, &(current->next->entry));
     current = current->next;
@@ -201,7 +200,7 @@ void vfat_dispose_directory_contents_list(DirectoryContentsList *l)
   DirectoryContentsList *entry=l;
   do {
     DirectoryContentsList *next = entry->next;
-    free(entry->entry);
+    if(entry->entry) free(entry->entry);
     free(entry);
     entry=next;
   } while(entry);
@@ -236,12 +235,13 @@ DirectoryEntry *vfat_recursive_scan(int fd, BIOSParameterBlock *bpb, uint32_t re
 
 void load_cluster_data(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, uint32_t cluster_num, void *buffer)
 {
-  size_t reserved_sectors = bpb->reserved_logical_sectors + (f32bpb->logical_sectors_per_fat * bpb->fat_count);
+  size_t reserved_sectors = f32bpb ? bpb->reserved_logical_sectors + (f32bpb->logical_sectors_per_fat * bpb->fat_count) : bpb->reserved_logical_sectors + (bpb->logical_sectors_per_fat * bpb->fat_count) ;
   size_t sector_of_cluster = (cluster_num-2) * bpb->logical_sectors_per_cluster;
-  size_t byte_offset = (reserved_sectors + sector_of_cluster) * bpb->bytes_per_logical_sector;
+  size_t byte_offset = (reserved_sectors + sector_of_cluster) * bpb->bytes_per_logical_sector + bpb->max_root_dir_entries*32; //add on the root directory length to the "reserved area"
 
   size_t cluster_length = bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector;
 
+  printf("load_cluster_data: byte_offset is 0x%x\n", byte_offset);
   lseek(fd, byte_offset, SEEK_SET);
   read(fd, buffer, cluster_length);
 }
@@ -250,13 +250,13 @@ void *retrieve_file_content(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosPa
 {
   uint32_t next_cluster_num;
   size_t ctr;
-  char *buf = (char *)malloc(entry->file_size);
+  char *buf = (char *)malloc(entry->file_size + bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector);
   if(buf==NULL) return NULL;
+  printf("retrieve_file_content: buf is 0x%x\n", buf);
 
   next_cluster_num = FAT32_CLUSTER_NUMBER(entry) & 0x0FFFFFFF;
   ctr = 0;
   do {
-      printf("retrieve_file_content: loading next cluster number 0x%x\n", next_cluster_num);
       load_cluster_data(fd, bpb, f32bpb, next_cluster_num, &buf[ctr]);
       ctr += bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector;
       next_cluster_num = vfat_cluster_map_next_cluster(m, next_cluster_num);
@@ -269,7 +269,7 @@ void *retrieve_file_content(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosPa
 
 void write_buffer(void *buffer, size_t length, char *filename)
 {
-  int out = open(filename, O_CREAT|O_WRONLY);
+  int out = open(filename, O_CREAT|O_WRONLY|O_TRUNC);
   if(out==-1) {
     printf("ERROR Could not open %s for writing\n", filename);
     return;
@@ -277,7 +277,7 @@ void write_buffer(void *buffer, size_t length, char *filename)
 
   for(size_t ctr=0; ctr<length; ctr+=WRITE_BLOCK_SIZE) {
     size_t size_to_write = ctr+WRITE_BLOCK_SIZE>length ? length-ctr : WRITE_BLOCK_SIZE;
-    write(out, &buffer[ctr], size_to_write);
+    write(out, &(((char *)buffer)[ctr]), size_to_write);
   }
   close(out);
 }
@@ -310,6 +310,8 @@ int main(int argc, char *argv[]) {
     reserved_sectors = bpb->reserved_logical_sectors + (f32bpb->logical_sectors_per_fat * bpb->fat_count);
 
     read_fs_information_sector(fd, bpb, f32bpb->fs_information_sector, &infosector);
+  } else {
+    reserved_sectors = bpb->reserved_logical_sectors;
   }
 
   cluster_map = vfat_load_cluster_map(fd, bpb, f32bpb);
@@ -318,14 +320,16 @@ int main(int argc, char *argv[]) {
   //FIXME: why is our calculation 128 sectors (2 clusters) out?
   //because the root directory starts at cluster 2 of the data area which is the same as the end of reserved_sectors?
   size_t root_dir_size=0;
-  DirectoryContentsList *root_dir = scan_root_dir(fd, bpb, reserved_sectors, f32bpb->root_directory_entry_cluster-2, &root_dir_size);
+  //FAT32 has a specific location set in the extra bios parameter block. FAT12/16 use a fixed root directory immediately after the FATs.
+  uint32_t root_directory_entry_cluster = f32bpb ? f32bpb->root_directory_entry_cluster-2 : (uint32_t)(bpb->fat_count*bpb->logical_sectors_per_fat) / (uint32_t)bpb->logical_sectors_per_cluster;
+  DirectoryContentsList *root_dir = scan_root_dir(fd, bpb, reserved_sectors, root_directory_entry_cluster, &root_dir_size);
 
   if(argc>2) {
     char decoded_attrs[12];
 
     printf("Looking for entry called %s...\n", argv[2]);
 
-    DirectoryEntry *entry = vfat_recursive_scan(fd, bpb, reserved_sectors,f32bpb->root_directory_entry_cluster-2 , argv[2], strlen(argv[2]));
+    DirectoryEntry *entry = vfat_recursive_scan(fd, bpb, reserved_sectors, root_directory_entry_cluster, argv[2], strlen(argv[2]));
     if(entry==NULL) {
       puts("Found nothing.\n");
     } else {

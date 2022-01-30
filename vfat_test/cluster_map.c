@@ -61,7 +61,7 @@ uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_clust
     case 16:
       offset = current_cluster_num*2;
       uint16_t wvalue = ((uint16_t *)m->buffer)[current_cluster_num];
-      if(wvalue=0xFFFF) {
+      if(wvalue==0xFFFF) {
         return 0x0FFFFFFF;
       } else {
         return (uint32_t) wvalue;
