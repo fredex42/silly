@@ -142,7 +142,7 @@ typedef struct __attribute__((packed)) directory_entry {
   uint32_t file_size;
 } DirectoryEntry;
 
-#define FAT32_CLUSTER_NUMBER(directory_entry) ((uint32_t)(directory_entry->f32_high_cluster_num) << 16 ) + (uint32_t)directory_entry->low_cluster_num
+#define FAT32_CLUSTER_NUMBER(directory_entry) ((uint32_t)(directory_entry->f32_high_cluster_num) << 16 ) | (uint32_t)directory_entry->low_cluster_num
 
 typedef struct __attribute__((packed)) long_file_name {
   uint8_t sequence;
