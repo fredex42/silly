@@ -2,7 +2,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-
+#include <stdlib.h> //for free(), malloc()
+#include "fat_fs.h"
 #include "cluster_map.h"
 
 /**
@@ -17,7 +18,7 @@ void vfat_dispose_cluster_map(VFatClusterMap *m)
 /**
 Allocates and initialises a new cluster map object
 */
-VFatClusterMap *vfat_load_cluster_map(int fd, struct bios_parameter_block *bpb, struct fat32_extended_bios_parameter_block *f32bpb)
+VFatClusterMap *vfat_load_cluster_map_file(int fd, struct bios_parameter_block *bpb, struct fat32_extended_bios_parameter_block *f32bpb)
 {
   VFatClusterMap *m = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
   size_t bytes_offset, bytes_to_load;
@@ -46,6 +47,53 @@ VFatClusterMap *vfat_load_cluster_map(int fd, struct bios_parameter_block *bpb, 
   }
 }
 
+
+void vfat_load_cluster_map_completed(uint8_t status, void *buffer, void *extradata)
+{
+  VFatClusterMap *m = (VFatClusterMap *)extradata;
+
+  if(status !=ATA_STATUS_OK) {
+    m->loaded_callback(status, NULL);
+    return;
+  }
+  uint16_t discriminator = (uint16_t) m->buffer[3]<<8 | (uint16_t)m->buffer[2];
+
+  if(discriminator==0xFFFF) {
+    m->bitsize=16;
+  } else if(discriminator>=0x0FFF) {
+    m->bitsize=32;
+  } else {
+    m->bitsize=12;
+  }
+
+  m->loaded_callback(status, m);
+}
+
+/**
+Allocates and initialises a new cluster map object. This involves a disk access,
+so the actual map is returned via a callback.
+*/
+int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, VFatClusterMap *map))
+{
+  VFatClusterMap *m = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
+  size_t sector_offset, sectors_to_load;
+
+  m->loaded_callback = callback;
+  sector_offset = (size_t) fs_ptr->bpb->reserved_logical_sectors;
+  if(fs_ptr->f32bpb) {
+    sectors_to_load = (size_t) fs_ptr->f32bpb->logical_sectors_per_fat;
+  } else {
+    sectors_to_load = (size_t) fs_ptr->bpb->logical_sectors_per_fat;
+  }
+
+  m->buffer_size = sectors_to_load * (size_t)fs_ptr->bpb->bytes_per_logical_sector;
+  m->buffer = (uint8_t *)malloc(m->buffer_size);
+
+//(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
+  fs_ptr->storage->driver_start_read(fs_ptr->drive_nr, sector_offset, sectors_to_load, m->buffer, m, &vfat_load_cluster_map_completed);
+
+}
+
 /**
 Queries the next cluster in the chain following on from the given cluster.
 Returns 0x0FFFFFFF when end-of-file is reached
@@ -69,7 +117,7 @@ uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_clust
     case 32:
       offset = current_cluster_num*4;
       uint32_t dvalue = ((uint32_t *)m->buffer)[current_cluster_num] & 0x0FFFFFFF; //upper 4 bits are reserved and must be masked off, apparently
-      if(dvalue>=0x0FFFFFF8) {
+      if(dvalue>=0x0FFFFFF8) {  //all of thses signify end-of-file
         return 0x0FFFFFFF;
       } else {
         return dvalue;
