@@ -15,7 +15,7 @@ The FATFS struct extends the GenericFS struct which contains only the function d
 also encapsulate the filesystem data
 */
 typedef struct fat_fs {
-  void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void (*callback)(uint8_t drive_nr, struct fat_fs *fs_ptr));
+  void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr));
   void (*unmount)(struct fat_fs *fs_ptr);
   void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr));
 
@@ -34,10 +34,13 @@ typedef struct fat_fs {
   struct vfat_cluster_map *cluster_map;
 } FATFS;
 
-
-uint8_t new_fat_fs(uint8_t drive_nr, void (*callback)(uint8_t drive_nr, FATFS *fs_ptr));
-void fat_fs_find_file(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr));
+/* Public functions */
+FATFS* new_fat_fs(uint8_t drive_nr);
+void fat_fs_find_file(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
 void fat_fs_unmount(struct fat_fs *fs_ptr);
-void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(uint8_t drive_nr, struct fat_fs *fs_ptr));
+void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr));
+
+/* Private functions */
+DirectoryEntry *vfat_recursive_scan(struct fat_fs *fs_ptr, uint32_t rootdir_cluster, char *remaining_path, size_t path_len);
 
 #endif

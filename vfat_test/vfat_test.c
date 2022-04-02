@@ -3,11 +3,15 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include "fat_fs.h"
 #include "ucs_conv.h"
 #include "vfat.h"
 #include "cluster_map.h"
+#include "fake_storage_driver.h"
+
 /**
 Return the index of the first occurrence of the character c in the string buf.
 Returns -1 if the character is not present.
@@ -20,25 +24,6 @@ size_t find_in_string(const char *buf, char c)
   return -1;
 }
 
-int read_header(int fd, BootSectorStart **start, BIOSParameterBlock **bpb, ExtendedBiosParameterBlock **ebpb, FAT32ExtendedBiosParameterBlock **f32bpb)
-{
-  *start = (BootSectorStart *) malloc(sizeof(BootSectorStart));
-  read(fd, *start, sizeof(BootSectorStart));
-  *bpb = (BIOSParameterBlock *) malloc(sizeof(BIOSParameterBlock));
-  read(fd, *bpb, sizeof(BIOSParameterBlock));
-
-  if((*bpb)->max_root_dir_entries==0) {
-    puts("Probably a FAT32\n");
-    lseek(fd, 0x024, SEEK_SET);
-    *f32bpb = (FAT32ExtendedBiosParameterBlock *) malloc(sizeof(FAT32ExtendedBiosParameterBlock));
-    read(fd, *f32bpb, sizeof(FAT32ExtendedBiosParameterBlock));
-  } else {
-    puts("Probably not FAT32\n");
-    *ebpb = (ExtendedBiosParameterBlock *) malloc(sizeof(ExtendedBiosParameterBlock));
-    read(fd, *ebpb, sizeof(ExtendedBiosParameterBlock));
-  }
-  return 0;
-}
 
 int read_fs_information_sector(int fd, BIOSParameterBlock *bpb, uint16_t sector_offset, FSInformationSector **sec)
 {
@@ -206,32 +191,6 @@ void vfat_dispose_directory_contents_list(DirectoryContentsList *l)
   } while(entry);
 }
 
-DirectoryEntry *vfat_recursive_scan(int fd, BIOSParameterBlock *bpb, uint32_t reserved_sectors, uint32_t rootdir_cluster, char *remaining_path, size_t path_len)
-{
-  size_t dummy;
-  size_t path_split_point=find_in_string(remaining_path, '\\');
-  char dir_to_search[12];
-  memset(&dir_to_search, 0, 12);
-  strncpy((char *)dir_to_search, (const char *)remaining_path, path_split_point > 12 ? 12 : path_split_point);
-
-  printf("vfat_recursive_scan looking for %s with %d remaining\n", dir_to_search, path_len);
-  DirectoryContentsList *l = scan_root_dir(fd, bpb, reserved_sectors, rootdir_cluster, &dummy);
-  DirectoryContentsList *subdir = vfat_find_dir_entry(l, dir_to_search);
-
-  if(path_len==0 || path_split_point==-1) {
-    DirectoryEntry *result = (DirectoryEntry *)malloc(sizeof(DirectoryEntry));
-    memcpy(result, subdir->entry, sizeof(DirectoryEntry));
-    vfat_dispose_directory_contents_list(l);
-    return result;
-  } else if(subdir==NULL) {  //we found nothing
-    vfat_dispose_directory_contents_list(l);
-    return NULL;
-  } else {
-    DirectoryEntry *result = vfat_recursive_scan(fd, bpb, reserved_sectors, FAT32_CLUSTER_NUMBER(subdir->entry)-2, &(remaining_path[path_split_point+1]), path_len-path_split_point);
-    vfat_dispose_directory_contents_list(l);
-    return result;
-  }
-}
 
 void load_cluster_data(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, uint32_t cluster_num, void *buffer)
 {
@@ -282,12 +241,21 @@ void write_buffer(void *buffer, size_t length, char *filename)
   close(out);
 }
 
+
+/*
+This callback is invoked once when the FAT_FS structure is loaded.
+*/
+void fat_fs_ready(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr)
+{
+  if(status==0) {
+    printf("File system on drive %d is ready at 0x%x\n", drive_nr, fs_ptr);
+  } else {
+    printf("Could not mount file system from drive %d, status was %d\n", drive_nr, status);
+  }
+}
+
 int main(int argc, char *argv[]) {
-  BootSectorStart *start = NULL;
-  BIOSParameterBlock *bpb = NULL;
-  ExtendedBiosParameterBlock *ebpb = NULL;
-  FAT32ExtendedBiosParameterBlock *f32bpb = NULL;
-  FSInformationSector *infosector = NULL;
+
   uint32_t reserved_sectors;
 
   VFatClusterMap *cluster_map = NULL;
@@ -297,59 +265,15 @@ int main(int argc, char *argv[]) {
     exit(2);
   }
 
-  int fd = open(argv[1], O_RDONLY);
-  if(fd==-1) {
-    printf("Could not open file %s\n",argv[1]);
+  FakeStorageDriver *drv = new_fake_storage_driver(argv[1]);
+  if(drv==NULL) {
+    puts("ERROR Could not initialise fake driver\n");
     exit(1);
   }
 
-  read_header(fd, &start,&bpb, &ebpb, &f32bpb);
+  FATFS* fs_ptr = new_fat_fs(drv->fd);
+  fs_ptr->storage = drv;
+  fs_ptr->mount(fs_ptr, drv->fd, &fat_fs_ready);
 
-  if(f32bpb) {
-    printf("reserved logical sectors %d, logical sectors per fat %d, fat count %d\n", bpb->reserved_logical_sectors, f32bpb->logical_sectors_per_fat, bpb->fat_count);
-    reserved_sectors = bpb->reserved_logical_sectors + (f32bpb->logical_sectors_per_fat * bpb->fat_count);
 
-    read_fs_information_sector(fd, bpb, f32bpb->fs_information_sector, &infosector);
-  } else {
-    reserved_sectors = bpb->reserved_logical_sectors;
-  }
-
-  cluster_map = vfat_load_cluster_map(fd, bpb, f32bpb);
-  printf("Found a FAT%d filesystem\n", cluster_map->bitsize);
-
-  //FIXME: why is our calculation 128 sectors (2 clusters) out?
-  //because the root directory starts at cluster 2 of the data area which is the same as the end of reserved_sectors?
-  size_t root_dir_size=0;
-  //FAT32 has a specific location set in the extra bios parameter block. FAT12/16 use a fixed root directory immediately after the FATs.
-  uint32_t root_directory_entry_cluster = f32bpb ? f32bpb->root_directory_entry_cluster-2 : (uint32_t)(bpb->fat_count*bpb->logical_sectors_per_fat) / (uint32_t)bpb->logical_sectors_per_cluster;
-  DirectoryContentsList *root_dir = scan_root_dir(fd, bpb, reserved_sectors, root_directory_entry_cluster, &root_dir_size);
-
-  if(argc>2) {
-    char decoded_attrs[12];
-
-    printf("Looking for entry called %s...\n", argv[2]);
-
-    DirectoryEntry *entry = vfat_recursive_scan(fd, bpb, reserved_sectors, root_directory_entry_cluster, argv[2], strlen(argv[2]));
-    if(entry==NULL) {
-      puts("Found nothing.\n");
-    } else {
-      if(entry->attributes&VFAT_ATTR_SUBDIR) {
-          size_t subdir_size;
-          puts("Subdirectory contents:\n");
-          DirectoryContentsList *contents = scan_root_dir(fd, bpb, reserved_sectors, FAT32_CLUSTER_NUMBER(entry)-2, &subdir_size);
-          printf("Subdirectory contained %d items\n", subdir_size);
-          vfat_dispose_directory_contents_list(contents);
-      } else {
-          void *buffer = retrieve_file_content(fd, bpb, f32bpb, cluster_map, entry);
-          write_buffer(buffer, entry->file_size, "file.out");
-          free(buffer);
-      }
-
-      printf("Found an entry: ");
-      vfat_dump_directory_entry(entry);
-
-    }
-  }
-
-  close(fd);
 }

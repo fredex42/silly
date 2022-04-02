@@ -59,10 +59,16 @@ void read_header_block_complete(uint8_t status, void *buffer, void *extradata)
   vfat_load_cluster_map(fs_ptr, &cluster_map_loaded);
 }
 
-void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(uint8_t drive_nr, struct fat_fs *fs_ptr))
+void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr))
 {
   char *block_buffer = (char *)malloc(512);
-  fs_ptr->storage->driver_start_read(drive_nr, 0, 1, block_buffer, fs_ptr, &read_header_block_complete);
+  fs_ptr->did_mount_cb = callback;
+  if(fs_ptr->storage==NULL) {
+    printf("fs_ptr->storage is not set!\n");
+    callback(fs_ptr, 1, drive_nr);
+  } else {
+    fs_ptr->storage->driver_start_read(drive_nr, 0, 1, block_buffer, fs_ptr, &read_header_block_complete);
+  }
 }
 
 void fat_fs_unmount(struct fat_fs *fs_ptr)
@@ -95,9 +101,9 @@ void fat_fs_find_file(struct fat_fs *fs_ptr, char *path, void (*callback)(struct
 
   printf("Looking for entry called %s...\n", path);
 
-  DirectoryEntry *entry = vfat_recursive_scan(fs_ptr->drive_nr, fs_ptr->bpb, fs_ptr->reserved_sectors, root_directory_entry_cluster, path, strlen(path));
+  DirectoryEntry *entry = vfat_recursive_scan(fs_ptr, root_directory_entry_cluster, path, strlen(path));
   callback(fs_ptr, entry);
-  
+
   // if(entry==NULL) {
   //   puts("Found nothing.\n");
   // } else {
@@ -120,22 +126,49 @@ void fat_fs_find_file(struct fat_fs *fs_ptr, char *path, void (*callback)(struct
   // }
 }
 
+DirectoryEntry *vfat_recursive_scan(struct fat_fs *fs_ptr, uint32_t rootdir_cluster, char *remaining_path, size_t path_len)
+{
+  size_t dummy;
+  size_t path_split_point=find_in_string(remaining_path, '\\');
+  char dir_to_search[12];
+  memset(&dir_to_search, 0, 12);
+  strncpy((char *)dir_to_search, (const char *)remaining_path, path_split_point > 12 ? 12 : path_split_point);
+
+  printf("vfat_recursive_scan looking for %s with %d remaining\n", dir_to_search, path_len);
+  DirectoryContentsList *l = scan_root_dir(fs_ptr->drive_nr, fs_ptr->bpb, fs_ptr->reserved_sectors, rootdir_cluster, &dummy);
+  DirectoryContentsList *subdir = vfat_find_dir_entry(l, dir_to_search);
+
+  if(path_len==0 || path_split_point==-1) {
+    DirectoryEntry *result = (DirectoryEntry *)malloc(sizeof(DirectoryEntry));
+    memcpy(result, subdir->entry, sizeof(DirectoryEntry));
+    vfat_dispose_directory_contents_list(l);
+    return result;
+  } else if(subdir==NULL) {  //we found nothing
+    vfat_dispose_directory_contents_list(l);
+    return NULL;
+  } else {
+    DirectoryEntry *result = vfat_recursive_scan(fs_ptr, FAT32_CLUSTER_NUMBER(subdir->entry)-2, &(remaining_path[path_split_point+1]), path_len-path_split_point);
+    vfat_dispose_directory_contents_list(l);
+    return result;
+  }
+}
 
 /**
-Initialises a new FATFS struct and mounts the given drive number onto it.
+Initialises a new FATFS struct. You should call the `mount` function on the returned FATFS
+structure to access it.
 Returns -1 if unsuccessful (could not allocate) or 0 if successul.
 The given callback function is called once the filesystem is ready.
 */
-uint8_t new_fat_fs(uint8_t drive_nr, void (*callback)(uint8_t drive_nr, FATFS *fs_ptr))
+FATFS* new_fat_fs(uint8_t drive_nr)
 {
   FATFS *newstruct = (FATFS *)malloc(sizeof(FATFS));
   if(newstruct==NULL) return -1;
   memset(newstruct, 0, sizeof(FATFS));
 
+  newstruct->drive_nr = drive_nr;
   newstruct->mount = &fat_fs_mount;
   newstruct->unmount = &fat_fs_unmount;
   newstruct->find_file = &fat_fs_find_file;
 
-  newstruct->mount(newstruct, drive_nr, callback);
-  return 0;
+  return newstruct;
 }
