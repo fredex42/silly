@@ -73,7 +73,7 @@ void vfat_load_cluster_map_completed(uint8_t status, void *buffer, void *extrada
 Allocates and initialises a new cluster map object. This involves a disk access,
 so the actual map is returned via a callback.
 */
-int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, VFatClusterMap *map))
+int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, FATFS *fs_ptr, VFatClusterMap *map))
 {
   VFatClusterMap *m = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
   size_t sector_offset, sectors_to_load;
