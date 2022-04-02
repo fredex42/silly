@@ -21,7 +21,7 @@ void vfat_dispose_cluster_map(VFatClusterMap *m);
 /**
 Allocates and initialises a new cluster map object
 */
-int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, VFatClusterMap *map));
+int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, FATFS *fs_ptr, VFatClusterMap *map));
 
 /**
 Queries the next cluster in the chain following on from the given cluster.

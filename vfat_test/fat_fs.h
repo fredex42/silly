@@ -34,4 +34,10 @@ typedef struct fat_fs {
   struct vfat_cluster_map *cluster_map;
 } FATFS;
 
+
+uint8_t new_fat_fs(uint8_t drive_nr, void (*callback)(uint8_t drive_nr, FATFS *fs_ptr));
+void fat_fs_find_file(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr));
+void fat_fs_unmount(struct fat_fs *fs_ptr);
+void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(uint8_t drive_nr, struct fat_fs *fs_ptr));
+
 #endif
