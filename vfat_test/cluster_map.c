@@ -1,8 +1,12 @@
-#include <string.h>
+#ifdef __BUILDING_TESTS
+#include <stdlib.h> //for malloc(), free
+#include <string.h> //for memset()
+#include <stdio.h>  //for printf()
+//#include <unistd.h> //for lseek()
 #include <sys/types.h>
 #include <unistd.h>
+#endif
 
-#include <stdlib.h> //for free(), malloc()
 #include "fat_fs.h"
 #include "cluster_map.h"
 
@@ -53,6 +57,7 @@ void vfat_load_cluster_map_completed(uint8_t status, void *buffer, void *extrada
   VFatClusterMap *m = (VFatClusterMap *)extradata;
 
   if(status !=ATA_STATUS_OK) {
+    printf("ERROR vfat_load_cluster_map_completed status is %d wanted %d\n", status, ATA_STATUS_OK);
     m->loaded_callback(status, NULL);
     return;
   }
@@ -73,12 +78,13 @@ void vfat_load_cluster_map_completed(uint8_t status, void *buffer, void *extrada
 Allocates and initialises a new cluster map object. This involves a disk access,
 so the actual map is returned via a callback.
 */
-int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, FATFS *fs_ptr, VFatClusterMap *map))
+int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, VFatClusterMap *map))
 {
   VFatClusterMap *m = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
   size_t sector_offset, sectors_to_load;
 
   m->loaded_callback = callback;
+  m->parent_fs = fs_ptr;
   sector_offset = (size_t) fs_ptr->bpb->reserved_logical_sectors;
   if(fs_ptr->f32bpb) {
     sectors_to_load = (size_t) fs_ptr->f32bpb->logical_sectors_per_fat;

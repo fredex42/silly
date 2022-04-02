@@ -39,66 +39,6 @@ int read_fs_information_sector(int fd, BIOSParameterBlock *bpb, uint16_t sector_
 }
 
 
-int first_dir_entry(int fd, BIOSParameterBlock *bpb, uint32_t rootdir_cluster, uint32_t reserved_sectors, DirectoryEntry **entry)
-{
-  printf("rootdir cluster is %d, sectors per cluster is %d, reserved sectors is %d, bytes per logical sector is %d\n", rootdir_cluster, bpb->logical_sectors_per_cluster, reserved_sectors, bpb->bytes_per_logical_sector);
-  off_t offset_in_bytes = (rootdir_cluster * bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector) + (reserved_sectors * bpb->bytes_per_logical_sector);
-
-  printf("first_dir_entry offset is 0x%x\n", offset_in_bytes);
-  lseek(fd, offset_in_bytes, SEEK_SET);
-
-  *entry = (DirectoryEntry *) malloc(sizeof(DirectoryEntry));
-  read(fd, *entry, sizeof(DirectoryEntry));
-  return 0;
-}
-
-int next_dir_entry(int fd, DirectoryEntry **entry)
-{
-  *entry = (DirectoryEntry *) malloc(sizeof(DirectoryEntry));
-  read(fd, *entry, sizeof(DirectoryEntry));
-  return 0;
-}
-
-void decode_attributes(uint8_t attrs, char *buf)
-{
-  if(attrs&VFAT_ATTR_READONLY) {
-    buf[0]='R';
-  } else {
-    buf[0]='.';
-  }
-  if(attrs&VFAT_ATTR_HIDDEN) {
-    buf[1]='H';
-  } else {
-    buf[1]='.';
-  }
-  if(attrs&VFAT_ATTR_SYSTEM) {
-    buf[2]='S';
-  } else {
-    buf[2]='.';
-  }
-  if(attrs&VFAT_ATTR_VOLLABEL) {
-    buf[3]='L';
-  } else {
-    buf[3]='.';
-  }
-  if(attrs&VFAT_ATTR_SUBDIR) {
-    buf[4]='D';
-  } else {
-    buf[4]='.';
-  }
-  if(attrs&VFAT_ATTR_ARCHIVE) {
-    buf[5]='A';
-  } else {
-    buf[5]='.';
-  }
-  if(attrs&VFAT_ATTR_DEVICE) {
-    buf[6]='D';
-  } else {
-    buf[6]='.';
-  }
-  buf[7]=0;
-}
-
 void vfat_dump_directory_entry(DirectoryEntry *entry)
 {
   char decoded_attrs[8];
@@ -117,56 +57,7 @@ void vfat_dump_directory_entry(DirectoryEntry *entry)
   }
 }
 
-DirectoryContentsList * scan_root_dir(int fd, BIOSParameterBlock *bpb, uint32_t reserved_sectors, uint32_t rootdir_cluster, size_t *list_length)
-{
-  DirectoryContentsList *result=NULL, *current=NULL;
-  size_t i=0;
-  char fn[9];
-  char xtn[4];
 
-  printf("Size of DirectoryEntry is %d\n", sizeof(DirectoryEntry));
-  result = (DirectoryContentsList *)malloc(sizeof(DirectoryContentsList));
-  current = result;
-  first_dir_entry(fd, bpb, rootdir_cluster, reserved_sectors, &(result->entry));
-
-  while(current->entry != NULL && current->entry->short_name[0]!=0) {
-    i++;
-
-    if(current->entry->attributes==VFAT_ATTR_LFNCHUNK) {
-      //FIXME - don't call unicode_to_ascii like this!!!
-      char *chars_one = unicode_to_ascii(current->lfn->chars_one, 10);
-      char *chars_two = unicode_to_ascii(current->lfn->chars_two, 12);
-      char *chars_three= unicode_to_ascii(current->lfn->chars_three, 4);
-
-      printf("Got LFN sequence 0x%x with %s%s%s\n",current->lfn->sequence, chars_one, chars_two, chars_three);
-      if(chars_three) free(chars_three);
-      if(chars_two) free(chars_two);
-      if(chars_one) free(chars_one);
-
-    } else {
-      strncpy((char *)&fn, current->entry->short_name, 8);
-      strncpy((char *)&xtn, current->entry->short_xtn, 3);
-
-      size_t fn_trim_point = find_in_string((const char *)fn, 0x20);
-      if(fn_trim_point==-1) fn_trim_point=8;
-      size_t xtn_trim_point = find_in_string((const char *)xtn, 0x20);
-      if(xtn_trim_point==-1) xtn_trim_point=3;
-
-      memset(current->short_name,0,12);
-      strncpy((char *)current->short_name, (const char *)fn, fn_trim_point);
-      if(xtn_trim_point>0 && xtn_trim_point<4) {
-        current->short_name[fn_trim_point] = '.';
-        strncpy((char *)(&current->short_name[fn_trim_point+1]), xtn, xtn_trim_point);
-      }
-      vfat_dump_directory_entry(current->entry);
-    }
-    current->next = (DirectoryContentsList *)malloc(sizeof(DirectoryContentsList));
-    next_dir_entry(fd, &(current->next->entry));
-    current = current->next;
-  }
-  *list_length=i;
-  return result;
-}
 
 
 /**
@@ -245,12 +136,12 @@ void write_buffer(void *buffer, size_t length, char *filename)
 /*
 This callback is invoked once when the FAT_FS structure is loaded.
 */
-void fat_fs_ready(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr)
+void fat_fs_ready(struct fat_fs *fs_ptr, uint8_t status)
 {
   if(status==0) {
-    printf("File system on drive %d is ready at 0x%x\n", drive_nr, fs_ptr);
+    printf("File system on drive %d is ready at 0x%lx\n", fs_ptr->drive_nr, fs_ptr);
   } else {
-    printf("Could not mount file system from drive %d, status was %d\n", drive_nr, status);
+    printf("Could not mount file system from drive %d, status was %d\n", fs_ptr->drive_nr, status);
   }
 }
 

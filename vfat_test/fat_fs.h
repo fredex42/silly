@@ -15,7 +15,7 @@ The FATFS struct extends the GenericFS struct which contains only the function d
 also encapsulate the filesystem data
 */
 typedef struct fat_fs {
-  void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr));
+  void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status));
   void (*unmount)(struct fat_fs *fs_ptr);
   void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr));
 
