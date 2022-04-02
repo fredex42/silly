@@ -10,6 +10,8 @@ typedef struct vfat_cluster_map {
     uint32_t buffer_size;
     uint8_t *buffer;  //buffer that holds the entire cluster map
 
+    struct fat_fs *parent_fs;
+
     void (*loaded_callback)(uint8_t status, struct vfat_cluster_map *map);
 } VFatClusterMap;
 
@@ -21,7 +23,7 @@ void vfat_dispose_cluster_map(VFatClusterMap *m);
 /**
 Allocates and initialises a new cluster map object
 */
-int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, FATFS *fs_ptr, VFatClusterMap *map));
+int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, VFatClusterMap *map));
 
 /**
 Queries the next cluster in the chain following on from the given cluster.
