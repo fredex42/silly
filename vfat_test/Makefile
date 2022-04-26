@@ -19,5 +19,8 @@ fake_storage_driver.o: fake_storage_driver.c fake_storage_driver.h generic_stora
 fat_fs.o: fat_fs.c fat_fs.h
 	gcc -c fat_fs.c ${CFLAGS}
 
-vfat_test: fake_storage_driver.o fat_fs.o ucs_conv.o cluster_map.o vfat_test.o
-	gcc -o vfat_test vfat_test.o ucs_conv.o cluster_map.o fat_fs.o fake_storage_driver.o
+string_helpers.o: string_helpers.c string_helpers.h
+	gcc -c string_helpers.c ${CFLAGS}
+
+vfat_test: fake_storage_driver.o fat_fs.o ucs_conv.o cluster_map.o vfat_test.o string_helpers.o
+	gcc -o vfat_test vfat_test.o ucs_conv.o cluster_map.o fat_fs.o fake_storage_driver.o string_helpers.o

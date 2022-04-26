@@ -7,6 +7,8 @@
 #include "generic_storage.h"
 #include "fat_fs.h"
 #include "cluster_map.h"
+#include "ucs_conv.h"
+#include "string_helpers.h"
 
 /**
 This callback is invoked when the cluster map has been read in and parsed.
@@ -28,6 +30,48 @@ void cluster_map_loaded(uint8_t status, struct vfat_cluster_map *map)
 }
 
 /**
+Scans a DirectoryContentsList to find an entry matching the given name
+*/
+DirectoryContentsList *vfat_find_dir_entry(DirectoryContentsList *l, const char *unpadded_name)
+{
+  for(DirectoryContentsList *entry=l;entry!=NULL;entry=entry->next) {
+    if(strncmp(entry->short_name, unpadded_name, 12)==0) return entry;
+  }
+  return NULL;
+}
+
+/**
+Iterates the given DirectoryContentsList and frees all associated memory
+*/
+void vfat_dispose_directory_contents_list(DirectoryContentsList *l)
+{
+  DirectoryContentsList *entry=l;
+  do {
+    DirectoryContentsList *next = entry->next;
+    if(entry->entry) free(entry->entry);
+    free(entry);
+    entry=next;
+  } while(entry);
+}
+
+
+void load_cluster_data(FATFS *fs_ptr, uint32_t cluster_num, void *buffer, void (*callback)(uint8_t status, void *buffer, void *extradata))
+{
+  size_t reserved_sectors = fs_ptr->f32bpb ?
+    fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->f32bpb->logical_sectors_per_fat * fs_ptr->bpb->fat_count) :
+     fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->logical_sectors_per_fat * fs_ptr->bpb->fat_count) ;
+  size_t sector_of_cluster = (cluster_num-2) * fs_ptr->bpb->logical_sectors_per_cluster;
+  size_t byte_offset = (reserved_sectors + sector_of_cluster) * fs_ptr->bpb->bytes_per_logical_sector + fs_ptr->bpb->max_root_dir_entries*32; //add on the root directory length to the "reserved area"
+
+  //size_t cluster_length = fs_ptr->bpb->logical_sectors_per_cluster;
+
+  printf("load_cluster_data: byte_offset is 0x%lx\n", byte_offset);
+  fs_ptr->storage->driver_start_read(fs_ptr->drive_nr, sector_of_cluster, fs_ptr->bpb->logical_sectors_per_cluster, buffer, (void *)fs_ptr, callback);
+  // lseek(fd, byte_offset, SEEK_SET);
+  // read(fd, buffer, cluster_length);
+}
+
+/**
 This callback is invoked when the header block of the disk has been read.
 It fills in the basic disk parameters into fs_ptr and then initiates loading in the
 cluster map.
@@ -40,11 +84,7 @@ void read_header_block_complete(uint8_t status, void *buffer, void *extradata)
   fs_ptr->start = (BootSectorStart *)buffer;
 
   buffer_loc += sizeof(BootSectorStart);
-  //read(fd, *start, sizeof(BootSectorStart));
 
-  //*(ptrs->bpb) = (BIOSParameterBlock *) malloc(sizeof(BIOSParameterBlock));
-  //read(fd, *bpb, sizeof(BIOSParameterBlock));
-  //memcpy(bpb, buffer+buffer_loc, sizeof(BiosParameterBlock));
   fs_ptr->bpb = (BIOSParameterBlock *)(buffer + buffer_loc);
 
   buffer_loc += sizeof(BIOSParameterBlock);
@@ -54,24 +94,23 @@ void read_header_block_complete(uint8_t status, void *buffer, void *extradata)
     //lseek(fd, 0x024, SEEK_SET);
     fs_ptr->f32bpb = (FAT32ExtendedBiosParameterBlock *)(buffer + buffer_loc);
     fs_ptr->reserved_sectors = fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->f32bpb->logical_sectors_per_fat * fs_ptr->bpb->fat_count);
-    //read(fd, *f32bpb, sizeof(FAT32ExtendedBiosParameterBlock));
     //read_fs_information_sector(fd, bpb, f32bpb->fs_information_sector, &infosector);
   } else {
     puts("Probably not FAT32\n");
     fs_ptr->ebpb = (ExtendedBiosParameterBlock *)(buffer + buffer_loc);
     fs_ptr->reserved_sectors = fs_ptr->bpb->reserved_logical_sectors;
-    //read(fd, *ebpb, sizeof(ExtendedBiosParameterBlock));
   }
   vfat_load_cluster_map(fs_ptr, &cluster_map_loaded);
 }
 
-void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr))
+void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status))
 {
   char *block_buffer = (char *)malloc(512);
   fs_ptr->did_mount_cb = callback;
+  fs_ptr->drive_nr = drive_nr;
   if(fs_ptr->storage==NULL) {
     printf("fs_ptr->storage is not set!\n");
-    callback(fs_ptr, 1, drive_nr);
+    callback(fs_ptr, 1);
   } else {
     fs_ptr->storage->driver_start_read(drive_nr, 0, 1, block_buffer, fs_ptr, &read_header_block_complete);
   }
@@ -254,7 +293,7 @@ DirectoryEntry *vfat_recursive_scan(struct fat_fs *fs_ptr, uint32_t rootdir_clus
   memset(&dir_to_search, 0, 12);
   strncpy((char *)dir_to_search, (const char *)remaining_path, path_split_point > 12 ? 12 : path_split_point);
 
-  printf("vfat_recursive_scan looking for %s with %d remaining\n", dir_to_search, path_len);
+  printf("vfat_recursive_scan looking for %s with %ld remaining\n", dir_to_search, path_len);
   DirectoryContentsList *l = scan_root_dir(fs_ptr->drive_nr, fs_ptr->bpb, fs_ptr->reserved_sectors, rootdir_cluster, &dummy);
   DirectoryContentsList *subdir = vfat_find_dir_entry(l, dir_to_search);
 
@@ -274,15 +313,15 @@ DirectoryEntry *vfat_recursive_scan(struct fat_fs *fs_ptr, uint32_t rootdir_clus
 }
 
 /**
-Initialises a new FATFS struct. You should call the `mount` function on the returned FATFS
+Initialises a new FATFS struct.
+Returns NULL if unsuccessful (could not allocate) or the initialised FATFS if successul.
+You should call the `mount` function on the returned FATFS
 structure to access it.
-Returns -1 if unsuccessful (could not allocate) or 0 if successul.
-The given callback function is called once the filesystem is ready.
 */
 FATFS* new_fat_fs(uint8_t drive_nr)
 {
   FATFS *newstruct = (FATFS *)malloc(sizeof(FATFS));
-  if(newstruct==NULL) return -1;
+  if(newstruct==NULL) return NULL;
   memset(newstruct, 0, sizeof(FATFS));
 
   newstruct->drive_nr = drive_nr;
