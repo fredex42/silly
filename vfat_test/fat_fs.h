@@ -17,7 +17,7 @@ also encapsulate the filesystem data
 typedef struct fat_fs {
   void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status));
   void (*unmount)(struct fat_fs *fs_ptr);
-  void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr));
+  void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
 
   void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status);
 
@@ -38,7 +38,7 @@ typedef struct fat_fs {
 FATFS* new_fat_fs(uint8_t drive_nr);
 void fat_fs_find_file(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
 void fat_fs_unmount(struct fat_fs *fs_ptr);
-void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, uint8_t drive_nr));
+void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status));
 
 /* Private functions */
 DirectoryEntry *vfat_recursive_scan(struct fat_fs *fs_ptr, uint32_t rootdir_cluster, char *remaining_path, size_t path_len);

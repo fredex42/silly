@@ -12,17 +12,7 @@
 #include "cluster_map.h"
 #include "fake_storage_driver.h"
 
-/**
-Return the index of the first occurrence of the character c in the string buf.
-Returns -1 if the character is not present.
-*/
-size_t find_in_string(const char *buf, char c)
-{
-  for(size_t i=0;i<strlen(buf);i++) {
-    if(buf[i]==c) return i;
-  }
-  return -1;
-}
+
 
 
 int read_fs_information_sector(int fd, BIOSParameterBlock *bpb, uint16_t sector_offset, FSInformationSector **sec)
@@ -55,45 +45,6 @@ void vfat_dump_directory_entry(DirectoryEntry *entry)
   } else {
     printf("Got file %s.%s with size %u and attributes 0x%x (%s) at cluster 0x%x\n", fn, xtn, entry->file_size,entry->attributes, decoded_attrs, FAT32_CLUSTER_NUMBER(entry));
   }
-}
-
-
-
-
-/**
-Scans a DirectoryContentsList to find an entry matching the given name
-*/
-DirectoryContentsList *vfat_find_dir_entry(DirectoryContentsList *l, const char *unpadded_name)
-{
-  for(DirectoryContentsList *entry=l;entry!=NULL;entry=entry->next) {
-    if(strncmp(entry->short_name, unpadded_name, 12)==0) return entry;
-  }
-  return NULL;
-}
-
-void vfat_dispose_directory_contents_list(DirectoryContentsList *l)
-{
-  DirectoryContentsList *entry=l;
-  do {
-    DirectoryContentsList *next = entry->next;
-    if(entry->entry) free(entry->entry);
-    free(entry);
-    entry=next;
-  } while(entry);
-}
-
-
-void load_cluster_data(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, uint32_t cluster_num, void *buffer)
-{
-  size_t reserved_sectors = f32bpb ? bpb->reserved_logical_sectors + (f32bpb->logical_sectors_per_fat * bpb->fat_count) : bpb->reserved_logical_sectors + (bpb->logical_sectors_per_fat * bpb->fat_count) ;
-  size_t sector_of_cluster = (cluster_num-2) * bpb->logical_sectors_per_cluster;
-  size_t byte_offset = (reserved_sectors + sector_of_cluster) * bpb->bytes_per_logical_sector + bpb->max_root_dir_entries*32; //add on the root directory length to the "reserved area"
-
-  size_t cluster_length = bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector;
-
-  printf("load_cluster_data: byte_offset is 0x%x\n", byte_offset);
-  lseek(fd, byte_offset, SEEK_SET);
-  read(fd, buffer, cluster_length);
 }
 
 void *retrieve_file_content(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, VFatClusterMap *m, DirectoryEntry *entry)
