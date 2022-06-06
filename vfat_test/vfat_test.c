@@ -83,14 +83,27 @@ void write_buffer(void *buffer, size_t length, char *filename)
   close(out);
 }
 
-
+void file_found(struct fat_fs *fs_ptr, DirectoryEntry *entry)
+{
+  if(entry==NULL) {
+    printf("File was not found\n");
+  } else {
+    printf("Found file %s.%s with size %d\n", entry->short_name, entry->short_xtn, entry->file_size);
+  }
+}
 /*
 This callback is invoked once when the FAT_FS structure is loaded.
 */
-void fat_fs_ready(struct fat_fs *fs_ptr, uint8_t status)
+void fat_fs_ready(struct fat_fs *fs_ptr, uint8_t status, void *extradata)
 {
+  char *some_path = (char *)extradata;
   if(status==0) {
     printf("File system on drive %d is ready at 0x%lx\n", fs_ptr->drive_nr, fs_ptr);
+    if(some_path !=NULL) {
+      fat_fs_find_file(fs_ptr, some_path, &file_found);
+    } else {
+      printf("No filename passed to look for.\n");
+    }
   } else {
     printf("Could not mount file system from drive %d, status was %d\n", fs_ptr->drive_nr, status);
   }
@@ -115,7 +128,7 @@ int main(int argc, char *argv[]) {
 
   FATFS* fs_ptr = new_fat_fs(drv->fd);
   fs_ptr->storage = drv;
-  fs_ptr->mount(fs_ptr, drv->fd, &fat_fs_ready);
+  fs_ptr->mount(fs_ptr, drv->fd, argv[2], &fat_fs_ready);
 
 
 }

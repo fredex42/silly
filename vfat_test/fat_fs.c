@@ -20,13 +20,15 @@ void cluster_map_loaded(uint8_t status, struct vfat_cluster_map *map)
   FATFS *fs_ptr = map->parent_fs;
   if(map==NULL) {
     printf("ERROR could not load FAT cluster map, status is %d\n", status);
-    fs_ptr->did_mount_cb(fs_ptr, 2);
+    fs_ptr->busy=0;
+    fs_ptr->did_mount_cb(fs_ptr, 2, fs_ptr->mount_data_ptr);
   } else {
     fs_ptr->cluster_map = map;
     printf("Found a FAT%d filesystem\n", map->bitsize);
-
-    fs_ptr->did_mount_cb(fs_ptr, status);
+    fs_ptr->busy=0;
+    fs_ptr->did_mount_cb(fs_ptr, status, fs_ptr->mount_data_ptr);
   }
+  fs_ptr->mount_data_ptr = NULL;
 }
 
 /**
@@ -92,7 +94,7 @@ void read_header_block_complete(uint8_t status, void *buffer, void *extradata)
   if(fs_ptr->bpb->max_root_dir_entries==0) {
     puts("Probably a FAT32\n");
     //lseek(fd, 0x024, SEEK_SET);
-    fs_ptr->f32bpb = (FAT32ExtendedBiosParameterBlock *)(buffer + buffer_loc);
+    fs_ptr->f32bpb = (FAT32ExtendedBiosParameterBlock *)(buffer + 0x024);
     fs_ptr->reserved_sectors = fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->f32bpb->logical_sectors_per_fat * fs_ptr->bpb->fat_count);
     //read_fs_information_sector(fd, bpb, f32bpb->fs_information_sector, &infosector);
   } else {
@@ -103,15 +105,17 @@ void read_header_block_complete(uint8_t status, void *buffer, void *extradata)
   vfat_load_cluster_map(fs_ptr, &cluster_map_loaded);
 }
 
-void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void (*callback)(struct fat_fs *fs_ptr, uint8_t status))
+void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
 {
   char *block_buffer = (char *)malloc(512);
-  fs_ptr->did_mount_cb = callback;
-  fs_ptr->drive_nr = drive_nr;
   if(fs_ptr->storage==NULL) {
     printf("fs_ptr->storage is not set!\n");
-    callback(fs_ptr, 1);
+    callback(fs_ptr, 1, extradata);
   } else {
+    fs_ptr->busy = 1;
+    fs_ptr->did_mount_cb = callback;
+    fs_ptr->drive_nr = drive_nr;
+    fs_ptr->mount_data_ptr = extradata;
     fs_ptr->storage->driver_start_read(drive_nr, 0, 1, block_buffer, fs_ptr, &read_header_block_complete);
   }
 }
@@ -328,6 +332,6 @@ FATFS* new_fat_fs(uint8_t drive_nr)
   newstruct->mount = &fat_fs_mount;
   newstruct->unmount = &fat_fs_unmount;
   newstruct->find_file = &fat_fs_find_file;
-
+  newstruct->busy = 0;
   return newstruct;
 }
