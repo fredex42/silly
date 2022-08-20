@@ -125,18 +125,26 @@ void fat_fs_unmount(struct fat_fs *fs_ptr)
 
 }
 
-int first_dir_entry(int fd, BIOSParameterBlock *bpb, uint32_t rootdir_cluster, uint32_t reserved_sectors, DirectoryEntry **entry)
+void _read_first_dir_complete(uint8_t status, void *buffer, void *fs_ptr_raw, void *extradata)
 {
-  printf("rootdir cluster is %d, sectors per cluster is %d, reserved sectors is %d, bytes per logical sector is %d\n", rootdir_cluster, bpb->logical_sectors_per_cluster, reserved_sectors, bpb->bytes_per_logical_sector);
-  off_t offset_in_bytes = (rootdir_cluster * bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector) + (reserved_sectors * bpb->bytes_per_logical_sector);
+  FATFS *fs_ptr = (FATFS *)fs_ptr_raw;
+  void (*)(FATFS *, uint8_t, DirectoryEntry *, void*) cb = (*)(FATFS *fs_ptr, uint8_t status, DirectoryEntry *entry, void* extradata)extradata;
 
-  printf("first_dir_entry offset is 0x%lx\n", offset_in_bytes);
-  lseek(fd, offset_in_bytes, SEEK_SET);
-
-  *entry = (DirectoryEntry *) malloc(sizeof(DirectoryEntry));
-  read(fd, *entry, sizeof(DirectoryEntry)); //FIXME needs replacing
-  return 0;
+  callback(fs_ptr, status, (DirectoryEntry *)buffer, NULL);
 }
+
+int first_dir_entry(FATFS *fs_ptr, uint8_t drive_nr, void *extradata, void (*callback)(FATFS *fs_ptr, uint8_t status, DirectoryEntry *entry, void* extradata))
+{
+  printf("rootdir cluster is %d, sectors per cluster is %d, reserved sectors is %d, bytes per logical sector is %d\n", fs_ptr->rootdir_cluster, fs_ptr->logical_sectors_per_cluster, fs_ptr->reserved_sectors, fs_ptr->bpb->bytes_per_logical_sector);
+  //off_t offset_in_bytes = (rootdir_cluster * bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector) + (reserved_sectors * bpb->bytes_per_logical_sector);
+
+  //printf("first_dir_entry offset is 0x%lx\n", offset_in_bytes);
+  //lseek(fd, offset_in_bytes, SEEK_SET);
+  char *block_buffer = (char *)malloc(4096);
+
+  fs_ptr->storage->driver_start_read((void *)fs_ptr, drive_nr, fs_ptr->rootdir_cluster, 8, block_buffer, (void *)callback, &_read_first_dir_complete);
+}
+
 
 int next_dir_entry(int fd, DirectoryEntry **entry)
 {
@@ -266,27 +274,6 @@ void fat_fs_find_file(struct fat_fs *fs_ptr, char *path, void (*callback)(struct
 
   DirectoryEntry *entry = vfat_recursive_scan(fs_ptr, root_directory_entry_cluster, path, strlen(path));
   callback(fs_ptr, entry);
-
-  // if(entry==NULL) {
-  //   puts("Found nothing.\n");
-  // } else {
-  //   if(entry->attributes&VFAT_ATTR_SUBDIR) {
-  //       size_t subdir_size;
-  //       puts("Subdirectory contents:\n");
-  //       //FIXME: why is our calculation 128 sectors (2 clusters) out?
-  //       //because the root directory starts at cluster 2 of the data area which is the same as the end of reserved_sectors?
-  //       DirectoryContentsList *contents = scan_root_dir(fs_ptr->drive_nr, fs_ptr->bpb, fs_ptr->reserved_sectors, FAT32_CLUSTER_NUMBER(entry)-2, &subdir_size);
-  //       printf("Subdirectory contained %d items\n", subdir_size);
-  //       vfat_dispose_directory_contents_list(contents);
-  //   } else {
-  //       void *buffer = retrieve_file_content(fs_ptr->drive_nr, fs_ptr->bpb, fs_ptr->f32bpb, fs_ptr->cluster_map, entry);
-  //       write_buffer(buffer, entry->file_size, "file.out");
-  //       free(buffer);
-  //   }
-  //
-  //   printf("Found an entry: ");
-  //   vfat_dump_directory_entry(entry);
-  // }
 }
 
 DirectoryEntry *vfat_recursive_scan(struct fat_fs *fs_ptr, uint32_t rootdir_cluster, char *remaining_path, size_t path_len)
