@@ -69,12 +69,14 @@ typedef struct ata_pending_operation {
   uint16_t base_addr;     //base IO port to do the read from/write to
 
   uint8_t device;         //0=>master 1=>slave
-  void (*completed_func)(uint8_t status, void *buffer);
+
+  void *extradata;    //arbitary pointer that gets passed unaltered to the callback
+  void (*completed_func)(uint8_t status, void *buffer, void *extradata);
 } ATAPendingOperation;
 
 void print_drive_info(uint8_t drive_nr);
-int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer));
-int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer));
+int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
+int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
 
 //ATA error codes
 #define ATA_E_AMNF    1<<0  //address mark not found

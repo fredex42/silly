@@ -3,7 +3,8 @@
 
 ;FAT format sector: https://networkencyclopedia.com/file-allocation-table-fat/#structure-of-fat-Volume
 jmp _bootsect
-db 'ANDY_____'
+nop
+db 'ANDY____'
 dw	0x0200	;512 bytes per logical sector
 db	0x04	;4 logical sectors per cluster - =>16-bit FAT
 dw	0x0004	;4 reserved sectors, including this one! FAT 0 is at 2k => 0x800 bytes
