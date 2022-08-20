@@ -10,7 +10,7 @@
 /*
 Simulates a driver read on a disk-image file
 */
-int8_t fake_driver_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
+int8_t fake_driver_start_read(void *fs_ptr, uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *fs_ptr, void *extradata))
 {
   uint64_t byte_offset = lba_address * BYTES_PER_LOGICAL_SECTOR;
   uint64_t byte_length = sector_count * BYTES_PER_LOGICAL_SECTOR;
@@ -30,11 +30,11 @@ int8_t fake_driver_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t se
       bytes_read += this_read;
     }
   }
-  callback(0, buffer, extradata);
+  callback(0, buffer, fs_ptr, extradata);
   return 0;
 }
 
-int8_t fake_driver_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
+int8_t fake_driver_start_write(void *fs_ptr, uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *fs_ptr, void *extradata))
 {
   puts("ERROR fake_driver_start_write not implemented\n");
   return -1;
