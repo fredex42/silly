@@ -6,10 +6,21 @@
 #include <stdio.h>
 #include <panic.h>
 #include <errors.h>
+#include <drivers/generic_storage.h>
 #include "ata_pio.h"
 #include "../../mmgr/heap.h"
 
 ATADriverState *master_driver_state = NULL;
+
+static GenericStorageDriver ata_pio_driver;
+
+/**
+Returns a static pointer to the driver struct
+*/
+const GenericStorageDriver *ata_pio_get_driver()
+{
+  return (const GenericStorageDriver *)&ata_pio_driver;
+}
 
 /*
 Returns 1 if the bus status is 0xFF, i.e. open-circuit (nothing connected to it) or 0 otherwise
@@ -135,8 +146,11 @@ void initialise_ata_driver()
   uint16_t *info;
   kputs("Initialising simple ATA driver...\r\n");
   master_driver_state = (ATADriverState*)malloc(sizeof(ATADriverState));
-
   kprintf("DEBUG ATA driver master state initialised at 0x%x\r\n", master_driver_state);
+  ata_pio_driver.driver_start_read = &ata_pio_start_read;
+  ata_pio_driver.driver_start_write = &ata_pio_start_write;
+  ata_pio_driver.driver_print_drive_info = &print_drive_info;
+
   if(!master_driver_state) {
     k_panic("Could not allocate memory for ATA driver state\r\n");
     return;

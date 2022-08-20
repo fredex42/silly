@@ -60,7 +60,7 @@ This should be called with interrupts disabled.
 It will return E_BUSY if another operation is already pending, for this reason should be considered
 "internal" as it needs queueing in front of it.
 */
-int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer))
+int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
 {
   uint16_t base_addr;
   uint8_t selector;

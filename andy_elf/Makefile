@@ -1,4 +1,4 @@
-.PHONY: 8259pic acpi drivers scheduler mmgr
+.PHONY: 8259pic acpi drivers scheduler mmgr fs
 
 all: test.elf
 
@@ -59,18 +59,20 @@ drivers:
 
 scheduler:
 	make -C scheduler
-
 mmgr:
 	make -C mmgr
 
+fs:
+	make -C fs
+
 test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o mmgr 8259pic acpi drivers scheduler
+		cpuid.o mmgr 8259pic acpi drivers scheduler fs
 	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o \
 		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
-		-Ldrivers/early_serial/ -learly_serial \
+		-Ldrivers/early_serial/ -learly_serial -L fs/vfat/ -l fs_vfat \
 		-Ttext 0x7E00 -Tdata 0xE000 -Trodata 0x9000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
 
