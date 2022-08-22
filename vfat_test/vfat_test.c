@@ -6,27 +6,14 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
 #include "fat_fs.h"
 #include "ucs_conv.h"
 #include "vfat.h"
 #include "cluster_map.h"
 #include "fake_storage_driver.h"
-
-
-
-
-int read_fs_information_sector(int fd, BIOSParameterBlock *bpb, uint16_t sector_offset, FSInformationSector **sec)
-{
-  if(sector_offset==0xFFFF || sector_offset==0) {
-    puts("FS Information Sector not supported\n");
-    return 0;
-  }
-
-  lseek(fd, sector_offset*bpb->bytes_per_logical_sector, SEEK_SET);
-  *sec = (FSInformationSector *) malloc(sizeof(FSInformationSector));
-  read(fd, *sec, sizeof(FSInformationSector));
-  return 0;
-}
+#include "file.h"
+#include "mounter.h"
 
 
 void vfat_dump_directory_entry(DirectoryEntry *entry)
@@ -47,24 +34,24 @@ void vfat_dump_directory_entry(DirectoryEntry *entry)
   }
 }
 
-void *retrieve_file_content(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, VFatClusterMap *m, DirectoryEntry *entry)
-{
-  uint32_t next_cluster_num;
-  size_t ctr;
-  char *buf = (char *)malloc(entry->file_size + bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector);
-  if(buf==NULL) return NULL;
-  printf("retrieve_file_content: buf is 0x%x\n", buf);
-
-  next_cluster_num = FAT32_CLUSTER_NUMBER(entry) & 0x0FFFFFFF;
-  ctr = 0;
-  do {
-      load_cluster_data(fd, bpb, f32bpb, next_cluster_num, &buf[ctr]);
-      ctr += bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector;
-      next_cluster_num = vfat_cluster_map_next_cluster(m, next_cluster_num);
-  } while(next_cluster_num<0x0FFFFFFF);
-
-  return (void *)buf;
-}
+// void *retrieve_file_content(int fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, VFatClusterMap *m, DirectoryEntry *entry)
+// {
+//   uint32_t next_cluster_num;
+//   size_t ctr;
+//   char *buf = (char *)malloc(entry->file_size + bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector);
+//   if(buf==NULL) return NULL;
+//   printf("retrieve_file_content: buf is 0x%x\n", buf);
+//
+//   next_cluster_num = FAT32_CLUSTER_NUMBER(entry) & 0x0FFFFFFF;
+//   ctr = 0;
+//   do {
+//       load_cluster_data(fd, bpb, f32bpb, next_cluster_num, &buf[ctr]);
+//       ctr += bpb->logical_sectors_per_cluster*bpb->bytes_per_logical_sector;
+//       next_cluster_num = vfat_cluster_map_next_cluster(m, next_cluster_num);
+//   } while(next_cluster_num<0x0FFFFFFF);
+//
+//   return (void *)buf;
+// }
 
 #define WRITE_BLOCK_SIZE  512
 
@@ -100,7 +87,7 @@ void fat_fs_ready(struct fat_fs *fs_ptr, uint8_t status, void *extradata)
   if(status==0) {
     printf("File system on drive %d is ready at 0x%lx\n", fs_ptr->drive_nr, fs_ptr);
     if(some_path !=NULL) {
-      fat_fs_find_file(fs_ptr, some_path, &file_found);
+      //fat_fs_find_file(fs_ptr, some_path, &file_found);
     } else {
       printf("No filename passed to look for.\n");
     }
@@ -128,7 +115,11 @@ int main(int argc, char *argv[]) {
 
   FATFS* fs_ptr = new_fat_fs(drv->fd);
   fs_ptr->storage = drv;
-  fs_ptr->mount(fs_ptr, drv->fd, argv[2], &fat_fs_ready);
 
+  //void fat_fs_mount(FATFS *fs_ptr, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
+  fat_fs_mount(fs_ptr, drv->fd, argv[2], &fat_fs_ready);
+
+  // fs_ptr->mount(fs_ptr, drv->fd, argv[2], &fat_fs_ready);
+  //
 
 }
