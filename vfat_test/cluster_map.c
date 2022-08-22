@@ -52,13 +52,13 @@ VFatClusterMap *vfat_load_cluster_map_file(int fd, struct bios_parameter_block *
 }
 
 
-void vfat_load_cluster_map_completed(uint8_t status, void *buffer, void *extradata)
+void vfat_load_cluster_map_completed(uint8_t status, void *buffer, void *fs_ptr, void *extradata)
 {
   VFatClusterMap *m = (VFatClusterMap *)extradata;
 
   if(status !=ATA_STATUS_OK) {
     printf("ERROR vfat_load_cluster_map_completed status is %d wanted %d\n", status, ATA_STATUS_OK);
-    m->loaded_callback(status, NULL);
+    m->loaded_callback(m->parent_fs, status, NULL);
     return;
   }
   uint16_t discriminator = (uint16_t) m->buffer[3]<<8 | (uint16_t)m->buffer[2];
@@ -71,14 +71,14 @@ void vfat_load_cluster_map_completed(uint8_t status, void *buffer, void *extrada
     m->bitsize=12;
   }
 
-  m->loaded_callback(status, m);
+  m->loaded_callback(m->parent_fs, status, m);
 }
 
 /**
 Allocates and initialises a new cluster map object. This involves a disk access,
 so the actual map is returned via a callback.
 */
-int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(uint8_t status, VFatClusterMap *map))
+int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(FATFS *fs_ptr,uint8_t status, VFatClusterMap *map))
 {
   VFatClusterMap *m = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
   size_t sector_offset, sectors_to_load;

@@ -14,14 +14,16 @@ int8_t fake_driver_start_read(void *fs_ptr, uint8_t drive_nr, uint64_t lba_addre
 {
   uint64_t byte_offset = lba_address * BYTES_PER_LOGICAL_SECTOR;
   uint64_t byte_length = sector_count * BYTES_PER_LOGICAL_SECTOR;
-
+  printf("DEBUG Disk reading %d sectors from lba address %ld\n", (uint32_t)sector_count, lba_address);
+  printf("DEBUG That's %ld bytes from an offset of %ld\n", byte_length, byte_offset);
+  
   lseek(drive_nr, byte_offset, SEEK_SET);
 
   ssize_t bytes_read = 0;
   while(bytes_read < byte_length) {
     ssize_t this_read = read(drive_nr, &((char *)buffer)[bytes_read], byte_length);
     if(this_read==-1) { //read failed
-      printf("ERROR Disk read failed\n");
+      printf("ERROR Disk read failed reading %d sectors from %ld\n", (uint32_t)sector_count, lba_address);
       return -1;
     } else if(this_read==0) { //no data
       printf("ERROR No data to read\n");

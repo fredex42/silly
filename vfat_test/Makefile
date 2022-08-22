@@ -4,6 +4,15 @@ all: vfat_test
 clean:
 	rm -f *.o vfat_test
 
+mounter.o: mounter.c vfat.h ucs_conv.h cluster_map.h generic_storage.h fat_fs.h
+	gcc -c mounter.c ${CFLAGS}
+
+file.o: file.c file.h vfat.h fat_fs.h
+	gcc -c file.c ${CFLAGS}
+
+vfat_directory_cache.o: vfat_directory_cache.c vfat_directory_cache.h vfat.h ucs_conv.h fat_fs.h
+	gcc -c vfat_directory_cache.c ${CFLAGS}
+
 vfat_test.o: vfat_test.c vfat.h ucs_conv.h cluster_map.h generic_storage.h fat_fs.h
 	gcc -c vfat_test.c ${CFLAGS}
 
@@ -22,5 +31,5 @@ fat_fs.o: fat_fs.c fat_fs.h
 string_helpers.o: string_helpers.c string_helpers.h
 	gcc -c string_helpers.c ${CFLAGS}
 
-vfat_test: fake_storage_driver.o fat_fs.o ucs_conv.o cluster_map.o vfat_test.o string_helpers.o
-	gcc -o vfat_test vfat_test.o ucs_conv.o cluster_map.o fat_fs.o fake_storage_driver.o string_helpers.o
+vfat_test: mounter.o file.o vfat_directory_cache.o fake_storage_driver.o fat_fs.o ucs_conv.o cluster_map.o vfat_test.o string_helpers.o
+	gcc -o vfat_test vfat_test.o ucs_conv.o cluster_map.o fat_fs.o fake_storage_driver.o string_helpers.o mounter.o vfat_directory_cache.o file.o
