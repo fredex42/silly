@@ -17,16 +17,27 @@ Called by the IO driver once the given cluster is loaded in. Query the (cached) 
 to see what the next cluster to load is, and if so then recurse back to load_next_cluster.
 If there is nothing left to load then call the all-done callback.
 */
-void _file_cluster_read_cb(uint8_t status, void *buffer, void *fs_ptr, void *extradata)
+void _file_cluster_read_cb(uint8_t status, void *buffer, void *fs_ptr_x, void *extradata)
 {
   FILE_LOAD_TRANSIENT_DATA *data = (FILE_LOAD_TRANSIENT_DATA *)extradata;
+  FATFS *fs_ptr = data->fs_ptr;
+
   uint32_t next_cluster_num = vfat_cluster_map_next_cluster(data->fs_ptr->cluster_map, data->loading_cluster);
-  if(next_cluster_num==0xFFFFFFFF) {
-    void (*load_done_cb)(FATFS *fs_ptr, uint8_t status, void *buffer) = data->load_done_cb;
+
+  void (*load_done_cb)(FATFS *fs_ptr, uint8_t status, void *buffer) = data->load_done_cb;
+
+  if(next_cluster_num>=0x0FFFFFFF) {
     free(data);
-    load_done_cb(data->fs_ptr, status, buffer);
+    load_done_cb(fs_ptr, status, buffer);
   } else {
-    load_next_cluster(data, buffer, next_cluster_num);
+    data->buffer_pos += BYTES_PER_CLUSTER(fs_ptr);
+    if(data->buffer_pos >= data->buffer_length_in_clusters*BYTES_PER_CLUSTER(fs_ptr)) {
+      //we ran out of space in the buffer
+      free(data);
+      load_done_cb(fs_ptr, FAT_ERR_NOMEM, buffer);
+    } else {
+      load_next_cluster(data, buffer, next_cluster_num);
+    }
   }
 }
 
@@ -37,10 +48,25 @@ Initialises the load of the next cluster of the file
 */
 void load_next_cluster(FILE_LOAD_TRANSIENT_DATA *req, void *buffer, uint32_t loading_cluster)
 {
+  printf("DEBUG load_next_cluster loading cluster 0x%x into buffer at 0x%x\n", loading_cluster, req->buffer_pos);
+
+  //cluster numbers are always out by 2.
+  //This is because the "first" sector, i.e. following on from the formatting info and FATs, is numbered 2
+  //but to get the actual location we must expressly skip over the FATs and reserved sectors.
+  uint32_t target_sector = SECTOR_FOR_CLUSTER(req->fs_ptr, (loading_cluster-2));
+  printf("DEBUG target_sector %d\n", target_sector);
+  uint32_t sectors_per_fat = req->fs_ptr->f32bpb ? req->fs_ptr->f32bpb->logical_sectors_per_fat : (uint32_t)req->fs_ptr->bpb->logical_sectors_per_fat;
+  printf("DEBUG sectors_per_fat is %d\n", sectors_per_fat);
+  uint32_t sectors_to_skip = req->fs_ptr->bpb->fat_count * sectors_per_fat;
+  printf("DEBUG sectors_to_skip (post-FAT) %d\n", sectors_to_skip);
+  sectors_to_skip += req->fs_ptr->bpb->reserved_logical_sectors;
+  printf("DEBUG sectors_to_skip (post-reserved) %d\n", sectors_to_skip);
+
   req->loading_cluster = loading_cluster;
   req->fs_ptr->storage->driver_start_read(
+    req->fs_ptr,
     req->fs_ptr->drive_nr,
-    SECTOR_FOR_CLUSTER(req->fs_ptr, loading_cluster),
+    target_sector+sectors_to_skip,
     req->fs_ptr->bpb->logical_sectors_per_cluster,
     (buffer + req->buffer_pos),
     req,

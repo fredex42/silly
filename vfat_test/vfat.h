@@ -180,4 +180,6 @@ typedef struct fat_buffer {
   uint32_t buffer_length_sectors;   //how many sectors to write back to disk
 } FATBuffer;
 
+#define FAT_ERR_OFFSET 1<<2
+#define FAT_ERR_NOMEM  FAT_ERR_OFFSET + 1 //indicates that the given buffer was not big enough
 #endif

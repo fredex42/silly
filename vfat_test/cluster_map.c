@@ -95,8 +95,7 @@ int vfat_load_cluster_map(FATFS *fs_ptr, void (*callback)(FATFS *fs_ptr,uint8_t 
   m->buffer_size = sectors_to_load * (size_t)fs_ptr->bpb->bytes_per_logical_sector;
   m->buffer = (uint8_t *)malloc(m->buffer_size);
 
-//(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
-  fs_ptr->storage->driver_start_read(fs_ptr->drive_nr, sector_offset, sectors_to_load, m->buffer, m, &vfat_load_cluster_map_completed);
+  fs_ptr->storage->driver_start_read(fs_ptr, fs_ptr->drive_nr, sector_offset, sectors_to_load, m->buffer, m, &vfat_load_cluster_map_completed);
 
 }
 

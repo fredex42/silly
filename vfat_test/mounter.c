@@ -16,6 +16,7 @@ Step 4. Directory tree is now cached so we can return to caller.
 */
 void directory_cache_loaded(FATFS *fs_ptr, uint8_t status, VFAT_DIRECTORY_CACHE_NODE *root)
 {
+  printf("Completed caching in directories\n");
   void (*final_callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata) = fs_ptr->mount_data_ptr->mount_completed_cb;
   void *cb_extradata = fs_ptr->mount_data_ptr->extradata;
   free(fs_ptr->mount_data_ptr);
