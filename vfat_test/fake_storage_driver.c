@@ -4,8 +4,11 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include "fake_storage_driver.h"
+
+extern int errno;
 
 /*
 Simulates a driver read on a disk-image file
@@ -14,22 +17,31 @@ int8_t fake_driver_start_read(void *fs_ptr, uint8_t drive_nr, uint64_t lba_addre
 {
   uint64_t byte_offset = lba_address * BYTES_PER_LOGICAL_SECTOR;
   uint64_t byte_length = sector_count * BYTES_PER_LOGICAL_SECTOR;
-  printf("DEBUG Disk reading %d sectors from lba address %ld\n", (uint32_t)sector_count, lba_address);
-  printf("DEBUG That's %ld bytes from an offset of %ld\n", byte_length, byte_offset);
-  
-  lseek(drive_nr, byte_offset, SEEK_SET);
+  printf("DEBUG Disk reading 0x%x sectors from lba address 0x%x\n", (uint32_t)sector_count, lba_address);
+  printf("DEBUG That's 0x%x bytes from an offset of 0x%x\n", byte_length, byte_offset);
 
+  off_t seeked = lseek(drive_nr, byte_offset, SEEK_SET);
+  switch(seeked) {
+    case (off_t)-1:
+      printf("ERROR Could not seek to offset: %d\n", errno);
+      callback(errno, buffer,fs_ptr, extradata);
+      return errno;
+    default:
+      printf("INFO Seeked to 0x%x\n", seeked);
+      break;
+  }
   ssize_t bytes_read = 0;
   while(bytes_read < byte_length) {
-    ssize_t this_read = read(drive_nr, &((char *)buffer)[bytes_read], byte_length);
+    ssize_t this_read = read(drive_nr, buffer + bytes_read, byte_length);
     if(this_read==-1) { //read failed
-      printf("ERROR Disk read failed reading %d sectors from %ld\n", (uint32_t)sector_count, lba_address);
+      printf("ERROR Disk read failed reading %d sectors from %ld on drive %d. errno was %d.\n", (uint32_t)sector_count, lba_address, drive_nr, errno);
       return -1;
     } else if(this_read==0) { //no data
       printf("ERROR No data to read\n");
       return -1;
     } else {
       bytes_read += this_read;
+      printf("DEBUG Read 0x%x bytes\n", bytes_read);
     }
   }
   callback(0, buffer, fs_ptr, extradata);
