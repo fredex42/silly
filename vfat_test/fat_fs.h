@@ -38,6 +38,7 @@ typedef struct fat_fs {
 
   struct mount_transient_data *mount_data_ptr;
 
+  struct vfat_directory_cache *directory_cache;
 } FATFS;
 
 /* Public functions */
