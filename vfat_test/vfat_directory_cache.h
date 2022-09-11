@@ -12,13 +12,17 @@
 
 typedef struct vfat_directory_cache_node {
   struct vfat_directory_cache_node *next;
-  uint8_t is_leaf;
-  DirectoryEntry *entry;
+  struct vfat_directory_cache_node *child;  //child==NULL => leaf node (i.e. file)
+  char full_file_name[255];
+  DirectoryEntry entry;
 } VFAT_DIRECTORY_CACHE_NODE;
 
-struct vfat_directory_cache {
+typedef struct vfat_directory_cache {
+  size_t bytes_allocated;
+  size_t bytes_used;
 
-};
+  VFAT_DIRECTORY_CACHE_NODE *start;
+} VFAT_DIRECTORY_CACHE;
 
 typedef struct vfat_directory_cache_transient_data {
 

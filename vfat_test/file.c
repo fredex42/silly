@@ -21,20 +21,20 @@ void _file_cluster_read_cb(uint8_t status, void *buffer, void *fs_ptr_x, void *e
 {
   FILE_LOAD_TRANSIENT_DATA *data = (FILE_LOAD_TRANSIENT_DATA *)extradata;
   FATFS *fs_ptr = data->fs_ptr;
-
+  void *client_extradata = data->extradata;
   uint32_t next_cluster_num = vfat_cluster_map_next_cluster(data->fs_ptr->cluster_map, data->loading_cluster);
 
-  void (*load_done_cb)(FATFS *fs_ptr, uint8_t status, void *buffer) = data->load_done_cb;
+  void (*load_done_cb)(FATFS *fs_ptr, uint8_t status, void *buffer, void *extradata) = data->load_done_cb;
 
   if(next_cluster_num>=0x0FFFFFFF) {
     free(data);
-    load_done_cb(fs_ptr, status, buffer);
+    load_done_cb(fs_ptr, status, buffer, client_extradata);
   } else {
     data->buffer_pos += BYTES_PER_CLUSTER(fs_ptr);
     if(data->buffer_pos >= data->buffer_length_in_clusters*BYTES_PER_CLUSTER(fs_ptr)) {
       //we ran out of space in the buffer
       free(data);
-      load_done_cb(fs_ptr, FAT_ERR_NOMEM, buffer);
+      load_done_cb(fs_ptr, FAT_ERR_NOMEM, buffer, client_extradata);
     } else {
       load_next_cluster(data, buffer, next_cluster_num);
     }
@@ -73,7 +73,7 @@ void load_next_cluster(FILE_LOAD_TRANSIENT_DATA *req, void *buffer, uint32_t loa
     &_file_cluster_read_cb);
 }
 
-void fat_load_file(FATFS *fs_ptr, uint32_t starting_cluster, void *buffer, uint32_t buffer_size, void (*load_done_cb)(FATFS *fs_ptr, uint8_t status, void *buffer))
+void fat_load_file(FATFS *fs_ptr, uint32_t starting_cluster, void *buffer, uint32_t buffer_size, void *extdata, void (*load_done_cb)(FATFS *fs_ptr, uint8_t status, void *buffer, void *extradata))
 {
   FILE_LOAD_TRANSIENT_DATA *req = (FILE_LOAD_TRANSIENT_DATA *)malloc(sizeof(FILE_LOAD_TRANSIENT_DATA));
   memset((void *)req, 0, sizeof(FILE_LOAD_TRANSIENT_DATA));
@@ -83,11 +83,16 @@ void fat_load_file(FATFS *fs_ptr, uint32_t starting_cluster, void *buffer, uint3
   req->loading_cluster = starting_cluster;
   req->buffer_length_in_clusters = buffer_size / BYTES_PER_CLUSTER(fs_ptr);
   req->load_done_cb = load_done_cb;
+  req->extradata = extdata;
   load_next_cluster(req, buffer, req->loading_cluster);
 }
 
 void decode_attributes(uint8_t attrs, char *buf)
 {
+  if(attrs&0x0F) {  //Read-only, hidden, system, volume label all set => LFN fragment
+    strncpy(buf, "!LFN", 8);
+    return;
+  }
   if(attrs&VFAT_ATTR_READONLY) {
     buf[0]='R';
   } else {
