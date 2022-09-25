@@ -3,6 +3,10 @@ all: vfat_test
 
 clean:
 	rm -f *.o vfat_test
+	make -C utils/ clean
+
+utils/libutils.a:
+	make -C utils/
 
 mounter.o: mounter.c vfat.h ucs_conv.h cluster_map.h generic_storage.h fat_fs.h
 	gcc -c mounter.c ${CFLAGS}
@@ -31,5 +35,5 @@ fat_fs.o: fat_fs.c fat_fs.h
 string_helpers.o: string_helpers.c string_helpers.h
 	gcc -c string_helpers.c ${CFLAGS}
 
-vfat_test: mounter.o file.o vfat_directory_cache.o fake_storage_driver.o fat_fs.o ucs_conv.o cluster_map.o vfat_test.o string_helpers.o
-	gcc -o vfat_test vfat_test.o ucs_conv.o cluster_map.o fat_fs.o fake_storage_driver.o string_helpers.o mounter.o vfat_directory_cache.o file.o
+vfat_test: mounter.o file.o vfat_directory_cache.o fake_storage_driver.o fat_fs.o ucs_conv.o cluster_map.o vfat_test.o string_helpers.o utils/libutils.a
+	gcc -o vfat_test vfat_test.o ucs_conv.o cluster_map.o fat_fs.o fake_storage_driver.o string_helpers.o mounter.o vfat_directory_cache.o file.o -Lutils -lutils

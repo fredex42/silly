@@ -7,6 +7,7 @@
 #include <types.h>
 #endif
 
+#include "utils/directory_queue.h"
 #include "generic_storage.h"
 #include "vfat.h"
 
@@ -25,7 +26,7 @@ typedef struct vfat_directory_cache {
 } VFAT_DIRECTORY_CACHE;
 
 typedef struct vfat_directory_cache_transient_data {
-
+  DIRECTORY_QUEUE *dirs_to_process;
 } VFAT_DIRECTORY_CACHE_DATA;
 
 void initialise_directory_cache(FATFS *fs_ptr, void (*callback)(FATFS *fs_ptr, uint8_t status, VFAT_DIRECTORY_CACHE_NODE *root));
