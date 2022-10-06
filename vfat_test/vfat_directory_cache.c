@@ -38,9 +38,25 @@ VFAT_DIRECTORY_CACHE_NODE *vfat_directory_cache_new_node(VFAT_DIRECTORY_CACHE *c
   return newnode;
 }
 
-void scan_directory(FATFS *fs_ptr, uint32_t starting_cluster, VFAT_DIRECTORY_CACHE_DATA *data, void (*callback)(FATFS *fs_ptr, uint8_t status,VFAT_DIRECTORY_CACHE_DATA *data))
+void link_cache_node(VFAT_DIRECTORY_CACHE *cache, VFAT_DIRECTORY_CACHE_NODE *node, VFAT_DIRECTORY_CACHE_NODE *prev_sibling, VFAT_DIRECTORY_CACHE_NODE *parent)
 {
+  if(prev_sibling) prev_sibling->next = node;
+  if(parent) parent->child = node;
+}
 
+void directory_cache_dump(VFAT_DIRECTORY_CACHE_NODE *node, uint16_t level)
+{
+  uint16_t i;
+  if(!node) return;
+  for(i=0; i<4*level; i++) putchar(' ');
+  puts(node->full_file_name);
+  putchar('\n');
+  if(node->child) {
+    directory_cache_dump(node->child, level+1);
+  }
+  if(node->next) {
+    directory_cache_dump(node->next, level);
+  }
 }
 
 void root_directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void *extradata)
@@ -49,10 +65,10 @@ void root_directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void 
   VFAT_DIRECTORY_CACHE_DATA *transient = (VFAT_DIRECTORY_CACHE_DATA *)extradata;
 
   if(status!=0) {
-    printf("ERROR Could not load root directory, error %d\n", status);
+    printf("ERROR Could not load directory, error %d\n", status);
     return;
   }
-  printf("Loaded root directory at 0x%llx\n", (uint64_t)buffer);
+  printf("Loaded directory at 0x%llx\n", (uint64_t)buffer);
 
   uint32_t directory_count=0;
   DirectoryEntry *entry;
@@ -78,19 +94,37 @@ void root_directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void 
           current_node->full_file_name[9]='.';
           memcpy(&(current_node->full_file_name)[10], entry->short_xtn, 3);
           memcpy(&current_node->entry, entry, sizeof(DirectoryEntry));
-          printf("INFO Got %s, size %d, attributes %s\n", current_node->full_file_name, entry->file_size, attrs);
+          //printf("INFO Got %s, size %d, attributes %s\n", current_node->full_file_name, entry->file_size, attrs);
 
           if(entry->attributes & VFAT_ATTR_SUBDIR) { //we are a directory
-            directory_queue_push(transient->dirs_to_process, entry);
-            printf("INFO Pushed %s to process in the next iteration, queue length is %d\n", current_node->full_file_name, transient->dirs_to_process->entry_count);
+            if(entry->short_name[0]!='.') { //FIXME: need a more sophisticated comparison to detect '.' and '..' dirs so we don't recurse forever
+              directory_queue_push(transient->dirs_to_process, entry);
+              printf("INFO Pushed %s to process in the next iteration, queue length is %d\n", current_node->full_file_name, transient->dirs_to_process->entry_count);
+            }
           }
         }
         ++directory_count;
         prev_node = current_node;
+        if(current_node) add_node_to_cache(fs_ptr->directory_cache, current_node);
         current_node = NULL;
+
       }
   }
-  free(buffer);
+
+  if(!directory_queue_empty(transient->dirs_to_process)) {
+    printf("INFO %d more directories to go\n", transient->dirs_to_process->entry_count);
+    DirectoryEntry next_ent;
+    directory_queue_pop(transient->dirs_to_process, &next_ent);
+    uint32_t fat32_cluster_num = (next_ent.f32_high_cluster_num << 4) + next_ent.low_cluster_num;
+    printf("INFO Next directory entry at cluster 0x%x\n", fat32_cluster_num);
+    fat_load_file(fs_ptr, fat32_cluster_num, buffer, BUFFER_SIZE_IN_PAGES*PAGE_SIZE, (void *)transient, &root_directory_loaded_cb);
+  } else {
+    printf("INFO Processed all directories\n");
+    //FIXME: why does free(buffer) here abort on an invalid pointer?
+    //free(buffer);
+    directory_queue_unref(transient->dirs_to_process);
+    transient->dirs_to_process=NULL;
+  }
 }
 
 void initialise_directory_cache(FATFS *fs_ptr,
@@ -115,6 +149,10 @@ void initialise_directory_cache(FATFS *fs_ptr,
     uint32_t root_directory_entry_cluster = fs_ptr->f32bpb->root_directory_entry_cluster;
     printf("Found FAT32root directory at cluster %ld\n", root_directory_entry_cluster);
     fat_load_file(fs_ptr, root_directory_entry_cluster, buffer, BUFFER_SIZE_IN_PAGES*PAGE_SIZE, (void *)transient, &root_directory_loaded_cb);
+
+    directory_cache_dump(fs_ptr->directory_cache->start, 0);
+    printf("All done!\n");
+
   } else {
     printf("FAT12/FAT16 not implemented yet");
   }
