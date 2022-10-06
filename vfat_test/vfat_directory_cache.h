@@ -23,6 +23,7 @@ typedef struct vfat_directory_cache {
   size_t bytes_used;
 
   VFAT_DIRECTORY_CACHE_NODE *start;
+  VFAT_DIRECTORY_CACHE_NODE *end;
 } VFAT_DIRECTORY_CACHE;
 
 typedef struct vfat_directory_cache_transient_data {
@@ -30,5 +31,6 @@ typedef struct vfat_directory_cache_transient_data {
 } VFAT_DIRECTORY_CACHE_DATA;
 
 void initialise_directory_cache(FATFS *fs_ptr, void (*callback)(FATFS *fs_ptr, uint8_t status, VFAT_DIRECTORY_CACHE_NODE *root));
+void add_node_to_cache(VFAT_DIRECTORY_CACHE *cache, VFAT_DIRECTORY_CACHE_NODE *node);
 
 #endif
