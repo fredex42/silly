@@ -265,8 +265,14 @@ extern ata_service_interrupt  ;this is defined in the ata_pio driver for servici
 
 IPrimaryATA:             ;IRQ14 Primary IDE
   pushf
+  push eax
   push ebx
-
+  push ecx
+  push edx
+  push esi
+  push edi
+  push ebp
+  
   mov ebx, 0
   push bx
   call ata_service_interrupt  ;tell the ATA driver that this cane from bus 0 (primary)
@@ -277,13 +283,25 @@ IPrimaryATA:             ;IRQ14 Primary IDE
   call pic_send_eoi
   add esp, 4
 
+  pop ebp
+  pop edi
+  pop esi
+  pop edx
+  pop ecx
   pop ebx
+  pop eax
   popf
   iret
 
 ISecondaryATA:             ;IRQ15 Secondary IDE
   pushf
+  push eax
   push ebx
+  push ecx
+  push edx
+  push esi
+  push edi
+  push ebp
 
   mov ebx, 1
   push bx
@@ -295,7 +313,13 @@ ISecondaryATA:             ;IRQ15 Secondary IDE
   call pic_send_eoi
   add esp, 4
 
+  pop ebp
+  pop edi
+  pop esi
+  pop edx
+  pop ecx
   pop ebx
+  pop eax
   popf
   iret
 
