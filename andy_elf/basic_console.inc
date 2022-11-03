@@ -3,6 +3,3 @@ extern PMPrintString
 extern PMPrintStringLen
 extern PMPrintChar
 extern PMScrollConsole
-
-; remove this definition to disable serial console
-%define SERIAL_CONSOLE 1

@@ -1,12 +1,12 @@
 [bits 32]
 
 ;All I/O ports are 8 bits wide
-%define SERIAL_BASE         0x3F8
+%define SERIAL_BASE         0x03F8
 ;these ports are changed if DLAB (Divisor Latch Access Bit) is 1
 %define SERIAL_DATA         SERIAL_BASE + 0
 %define SERIAL_INT_ENABLE   SERIAL_BASE + 1
 ;if DLAB is 1 then the first two ports are reassigned as follows
-%define SERIAL_DIVISOR_LSB  SERIAL_BASE + 0 
+%define SERIAL_DIVISOR_LSB  SERIAL_BASE + 0
 %define SERIAL_DIVISOR_MSB  SERIAL_BASE + 1
 
 %define SERIAL_INTERRUPT_ID     SERIAL_BASE + 2
@@ -20,29 +20,34 @@ global early_serial_lowlevel_init
 global early_serial_putchar
 
 ; Purpose - initialises the first serial port (COM1, ttyS0 or however you want to name it)
-; This is "early", i.e. loadable before memory management etc, and is only intended for debugging 
+; This is "early", i.e. loadable before memory management etc, and is only intended for debugging
 ; output on the serial port.
 ; Hard-sets 9600 8-N-1 parameters
 early_serial_lowlevel_init:
     push ebp
     mov ebp, esp
+    push dx
 
     ;Configure the baud rate.
     ;First we need to access the divsor
     xor ax, ax
-    in al, SERIAL_LINE_CONTROL
+    mov dx, SERIAL_LINE_CONTROL
+    in ax, dx
     or al, 0x80    ;set the MSB
-    out SERIAL_LINE_CONTROL, al
+    out dx, al
     ;Now, we can use SERIAL_DIVISOR_xSB
     ;we want 9600 baud, which is a divisor of 12 or 0x0C
+    mov dx, SERIAL_DIVISOR_MSB
     xor ax, ax
-    out SERIAL_DIVISOR_MSB, al
+    out dx, al
+    mov dx, SERIAL_DIVISOR_LSB
     mov al, 0x0C
-    out SERIAL_DIVISOR_LSB, al
+    out dx, al
 
     ;Now clear the DLAB bit. This is done by clearing the MSB of the line control register.
     xor ax, ax
-    in al, SERIAL_LINE_CONTROL
+    mov dx, SERIAL_LINE_CONTROL
+    in al, dx
     and al, 0x7F
     ;Data bits are bits 0 and 1 of the line control register. 11 => 8 bits.
     or al, 0x03
@@ -50,12 +55,14 @@ early_serial_lowlevel_init:
     and al, 0xFB
     ;Parity is bits 3,4,5 of the line control register. xx0 => No parity
     and al, 0xC7
-    out SERIAL_LINE_CONTROL, al
+    out dx, al
 
     ;We don't yet have PM interrupts set up. So we can't use them.
     xor al, al
-    out SERIAL_INT_ENABLE, al
+    mov dx, SERIAL_INT_ENABLE
+    out dx, al
 
+    pop dx
     pop ebp
     ret
 
@@ -66,17 +73,21 @@ early_serial_lowlevel_init:
 early_serial_putchar:
     push ebp
     mov ebp, esp
+    push dx
 
     ;Check if the transmit buffer is empty yet
     _early_serial_putchar_wait_loop:
-    in al, SERIAL_LINE_STATUS
+    mov dx, SERIAL_LINE_STATUS
+    in al, dx
     test al, 0x20    ;we need to check bit 5
     jz _early_serial_putchar_wait_loop ;zero flag set => result of AND was zero => serial line is transmitting
 
     ;now write the char
-    mov al, BYTE PTR [ebp+8]
-    out SERIAL_DATA, al
+    mov al, BYTE [ebp+8]
+    mov dx, SERIAL_DATA
+    out dx, al
 
     ;return
+    pop dx
     pop ebp
     ret

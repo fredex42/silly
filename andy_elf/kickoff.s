@@ -2,6 +2,9 @@
 section .text
 global _start
 
+; remove this definition to disable serial console (also remove in basic_console.s)
+%define SERIAL_CONSOLE 1
+
 extern early_serial_lowlevel_init
 
 %include "basic_console.inc"

@@ -7,7 +7,10 @@ global PMPrintString
 global PMPrintChar
 global PMPrintStringLen
 
-global early_serial_putchar
+extern early_serial_putchar
+
+; remove this definition to disable serial console
+%define SERIAL_CONSOLE 1
 
 %include "memlayout.inc"
 
@@ -43,9 +46,9 @@ PMPrintString:
 	jz pm_string_done	;if the next char is 0, then exit
 
 	%ifdef SERIAL_CONSOLE
-	push al
+	push ax
 	call early_serial_putchar
-	pop al
+	pop ax
 	%endif
 
 	cmp al, 0x0d		;CR
@@ -121,9 +124,9 @@ PMPrintStringLen:
 	jz pm_string_done_len	;if we get to zero, then exit
 
 	%ifdef SERIAL_CONSOLE
-	push al
+	push ax
 	call early_serial_putchar
-	pop al
+	pop ax
 	%endif
 
 	cmp al, 0x0d		;CR
@@ -173,9 +176,9 @@ PMPrintChar:
 	mov edi, TextConsoleOffset
 
 	%ifdef SERIAL_CONSOLE
-	push bl
+	push bx
 	call early_serial_putchar
-	pop bl
+	pop bx
 	%endif
 
 	xor eax,eax

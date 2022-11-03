@@ -1,4 +1,4 @@
-.PHONY: ata_pio
+.PHONY: ata_pio early_serial
 
 all: ata_pio early_serial
 
