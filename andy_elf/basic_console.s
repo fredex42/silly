@@ -7,6 +7,11 @@ global PMPrintString
 global PMPrintChar
 global PMPrintStringLen
 
+extern early_serial_putchar
+
+; remove this definition to disable serial console
+%define SERIAL_CONSOLE 1
+
 %include "memlayout.inc"
 
 ;Print an ASCIIZ string in protected mode.
@@ -39,6 +44,13 @@ PMPrintString:
 	lodsb
 	test al, al
 	jz pm_string_done	;if the next char is 0, then exit
+
+	%ifdef SERIAL_CONSOLE
+	push ax
+	call early_serial_putchar
+	pop ax
+	%endif
+
 	cmp al, 0x0d		;CR
 	jz pm_carraige_rtn
 	cmp al, 0x0a		;LF
@@ -110,6 +122,13 @@ PMPrintStringLen:
 	dec ecx
 	test ecx,ecx
 	jz pm_string_done_len	;if we get to zero, then exit
+
+	%ifdef SERIAL_CONSOLE
+	push ax
+	call early_serial_putchar
+	pop ax
+	%endif
+
 	cmp al, 0x0d		;CR
 	jz pm_carraige_rtn_len
 	cmp al, 0x0a		;LF
@@ -155,6 +174,12 @@ PMPrintChar:
 	mov ax, DisplayMemorySeg
 	mov es, ax
 	mov edi, TextConsoleOffset
+
+	%ifdef SERIAL_CONSOLE
+	push bx
+	call early_serial_putchar
+	pop bx
+	%endif
 
 	xor eax,eax
 	mov al, byte [CursorRowPtr]

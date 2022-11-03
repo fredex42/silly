@@ -2,6 +2,11 @@
 section .text
 global _start
 
+; remove this definition to disable serial console (also remove in basic_console.s)
+%define SERIAL_CONSOLE 1
+
+extern early_serial_lowlevel_init
+
 %include "basic_console.inc"
 %include "memlayout.inc"
 %include "exceptions.inc"
@@ -83,6 +88,9 @@ mov ds, ax
 mov es, ax
 mov ss, ax
 mov esp, 0x7fff0	;set stack pointer to the end of conventional RAM
+
+;set up serial debugging output. Vital if SERIAL_CONSOLE is defined in basic_console.inc
+call early_serial_lowlevel_init
 
 mov byte [CursorColPtr], dl
 mov byte [CursorRowPtr], dh
