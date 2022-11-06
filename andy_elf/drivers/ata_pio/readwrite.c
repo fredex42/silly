@@ -90,6 +90,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
   op->sector_count = sector_count;
   op->device = drive_nr & 0x1;  //just take the leftmost bit, 0=>master, 1=>slave
   op->buffer = buffer;
+  op->extradata = extradata;
   op->paging_directory = get_current_paging_directory();
   op->buffer_loc = 0;
   op->base_addr = base_addr;
@@ -105,7 +106,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
   outb(ATA_COMMAND(base_addr), ATA_CMD_READ_SECTORS);
 }
 
-int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer))
+int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
 {
   uint16_t base_addr;
   uint8_t selector;
@@ -138,6 +139,7 @@ int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t secto
   op->paging_directory = get_current_paging_directory();
   op->buffer_loc = 0;
   op->base_addr = base_addr;
+  op->extradata = extradata;
   op->sectors_read = 0;
   op->completed_func = callback;
 
@@ -186,7 +188,7 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     //memset((void *)op, 0, sizeof(ATAPendingOperation));
     op->type = ATA_OP_NONE;
     //the operation is now completed
-    op->completed_func(ATA_STATUS_OK, op->buffer);
+    op->completed_func(ATA_STATUS_OK, op->buffer, op->extradata);
   }
 
   if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
@@ -249,7 +251,7 @@ void ata_complete_write_lowerhalf(SchedulerTask *t)
 
   if(op->sectors_read>=op->sector_count) {
     //the operation is now completed
-    op->completed_func(ATA_STATUS_OK, op->buffer);
+    op->completed_func(ATA_STATUS_OK, op->buffer, op->extradata);
     //reset the "pending operation" block for the next operation
     op->type = ATA_OP_NONE;
   } else {

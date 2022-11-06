@@ -303,7 +303,7 @@ void test_read_cb(uint8_t status, void *buffer)
   for(register uint16_t i=0;i<PAGE_SIZE/2;i++) {  //fill the page with a number sequence
     newbuffer[i] = i;
   }
-  uint8_t err = ata_pio_start_write(1, 0, 7, (void *)newbuffer, &test_write_cb);
+  uint8_t err = ata_pio_start_write(1, 0, 7, (void *)newbuffer, NULL, &test_write_cb);
   switch(err) {
     case E_OK:
       break;
@@ -323,7 +323,7 @@ void test_read()
 
   kputs("Testing disk read from HDD0...\r\n");
   //read in 8 sectors (=4kb) from block 0 of the disk
-  uint8_t err = ata_pio_start_read(0, 0, 2, buffer, &test_read_cb);
+  uint8_t err = ata_pio_start_read(0, 0, 2, buffer, NULL, &test_read_cb);
   switch(err) {
     case E_OK:
       break;

@@ -26,7 +26,7 @@ int8_t load_bootsector(uint8_t drive_nr, const GenericStorageDriver *drv, void (
 
   //read just the first 4 sectors and return the buffer for it. Fire the callback when it's ready.
   //That should occupy 2k of the buffer.
-  return drv->driver_start_read(drive_nr, 0, 4, buf, callback);
+  return drv->driver_start_read(drive_nr, 0, 4, buf, NULL, callback);
 }
 
 void interrogate_fat_filesystem(uint8_t status, void *buffer)
@@ -81,9 +81,9 @@ int8_t start_load_fat(FATBuffer *b, BIOSParameterBlock *bpb, uint8_t drive_nr, c
   //load in enough to fill the buffer.
   uint32_t block_count = b->initial_length_bytes / (uint32_t)bpb->bytes_per_logical_sector;
   kprintf("DEBUG start_load_fat loading %l blocks for %l bytes\r\n", block_count, b->initial_length_bytes);
-  block_nr = bpb->reserved_logical_sectors; //FAT starts after the reserved area.
+  uint32_t block_nr = bpb->reserved_logical_sectors; //FAT starts after the reserved area.
 
-  return drv->driver_start_read(drive_nr, block_nr, (uint8_t)block_count, b->buffer, &vfat_load_buffer_filled);
+  return drv->driver_start_read(drive_nr, block_nr, (uint8_t)block_count, b->buffer, NULL, &vfat_load_buffer_filled);
 }
 
 void test_vfat()

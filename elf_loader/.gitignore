@@ -1,3 +1,7 @@
 elf_boot
 *.dump
 *.log
+bochs
+snapshot.*
+copy.*
+*.fat*
