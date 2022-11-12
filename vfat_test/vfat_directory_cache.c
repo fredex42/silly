@@ -21,8 +21,8 @@ If the allocation fails for some reason, returns NULL
 VFAT_DIRECTORY_CACHE_NODE *vfat_directory_cache_new_node(VFAT_DIRECTORY_CACHE *c)
 {
   if(c->bytes_used+sizeof(VFAT_DIRECTORY_CACHE_NODE) > c->bytes_allocated) {
-    printf("INFO Expanding the directory cache by 1 page\n");
-    c->start = (VFAT_DIRECTORY_CACHE_NODE *)realloc(c->start, PAGE_SIZE);
+    printf("INFO Expanding the directory cache by 1 page. New extent is %d\n",c->bytes_allocated+PAGE_SIZE);
+    c->start = (VFAT_DIRECTORY_CACHE_NODE *)realloc(c->start, c->bytes_allocated+PAGE_SIZE);
     if(c->start==NULL) {
       printf("ERROR Oh no! out of memory.\n");
       return NULL;
@@ -32,32 +32,44 @@ VFAT_DIRECTORY_CACHE_NODE *vfat_directory_cache_new_node(VFAT_DIRECTORY_CACHE *c
 
   //gcc does pointer arithmatic in elements, not bytes.
   //because `c->start` is typed as VFAT_DIRECTORY_CACHE_NODE, adding one to `c->start`
-  //means that we add one _element_, i.e. 280 bytes
-  VFAT_DIRECTORY_CACHE_NODE *newnode = (c->start + 1);
+  //means that we add one _element_, i.e. 380 bytes
+  VFAT_DIRECTORY_CACHE_NODE *newnode = (c->start + c->entries);
+  ++c->entries;
   c->bytes_used += sizeof(VFAT_DIRECTORY_CACHE_NODE);
   return newnode;
 }
 
-void link_cache_node(VFAT_DIRECTORY_CACHE *cache, VFAT_DIRECTORY_CACHE_NODE *node, VFAT_DIRECTORY_CACHE_NODE *prev_sibling, VFAT_DIRECTORY_CACHE_NODE *parent)
+void directory_cache_dump_node(VFAT_DIRECTORY_CACHE_NODE *node, uint16_t level)
 {
-  if(prev_sibling) prev_sibling->next = node;
-  if(parent) parent->child = node;
-}
-
-void directory_cache_dump(VFAT_DIRECTORY_CACHE_NODE *node, uint16_t level)
-{
-  uint16_t i;
-  if(!node) return;
-  for(i=0; i<4*level; i++) putchar(' ');
+  for(int i=0; i<4*level; i++) putchar(' ');
   puts(node->full_file_name);
   putchar('\n');
-  if(node->child) {
-    directory_cache_dump(node->child, level+1);
-  }
-  if(node->next) {
-    directory_cache_dump(node->next, level);
+}
+
+void directory_cache_dump(VFAT_DIRECTORY_CACHE *c)
+{
+  printf("INFO Directory cache uses %d bytes out of %d allocated\n", c->bytes_used, c->bytes_allocated);
+
+  VFAT_DIRECTORY_CACHE_NODE *node = (c->start + 1);
+  while(node!=NULL && node->entry.short_name[0]!=0) {
+     directory_cache_dump_node(node, 1);
+     node += 1;
   }
 }
+// void directory_cache_dump(VFAT_DIRECTORY_CACHE_NODE *node, uint16_t level)
+// {
+//   uint16_t i;
+//   if(!node) return;
+//   for(i=0; i<4*level; i++) putchar(' ');
+//   puts(node->full_file_name);
+//   putchar('\n');
+//   if(node->child) {
+//     directory_cache_dump(node->child, level+1);
+//   }
+//   if(node->next) {
+//     directory_cache_dump(node->next, level);
+//   }
+// }
 
 void root_directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void *extradata)
 {
@@ -91,8 +103,8 @@ void root_directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void 
           memset(current_node, 0, sizeof(VFAT_DIRECTORY_CACHE_NODE));
 
           memcpy(current_node->full_file_name, entry->short_name, 8);
-          current_node->full_file_name[9]='.';
-          memcpy(&(current_node->full_file_name)[10], entry->short_xtn, 3);
+          current_node->full_file_name[8]='.';
+          memcpy(&(current_node->full_file_name)[9], entry->short_xtn, 3);
           memcpy(&current_node->entry, entry, sizeof(DirectoryEntry));
           //printf("INFO Got %s, size %d, attributes %s\n", current_node->full_file_name, entry->file_size, attrs);
 
@@ -104,10 +116,10 @@ void root_directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void 
           }
         }
         ++directory_count;
+        //
+        // if(current_node) add_node_to_cache(fs_ptr->directory_cache, current_node);
+        // //if(current_node) link_cache_node(fs_ptr->directory_cache, current_node, prev_node, transient->parent);
         prev_node = current_node;
-        if(current_node) add_node_to_cache(fs_ptr->directory_cache, current_node);
-        current_node = NULL;
-
       }
   }
 
@@ -121,6 +133,9 @@ void root_directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void 
   } else {
     printf("INFO Processed all directories\n");
     //FIXME: why does free(buffer) here abort on an invalid pointer?
+    //Most likely, becuase the `buffer` pointer here is not the actual pointer initialised by malloc()
+    //file.c loader functions do some pointer arithmatic to load blocks into the overall memory buffer and this function
+    //is called on the last iteration, so `buffer` here will only be the last portion to be loaded.
     //free(buffer);
     directory_queue_unref(transient->dirs_to_process);
     transient->dirs_to_process=NULL;
@@ -150,7 +165,7 @@ void initialise_directory_cache(FATFS *fs_ptr,
     printf("Found FAT32root directory at cluster %ld\n", root_directory_entry_cluster);
     fat_load_file(fs_ptr, root_directory_entry_cluster, buffer, BUFFER_SIZE_IN_PAGES*PAGE_SIZE, (void *)transient, &root_directory_loaded_cb);
 
-    directory_cache_dump(fs_ptr->directory_cache->start, 0);
+    directory_cache_dump(fs_ptr->directory_cache);
     printf("All done!\n");
 
   } else {

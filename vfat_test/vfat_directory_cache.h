@@ -21,7 +21,8 @@ typedef struct vfat_directory_cache_node {
 typedef struct vfat_directory_cache {
   size_t bytes_allocated;
   size_t bytes_used;
-
+  size_t entries;
+  
   VFAT_DIRECTORY_CACHE_NODE *start;
   VFAT_DIRECTORY_CACHE_NODE *end;
 } VFAT_DIRECTORY_CACHE;

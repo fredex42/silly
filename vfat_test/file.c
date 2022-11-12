@@ -28,6 +28,8 @@ void _file_cluster_read_cb(uint8_t status, void *buffer, void *fs_ptr_x, void *e
 
   if(next_cluster_num>=0x0FFFFFFF) {
     free(data);
+    //FIXME: the `buffer` pointer here is inaccurate on multi-cluster loads, because of the pointer math on `driver_start_read`
+    //(~line 68)
     load_done_cb(fs_ptr, status, buffer, client_extradata);
   } else {
     data->buffer_pos += BYTES_PER_CLUSTER(fs_ptr);
