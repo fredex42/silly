@@ -89,6 +89,12 @@ void fat_load_file(FATFS *fs_ptr, uint32_t starting_cluster, void *buffer, uint3
   load_next_cluster(req, buffer, req->loading_cluster);
 }
 
+// void fat_get_root_dir(FATFS *fs_ptr, void *buffer, uint32_t buffer_size, void *extdata, void (*load_done_cb)(FATFS *fs_ptr, uint8_t status, void *buffer, void *extradata))
+// {
+//   uint32_t root_directory_entry_cluster = fs_ptr->f32bpb ? fs_ptr->f32bpb->root_directory_entry_cluster : (fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->fat_count*logical_sectors_per_fat))*fs_ptr->bpb->logical_sectors_per_cluster);
+//   fat_load_file(fs_ptr, root_directory_entry_cluster, buffer, buffer_size, extdata, load_done_cb);
+// }
+
 void decode_attributes(uint8_t attrs, char *buf)
 {
   if(attrs&0x0F) {  //Read-only, hidden, system, volume label all set => LFN fragment

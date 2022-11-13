@@ -9,21 +9,7 @@
 #include "cluster_map.h"
 #include "ucs_conv.h"
 #include "string_helpers.h"
-#include "vfat_directory_cache.h"
-
-/**
-Step 4. Directory tree is now cached so we can return to caller.
-*/
-void directory_cache_loaded(FATFS *fs_ptr, uint8_t status, VFAT_DIRECTORY_CACHE_NODE *root)
-{
-  printf("Completed caching in directories\n");
-  void (*final_callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata) = fs_ptr->mount_data_ptr->mount_completed_cb;
-  void *cb_extradata = fs_ptr->mount_data_ptr->extradata;
-  free(fs_ptr->mount_data_ptr);
-  fs_ptr->mount_data_ptr = NULL;
-  fs_ptr->busy = 0;
-  final_callback(fs_ptr, status, cb_extradata);
-}
+#include "dir.h"
 
 /**
 Step 3. Called once the cluster map has been loaded.
@@ -38,8 +24,14 @@ void cluster_map_loaded(FATFS *fs_ptr, uint8_t status, VFatClusterMap *map) {
     printf("Found a FAT%d filesystem\n", map->bitsize);
   }
 
+  void (*final_callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata) = fs_ptr->mount_data_ptr->mount_completed_cb;
+  void *cb_extradata = fs_ptr->mount_data_ptr->extradata;
   fs_ptr->cluster_map = map;
-  initialise_directory_cache(fs_ptr, &directory_cache_loaded);
+  free(fs_ptr->mount_data_ptr);
+  fs_ptr->mount_data_ptr = NULL;
+  fs_ptr->busy = 0;
+
+  final_callback(fs_ptr, status, cb_extradata);
 }
 
 /**
