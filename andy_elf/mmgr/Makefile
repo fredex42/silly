@@ -5,8 +5,11 @@ all: libmmgr.a
 mmgr.o: mmgr.c
 	gcc -c ${CFLAGS} mmgr.c
 
-heap.o: heap.c heap.h
+heap.o: heap.c heap.h process.h
 	gcc -c ${CFLAGS} heap.c
 
-libmmgr.a: mmgr.o heap.o
-	ar rcs libmmgr.a mmgr.o heap.o
+process.o: process.c process.h
+	gcc -c ${CFLAGS} process.c
+
+libmmgr.a: mmgr.o heap.o process.o
+	ar rcs libmmgr.a mmgr.o heap.o process.o

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <sys/mmgr.h>
 #include <panic.h>
+#include "process.h"
 
 struct HeapZoneStart * initialise_heap(size_t initial_pages)
 {
@@ -27,6 +28,10 @@ struct HeapZoneStart * initialise_heap(size_t initial_pages)
   ptr->next_ptr = NULL;
 
   zone->first_ptr = ptr;
+
+  struct ProcessTableEntry *kernel_process = get_process(0);
+  kernel_process->heap_start = zone;
+  kernel_process->heap_allocated = zone->zone_length;
 
   return zone;
 }
@@ -98,32 +103,42 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
   struct PointerHeader* new_ptr=NULL;
 
   kprintf("DEBUG allocating %d bytes into zone 0x%x...\r\n", bytes, zone);
+  kprintf("DEBUG first pointer in zone at 0x%x\r\n", zone->first_ptr);
 
   for(struct PointerHeader *p=zone->first_ptr; p->next_ptr==NULL; p=p->next_ptr) {
+    kprintf("DEBUG checking pointer block at 0x%x\r\n", p);
     if(p->magic!=HEAP_PTR_SIG) k_panic("Kernel heap corrupted\r\n");
 
     if(p->in_use) continue;
     //ok, this block is not in use, can we fit this alloc into it?
     if(p->block_length<bytes) continue;
+    kprintf("DEBUG proceeding with alloc\r\n");
     //great, this alloc fits.
     remaining_length = p->block_length - bytes;
+    kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
     p->block_length = bytes;
     p->in_use = 1;
     zone->allocated += bytes;
     zone->dirty = 1;
 
     if(remaining_length>sizeof(struct PointerHeader)) {
+      kprintf("DEBUG placing new block at boundary\r\n");
       //we can fit another block in the remaining space.
-      new_ptr = (struct PointerHeader *)((char *)(p + sizeof(struct PointerHeader) + remaining_length));
+      kprintf("DEBUG existing block start is 0x%x. Sizeof pointer header is 0x%x and remaining length is 0x%x\r\n", p, sizeof(struct PointerHeader), remaining_length);
+      new_ptr = (struct PointerHeader *)((void *)p + sizeof(struct PointerHeader) + p->block_length);
+      kprintf("DEBUG new block start is at 0x%x\r\n", new_ptr);
       new_ptr->magic = HEAP_PTR_SIG;
       new_ptr->block_length = remaining_length - sizeof(struct PointerHeader);
       new_ptr->in_use = 0;
       new_ptr->next_ptr = p->next_ptr;
       p->next_ptr = new_ptr;
+    } else {
+      kputs("INFO not enough remaining length to allocate a new block\r\n");
     }
     //return pointer to the data zone
-    return (void *)(p + sizeof(struct PointerHeader));
+    return (void *)p + sizeof(struct PointerHeader);
   }
+  kputs("ERROR ran out of space in the zone, this should not happen\r\n");
   return NULL;
 }
 
@@ -152,4 +167,18 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
   //at this point, z might be the previous zone; it might be a new one; or it might be NULL if something went wrong.
   if(!z) return NULL;
   return _zone_alloc(z, bytes);
+}
+
+void* malloc_for_process(uint16_t pid, size_t bytes)
+{
+  struct ProcessTableEntry *process = get_process(pid);
+  if(!process) return NULL;
+  if(process->status==PROCESS_NONE) return NULL;  //don't alloc a non-existent process
+  return heap_alloc(process->heap_start, bytes);
+}
+
+//allocates onto the kernel heap
+void* malloc(size_t bytes)
+{
+    return malloc_for_process(0, bytes);
 }

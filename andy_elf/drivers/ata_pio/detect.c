@@ -7,6 +7,7 @@
 #include <panic.h>
 #include <errors.h>
 #include "ata_pio.h"
+#include "../../mmgr/heap.h"
 
 ATADriverState *master_driver_state = NULL;
 
@@ -90,8 +91,13 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
   //kprintf("DEBUG sizeof(ATADriverState) is %l, active drive count is %d\r\n", sizeof(ATADriverState), (uint16_t) master_driver_state->active_drive_count);
 
   //on success, we want to save the data into the same ram page as the master_driver_state immediately following that structure
-  uint16_t *buffer = (uint16_t *)((vaddr)master_driver_state + (vaddr)sizeof(ATADriverState) + ((vaddr)master_driver_state->active_drive_count * 256));
-
+  //uint16_t *buffer = (uint16_t *)((vaddr)master_driver_state + (vaddr)sizeof(ATADriverState) + ((vaddr)master_driver_state->active_drive_count * 256));
+  uint16_t *buffer = (uint16_t *)malloc(256*sizeof(int16_t)); //we pull 256 words.
+  if(buffer==NULL) {
+    kputs("ERROR No memory to allocate buffer\r\n");
+    return NULL;
+  }
+  
   while(1) {
     st = inb(ATA_STATUS(base_addr));
     if((st & 0x8)) { //DRQ, bit 3 was set => success
@@ -105,6 +111,7 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
     if((st & 0x1)) {  //ERR, bit 1 was set => error
       kprintf("\tWARNING Disk error trying to identify drive 0x%x on 0x%x, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
       master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
+      //FIXME: free the buffer!
       return NULL;
     }
   }
@@ -124,13 +131,15 @@ void initialise_ata_driver()
 {
   uint16_t *info;
   kputs("Initialising simple ATA driver...\r\n");
-  master_driver_state = (ATADriverState *)vm_alloc_pages(NULL, 1, MP_READWRITE);
+  //master_driver_state = (ATADriverState *)vm_alloc_pages(NULL, 1, MP_READWRITE);
+  master_driver_state = (ATADriverState*)malloc(sizeof(ATADriverState));
+
   if(!master_driver_state) {
     k_panic("Could not allocate memory for ATA driver state\r\n");
     return;
   }
 
-  memset((void *)master_driver_state, 0, sizeof(master_driver_state));
+  memset((void *)master_driver_state, 0, sizeof(ATADriverState));
 
   kprintf("\tDEBUG ATA driver state ptr is 0x%x\r\n", master_driver_state);
   for(register int i=0;i<4; i++) {
@@ -269,7 +278,7 @@ void test_write_cb(uint8_t status, void *buffer)
 void test_read_cb(uint8_t status, void *buffer)
 {
   kprintf("Received data from test read with status %d at 0x%x\r\n", (uint16_t) status, buffer);
-  vm_deallocate_physical_pages(NULL, buffer, 1);
+  //vm_deallocate_physical_pages(NULL, buffer, 1); <--can't free yet!!
 
   kputs("Testing disk write from HDD0...\r\n");
 
@@ -293,7 +302,8 @@ void test_read_cb(uint8_t status, void *buffer)
 
 void test_read()
 {
-  void* buffer = vm_alloc_pages(NULL, 1, MP_READWRITE);
+  //void* buffer = vm_alloc_pages(NULL, 1, MP_READWRITE);
+  void *buffer=malloc(4096);
 
   kputs("Testing disk read from HDD0...\r\n");
   //read in 8 sectors (=4kb) from block 0 of the disk

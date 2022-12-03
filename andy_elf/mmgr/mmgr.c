@@ -18,7 +18,7 @@
 #include "panic.h"
 
 #include "heap.h"
-
+#include "process.h"
 static uint32_t __attribute__ ((aligned(4096))) kernel_paging_directory[1024];  //root paging directory
 static uint32_t __attribute__ ((aligned(4096))) first_pagedir_entry[1024];      //first entry in the page table, this covers the first 4Mb
 
@@ -49,6 +49,7 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
   kputs("Applying memory map protections...\r\n");
   apply_memory_map_protections(ptr);
   kputs("Memory manager initialised.\r\n");
+  initialise_process_table(&kernel_paging_directory);
   initialise_heap(MIN_ZONE_SIZE_PAGES*4);
 }
 
