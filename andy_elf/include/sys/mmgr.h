@@ -5,6 +5,9 @@
 #include <types.h>
 #endif
 
+#ifndef __SYS_MMGR_H
+#define __SYS_MMGR_H
+
 /**
 data structure for a memory region obtained from INT 0x15, EAX = 0xE820
 See https://wiki.osdev.org/Detecting_Memory_(x86)#Getting_an_E820_Memory_Map
@@ -84,3 +87,5 @@ void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageen
 /* internal functions */
 void setup_paging();
 uint8_t find_next_unallocated_page(uint32_t *base_directory, int16_t *dir, int16_t *off);
+
+#endif
