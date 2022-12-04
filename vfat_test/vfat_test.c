@@ -119,7 +119,8 @@ void update_to_next_path_part(struct find_file_data *d)
   }
   if(next_path_point>=d->path_length-1) {
     d->completed = 1;
-    d->current_search[0] = 0;
+    //d->current_search[0] = 0;
+    strncpy(d->current_search, &(d->full_path[d->path_point]), d->path_length-1);
     return;
   }
   strncpy(d->current_search, &(d->full_path[d->path_point]), next_path_point-d->path_point);
@@ -153,12 +154,13 @@ void directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void *extr
 {
   struct find_file_data *d = (struct find_file_data *)extradata;
   printf("INFO Loaded directory at %s\n", d->current_search);
-  update_to_next_path_part(d);
-  if(d->completed) {
+    if(d->completed) {
     printf("INFO Found the file!\n");
     d->callback(fs_ptr, d->current_directory_entry);
     return;
   }
+
+  update_to_next_path_part(d);
 
   //include terminating nulls!
   char name[9];
@@ -168,18 +170,22 @@ void directory_loaded_cb(FATFS *fs_ptr, uint8_t status, void *buffer, void *extr
   split_file_name(d->current_search, name, xtn);
 
   printf("INFO Next directory portion is %s, name '%s' xtn '%s'\n", d->current_search, name, xtn);
-  d->current_directory_entry = vfat_find_in_directory(name, xtn, buffer, 1024);
-  if(d->current_directory_entry==NULL) {
+  DirectoryEntry *found_dir = vfat_find_in_directory(name, xtn, buffer, 1024);
+  if(found_dir==NULL) {
     printf("INFO Can't find %s at level %d\n", d->current_search, d->steps);
     d->callback(fs_ptr, NULL);
     return;
   }
 
+  if(!d->current_directory_entry) d->current_directory_entry = (DirectoryEntry *)malloc(sizeof(DirectoryEntry));
+  memcpy(d->current_directory_entry, found_dir, sizeof(DirectoryEntry));
+
   ++d->steps;
   size_t next_cluster_location = d->current_directory_entry->f32_high_cluster_num << 4 | d->current_directory_entry->low_cluster_num;
 
   //FIXME: we should free the buffer here, but we need to copy d->current_directory_entry rather than reference it for that
-  //free(buffer);
+  //DONE
+  free(buffer);
   recursively_find_file(fs_ptr, next_cluster_location, d);
 }
 
