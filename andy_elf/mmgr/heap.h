@@ -14,7 +14,7 @@ typedef struct HeapZoneStart {
   uint32_t magic; //must be 0x4f5a454e = "ZONE"
   size_t zone_length;
   size_t allocated;
-  unsigned int dirty : 1;
+  uint8_t dirty : 1;
   struct HeapZoneStart* next_zone;
   struct PointerHeader* first_ptr;
 } HeapZoneStart;
@@ -22,10 +22,10 @@ typedef struct HeapZoneStart {
 typedef struct PointerHeader {
   uint32_t magic; //must be 0x54505220 = "PTR "
   size_t block_length;
-  unsigned int in_use : 1;
+  uint8_t in_use : 1;
   struct PointerHeader* next_ptr;
 } PointerHeader;
 
-struct HeapZoneStart * initialise_heap(size_t initial_pages);
+struct HeapZoneStart* initialise_heap(size_t initial_pages);
 
 #endif

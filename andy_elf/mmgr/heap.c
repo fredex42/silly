@@ -85,7 +85,7 @@ struct HeapZoneStart* _expand_zone(struct HeapZoneStart* zone, size_t page_count
 
     struct PointerHeader* ptr = (struct PointerHeader *)((char *)(slab + sizeof(struct HeapZoneStart)));
     ptr->magic = HEAP_PTR_SIG;
-    ptr->block_length = zone->zone_length - sizeof(struct HeapZoneStart) - sizeof(struct PointerHeader);
+    ptr->block_length = zone->zone_length - sizeof(struct HeapZoneStart);
     ptr->in_use=0;
     ptr->next_ptr = NULL;
 
@@ -116,7 +116,7 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
     //great, this alloc fits.
     remaining_length = p->block_length - bytes;
     kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
-    p->block_length = bytes;
+    p->block_length = bytes+sizeof(struct PointerHeader);
     p->in_use = 1;
     zone->allocated += bytes;
     zone->dirty = 1;
@@ -128,7 +128,7 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
       new_ptr = (struct PointerHeader *)((void *)p + sizeof(struct PointerHeader) + p->block_length);
       kprintf("DEBUG new block start is at 0x%x\r\n", new_ptr);
       new_ptr->magic = HEAP_PTR_SIG;
-      new_ptr->block_length = remaining_length - sizeof(struct PointerHeader);
+      new_ptr->block_length = remaining_length ;
       new_ptr->in_use = 0;
       new_ptr->next_ptr = p->next_ptr;
       p->next_ptr = new_ptr;
