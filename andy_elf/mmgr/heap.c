@@ -136,7 +136,7 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
       new_ptr = (struct PointerHeader *)((void *)p + sizeof(struct PointerHeader) + p->block_length);
       kprintf("DEBUG new block start is at 0x%x\r\n", new_ptr);
       new_ptr->magic = HEAP_PTR_SIG;
-      new_ptr->block_length = remaining_length ;
+      new_ptr->block_length = remaining_length + sizeof(struct PointerHeader);
       new_ptr->in_use = 0;
       new_ptr->next_ptr = p->next_ptr;
       p->next_ptr = new_ptr;

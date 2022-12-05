@@ -97,7 +97,7 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
     kputs("ERROR No memory to allocate buffer\r\n");
     return NULL;
   }
-  
+
   while(1) {
     st = inb(ATA_STATUS(base_addr));
     if((st & 0x8)) { //DRQ, bit 3 was set => success
@@ -134,6 +134,7 @@ void initialise_ata_driver()
   //master_driver_state = (ATADriverState *)vm_alloc_pages(NULL, 1, MP_READWRITE);
   master_driver_state = (ATADriverState*)malloc(sizeof(ATADriverState));
 
+  kprintf("DEBUG ATA driver master state initialised at 0x%x\r\n", master_driver_state);
   if(!master_driver_state) {
     k_panic("Could not allocate memory for ATA driver state\r\n");
     return;
@@ -144,7 +145,9 @@ void initialise_ata_driver()
   kprintf("\tDEBUG ATA driver state ptr is 0x%x\r\n", master_driver_state);
   for(register int i=0;i<4; i++) {
     //these area already initialised to 0
-    master_driver_state->pending_disk_operation[i] = (ATAPendingOperation *)( (vaddr)master_driver_state + sizeof(ATADriverState) + i*sizeof(ATAPendingOperation));
+    //master_driver_state->pending_disk_operation[i] = (ATAPendingOperation *)( (vaddr)master_driver_state + sizeof(ATADriverState) + i*sizeof(ATAPendingOperation));
+    master_driver_state->pending_disk_operation[i] = (ATAPendingOperation*) malloc(sizeof(ATAPendingOperation));
+    memset(master_driver_state->pending_disk_operation[i], 0, sizeof(ATAPendingOperation));
   }
 
   ata_detect_active_buses();
@@ -154,13 +157,13 @@ void initialise_ata_driver()
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Master, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[0] = info;
-      //print_drive_info(0);
+      print_drive_info(0);
     }
     info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Slave, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[1] = info;
-      //print_drive_info(1);
+      print_drive_info(1);
     }
   }
   if(master_driver_state->active_bus_mask & 0x2) {
@@ -168,13 +171,13 @@ void initialise_ata_driver()
     if(info!=NULL) {
       kputs("\tFound ATA Secondary Master\r\n");
       master_driver_state->disk_identity[2] = info;
-      //print_drive_info(2);
+      print_drive_info(2);
     }
     info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
       kputs("\tFound ATA Secondary Slave\r\n");
       master_driver_state->disk_identity[3] = info;
-      //print_drive_info(3);
+      print_drive_info(3);
     }
   }
 
