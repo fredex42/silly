@@ -20,11 +20,12 @@ void ata_service_interrupt(uint8_t bus_nr)
   SchedulerTask *t;
   kprintf("DEBUG ATA master driver state is at 0x%x\r\n", master_driver_state);
   ATAPendingOperation *op = master_driver_state->pending_disk_operation[bus_nr];
-  kprintf("DEBUG received ATA service interrupt for %d. Pending operation pointer is 0x%x\r\n", (uint16_t) bus_nr, op);
+  kprintf("DEBUG received ATA service interrupt for %d.\r\n", (uint16_t) bus_nr);
+  kprintf("DEBUG Pending operation pointer is 0x%x\r\n", op);
 
 
   if(op==NULL || op->type==ATA_OP_NONE) {
-    kprintf("ERROR Received interrupt notification for IDE bus %d without a pending operation\r\n", (uint16_t)bus_nr);
+    kprintf("ERROR Received unexpected notification for IDE bus %d\r\n", (uint16_t)bus_nr);
     return;
   }
 

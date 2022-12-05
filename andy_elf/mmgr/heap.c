@@ -103,11 +103,11 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
   struct PointerHeader* new_ptr=NULL;
 
   kprintf("DEBUG allocating %d bytes into zone 0x%x...\r\n", bytes, zone);
-  kprintf("DEBUG first pointer in zone at 0x%x\r\n", zone->first_ptr);
+  //kprintf("DEBUG first pointer in zone at 0x%x\r\n", zone->first_ptr);
 
   struct PointerHeader *p=zone->first_ptr;
   while(1) {
-    kprintf("DEBUG checking pointer block at 0x%x\r\n", p);
+    //kprintf("DEBUG checking pointer block at 0x%x\r\n", p);
     if(p->magic!=HEAP_PTR_SIG) k_panic("Kernel heap corrupted\r\n");
 
     if(p->in_use) {
@@ -120,21 +120,21 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
       if(p==NULL) break; else continue;
     }
 
-    kprintf("DEBUG proceeding with alloc\r\n");
+    //kprintf("DEBUG proceeding with alloc\r\n");
     //great, this alloc fits.
     remaining_length = p->block_length - bytes;
-    kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
+    //kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
     p->block_length = bytes + sizeof(struct PointerHeader);
     p->in_use = 1;
     zone->allocated += bytes;
     zone->dirty = 1;
 
     if(remaining_length>sizeof(struct PointerHeader)) {
-      kprintf("DEBUG placing new block at boundary\r\n");
+      //kprintf("DEBUG placing new block at boundary\r\n");
       //we can fit another block in the remaining space.
-      kprintf("DEBUG existing block start is 0x%x. Sizeof pointer header is 0x%x and remaining length is 0x%x\r\n", p, sizeof(struct PointerHeader), remaining_length);
+      //kprintf("DEBUG existing block start is 0x%x. Sizeof pointer header is 0x%x and remaining length is 0x%x\r\n", p, sizeof(struct PointerHeader), remaining_length);
       new_ptr = (struct PointerHeader *)((void *)p + sizeof(struct PointerHeader) + p->block_length);
-      kprintf("DEBUG new block start is at 0x%x\r\n", new_ptr);
+      //kprintf("DEBUG new block start is at 0x%x\r\n", new_ptr);
       new_ptr->magic = HEAP_PTR_SIG;
       new_ptr->block_length = remaining_length + sizeof(struct PointerHeader);
       new_ptr->in_use = 0;

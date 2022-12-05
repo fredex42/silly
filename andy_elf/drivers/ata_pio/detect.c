@@ -16,7 +16,7 @@ Returns 1 if the bus status is 0xFF, i.e. open-circuit (nothing connected to it)
 */
 uint8_t ata_check_open_circuit(uint16_t base_addr)
 {
-  uint8_t b = ATA_STATUS(base_addr);
+  uint8_t b = inb(ATA_STATUS(base_addr));
   if(b==0xFF) return 1;
   return 0;
 }
@@ -53,9 +53,6 @@ returned the information.
 uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
 {
   register uint8_t st;
-  outb(ATA_DRIVE_HEAD(base_addr), drive_nr);
-  outb(ATA_COMMAND(base_addr), ATA_CMD_IDENTIFY);
-
   kprintf("INFO identify_drive drive_nr is %d\r\n", (uint16_t)drive_nr);
   uint8_t bus_nr = (drive_nr & 0xF) >> 1;
   if(bus_nr>4) {
@@ -65,9 +62,16 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
 
   //tell the interrupt handler to ignore, as we are polling
   master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_IGNORE;
+
+  outb(ATA_DRIVE_HEAD(base_addr), drive_nr);
+  outb(ATA_COMMAND(base_addr), ATA_CMD_IDENTIFY);
+
   while(1) {
     st = inb(ATA_STATUS(base_addr));
-    if(st==0) return NULL;  //zero status => nothing here, move on
+    if(st==0){
+      master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
+      return NULL;  //zero status => nothing here, move on
+    }
 
     if(! (st & 0x80) ) break; //poll the status until BSY bit clears (bit 7)
   }
@@ -106,6 +110,7 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
           buffer[i] = inw(ATA_DATA_REG(base_addr));
       }
       ++master_driver_state->active_drive_count;  //record the fact that we have the drive
+      master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
       return buffer;
     }
     if((st & 0x1)) {  //ERR, bit 1 was set => error
