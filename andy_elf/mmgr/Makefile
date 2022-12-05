@@ -2,6 +2,9 @@ CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables
 
 all: libmmgr.a
 
+clean:
+	rm -f *.o *.a
+	
 mmgr.o: mmgr.c
 	gcc -c ${CFLAGS} mmgr.c
 

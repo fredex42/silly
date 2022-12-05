@@ -105,18 +105,26 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
   kprintf("DEBUG allocating %d bytes into zone 0x%x...\r\n", bytes, zone);
   kprintf("DEBUG first pointer in zone at 0x%x\r\n", zone->first_ptr);
 
-  for(struct PointerHeader *p=zone->first_ptr; p->next_ptr==NULL; p=p->next_ptr) {
+  struct PointerHeader *p=zone->first_ptr;
+  while(1) {
     kprintf("DEBUG checking pointer block at 0x%x\r\n", p);
     if(p->magic!=HEAP_PTR_SIG) k_panic("Kernel heap corrupted\r\n");
 
-    if(p->in_use) continue;
+    if(p->in_use) {
+      p=p->next_ptr;
+      if(p==NULL) break; else continue;
+    }
     //ok, this block is not in use, can we fit this alloc into it?
-    if(p->block_length<bytes) continue;
+    if(p->block_length<bytes){
+      p = p->next_ptr;
+      if(p==NULL) break; else continue;
+    }
+
     kprintf("DEBUG proceeding with alloc\r\n");
     //great, this alloc fits.
     remaining_length = p->block_length - bytes;
     kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
-    p->block_length = bytes+sizeof(struct PointerHeader);
+    p->block_length = bytes + sizeof(struct PointerHeader);
     p->in_use = 1;
     zone->allocated += bytes;
     zone->dirty = 1;
@@ -159,6 +167,7 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
     z=z->next_zone;
   }
 
+  kputs("DEBUG No existing heap zones had space, expanding last zone\r\n");
   //if we get here, then no zones had available space. z should be set to the last zone.
   size_t pages_required = bytes / PAGE_SIZE;
   //always allocate at least MIN_ZONE_SIZE_PAGES
