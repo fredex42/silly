@@ -116,7 +116,7 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
     if((st & 0x1)) {  //ERR, bit 1 was set => error
       kprintf("\tWARNING Disk error trying to identify drive 0x%x on 0x%x, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
       master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
-      //FIXME: free the buffer!
+      free(buffer);
       return NULL;
     }
   }
@@ -280,17 +280,18 @@ void print_drive_info(uint8_t drive_nr)
 void test_write_cb(uint8_t status, void *buffer)
 {
   kprintf("Completed test write from 0x%x with status %d\r\n", buffer, (uint16_t) status);
-  vm_deallocate_physical_pages(NULL, buffer, 1);
+  free(buffer);
 }
 
 void test_read_cb(uint8_t status, void *buffer)
 {
   kprintf("Received data from test read with status %d at 0x%x\r\n", (uint16_t) status, buffer);
   //vm_deallocate_physical_pages(NULL, buffer, 1); <--can't free yet!!
-
+  free(buffer);
+  
   kputs("Testing disk write from HDD0...\r\n");
 
-  uint16_t *newbuffer = (uint16_t *)vm_alloc_pages(NULL, 1, MP_READWRITE);
+  uint16_t *newbuffer = (uint16_t *)malloc(4096);
   for(register uint16_t i=0;i<PAGE_SIZE/2;i++) {  //fill the page with a number sequence
     newbuffer[i] = i;
   }

@@ -151,6 +151,60 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
 }
 
 /**
+De-allocate the pointer in the given zone.
+*/
+void _zone_dealloc(struct HeapZoneStart *zone, void* ptr)
+{
+  struct PointerHeader* ptr_info = (struct PointerHeader*)((void*) ptr - sizeof(struct PointerHeader));
+  if(ptr_info->magic != HEAP_PTR_SIG) {
+    kprintf("ERROR Could not free pointer at 0x%x in zone 0x%x, heap may be corrupted\r\n", ptr, zone);
+    k_panic("Heap corruption detected\r\n");
+  }
+
+  ptr_info->in_use = 0;
+  zone->allocated -= ptr_info->block_length;
+
+  if(ptr_info->next_ptr && ptr_info->next_ptr->in_use==0) {
+    //there is a following block. If this is also free, then we should coalesce them to fight fragmentation.
+    kprintf("DEBUG Pointer 0x%x following 0x%x is free too, coalescing\r\n", ptr_info->next_ptr, ptr_info);
+    if(ptr_info->next_ptr->magic != HEAP_PTR_SIG) {
+      kprintf("ERROR Pointer at 0x%x following 0x%x appears corrupted\r\n", ptr_info->next_ptr, ptr_info);
+      return;
+    }
+    struct PointerHeader* ptr_to_remove = ptr_info->next_ptr;
+    ptr_info->next_ptr = ptr_to_remove->next_ptr;
+    ptr_info->block_length += ptr_to_remove->block_length;
+    memset(ptr_to_remove, 0, sizeof(struct PointerHeader));
+  }
+}
+
+/**
+Find the zone that this ptr belongs to.
+*/
+struct HeapZoneStart* _zone_for_ptr(struct HeapZoneStart *heap,void* ptr)
+{
+  if(heap->magic != HEAP_ZONE_SIG) k_panic("Kernel heap corrupted\r\n");
+  void* zone_start = (void*)heap;
+  void* zone_end = (void*)heap + heap->zone_length;
+  if(ptr>zone_start && ptr<zone_end) return heap; //this is the zone that contains the pointer
+  if(heap->next_zone) return _zone_for_ptr(heap->next_zone, ptr); //recurse on to the next zone
+  return NULL;  //we reached the end of the whole heap and did not find it.
+}
+
+/**
+Frees the pointer from the given heap
+*/
+void heap_free(struct HeapZoneStart *heap, void* ptr)
+{
+  struct HeapZoneStart* zone = _zone_for_ptr(heap, ptr);
+  if(!zone) {
+    kprintf("ERROR Attempted to free pointer 0x%x from heap 0x%x which it does not belong to\r\n", ptr, heap);
+    return;
+  }
+  _zone_dealloc(zone, ptr);
+}
+
+/**
 Allocate a new pointer in the given heap.
 This will try to find a zone with enough space in it, and if not
 will try to expand the heap.
@@ -190,4 +244,17 @@ void* malloc_for_process(uint16_t pid, size_t bytes)
 void* malloc(size_t bytes)
 {
     return malloc_for_process(0, bytes);
+}
+
+void free_for_process(uint16_t pid, void *ptr)
+{
+  struct ProcessTableEntry *process = get_process(pid);
+  if(!process) return;
+  if(process->status==PROCESS_NONE) return;  //don't alloc a non-existent process
+  return heap_free(process->heap_start, ptr);
+}
+
+void free(void* ptr)
+{
+  return free_for_process(0, ptr);
 }

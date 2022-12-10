@@ -17,13 +17,13 @@
 struct ProcessTableEntry {
   uint32_t magic; //must be 0x54504552 = 'PTBE'
   //saved register states
+  size_t esp;
   size_t eax;
   size_t ebx;
   size_t ecx;
   size_t edx;
   size_t edi;
   size_t esi;
-  size_t esp;
   size_t ebp;
   size_t ds;
   size_t es;

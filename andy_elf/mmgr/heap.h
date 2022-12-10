@@ -28,4 +28,14 @@ typedef struct PointerHeader {
 
 struct HeapZoneStart* initialise_heap(size_t initial_pages);
 
+//allocates onto the heap of the given process, which must exist.
+void* malloc_for_process(uint16_t pid, size_t bytes);
+//allocates onto the kernel heap; calls malloc_for_process with pid=0
+void* malloc(size_t bytes);
+
+//frees from the heap of the given process, which must exist.
+void free_for_process(uint16_t pid, void *ptr);
+//frees from the kernel heap; calls free_for_process with pid=0
+void free(void* ptr);
+
 #endif
