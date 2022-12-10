@@ -39,6 +39,7 @@ void scheduler_tick()
 
     ++global_scheduler_state->tasks_in_progress;
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
+    kprintf("Completed scheduled task");
     --global_scheduler_state->tasks_in_progress;
   }
 }
