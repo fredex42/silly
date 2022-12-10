@@ -140,9 +140,16 @@ PMPrintStringLen:
 
 	inc byte [CursorColPtr]
 	cmp byte [CursorColPtr], 0x50	;columns-per-row
-	jnz pm_next_char_len
-	mov byte [CursorColPtr], 0
+	jnz pm_next_char_len		;are we over the length of the row? If not go back for next char
+	mov byte [CursorColPtr], 0 ;reset to row 0 and go to next line
 	inc byte [CursorRowPtr]
+	cmp byte [CursorRowPtr], 24
+	jnz pm_next_char_len ;are we over the height of the screen? If not go back for the next char
+	push ecx
+	call PMScrollConsole ;scroll the screen up one line and print over bottom line
+	pop ecx
+	dec byte [CursorRowPtr]
+	sub edi, 0xA2	;move back 80 chars (and 80 attribs!) as we will be outside the mapped framebuffer RAM area by now.
 	jmp pm_next_char_len
 
 	pm_carraige_rtn_len:
@@ -156,7 +163,9 @@ PMPrintStringLen:
 	jmp pm_next_char_len
 
 	pm_linefeed_scroll_len:
+	push ecx
 	call PMScrollConsole
+	pop ecx
 
 	pm_string_done_len:
 	popf

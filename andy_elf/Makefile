@@ -1,4 +1,4 @@
-.PHONY: 8259pic acpi drivers scheduler
+.PHONY: 8259pic acpi drivers scheduler mmgr
 
 all: test.elf
 
@@ -11,6 +11,8 @@ clean:
 	make -C acpi clean
 	make -C 8259pic clean
 	make -C drivers clean
+	make -C scheduler clean
+	make -C mmgr clean
 
 kickoff.o: kickoff.s
 	nasm -f elf32 kickoff.s
@@ -30,9 +32,6 @@ stdio_funcs.o: stdio_funcs.c
 
 c_exceptions.o: c_exceptions.c
 	gcc -c ${CFLAGS} c_exceptions.c
-
-mmgr.o: mmgr.c
-	gcc -c ${CFLAGS} mmgr.c
 
 panic.o: panic.c
 	gcc -c ${CFLAGS} panic.c
@@ -61,11 +60,15 @@ drivers:
 scheduler:
 	make -C scheduler
 
+mmgr:
+	make -C mmgr
+
 test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
-		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o 8259pic acpi drivers scheduler
+		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
+		cpuid.o mmgr 8259pic acpi drivers scheduler
 	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
-		c_exceptions.o mmgr.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o \
+		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o \
+		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
 		-Ldrivers/early_serial/ -learly_serial \
 		-Ttext 0x7E00 -Tdata 0xE000 -Trodata 0x9000 \
