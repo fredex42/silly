@@ -92,10 +92,8 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
 
   //Still here? Good. We've got a drive, now poll for success or failure.
 
-  //kprintf("DEBUG sizeof(ATADriverState) is %l, active drive count is %d\r\n", sizeof(ATADriverState), (uint16_t) master_driver_state->active_drive_count);
-
-  //on success, we want to save the data into the same ram page as the master_driver_state immediately following that structure
-  //uint16_t *buffer = (uint16_t *)((vaddr)master_driver_state + (vaddr)sizeof(ATADriverState) + ((vaddr)master_driver_state->active_drive_count * 256));
+  //create a new buffer to store the drive information. If we get a failure this is freed otherwise it
+  //is linked back into the ATA state
   uint16_t *buffer = (uint16_t *)malloc(256*sizeof(int16_t)); //we pull 256 words.
   if(buffer==NULL) {
     kputs("ERROR No memory to allocate buffer\r\n");
@@ -136,7 +134,6 @@ void initialise_ata_driver()
 {
   uint16_t *info;
   kputs("Initialising simple ATA driver...\r\n");
-  //master_driver_state = (ATADriverState *)vm_alloc_pages(NULL, 1, MP_READWRITE);
   master_driver_state = (ATADriverState*)malloc(sizeof(ATADriverState));
 
   kprintf("DEBUG ATA driver master state initialised at 0x%x\r\n", master_driver_state);
@@ -149,8 +146,6 @@ void initialise_ata_driver()
 
   kprintf("\tDEBUG ATA driver state ptr is 0x%x\r\n", master_driver_state);
   for(register int i=0;i<4; i++) {
-    //these area already initialised to 0
-    //master_driver_state->pending_disk_operation[i] = (ATAPendingOperation *)( (vaddr)master_driver_state + sizeof(ATADriverState) + i*sizeof(ATAPendingOperation));
     master_driver_state->pending_disk_operation[i] = (ATAPendingOperation*) malloc(sizeof(ATAPendingOperation));
     memset(master_driver_state->pending_disk_operation[i], 0, sizeof(ATAPendingOperation));
   }
@@ -286,9 +281,8 @@ void test_write_cb(uint8_t status, void *buffer)
 void test_read_cb(uint8_t status, void *buffer)
 {
   kprintf("Received data from test read with status %d at 0x%x\r\n", (uint16_t) status, buffer);
-  //vm_deallocate_physical_pages(NULL, buffer, 1); <--can't free yet!!
   free(buffer);
-  
+
   kputs("Testing disk write from HDD0...\r\n");
 
   uint16_t *newbuffer = (uint16_t *)malloc(4096);
@@ -311,7 +305,6 @@ void test_read_cb(uint8_t status, void *buffer)
 
 void test_read()
 {
-  //void* buffer = vm_alloc_pages(NULL, 1, MP_READWRITE);
   void *buffer=malloc(4096);
 
   kputs("Testing disk read from HDD0...\r\n");
