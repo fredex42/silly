@@ -5,7 +5,7 @@ all: libfs_vfat.a
 clean:
 	rm -f *.o *.a
 
-vfat.o: vfat.c vfat.h
+vfat.o: vfat.c ../../include/fs/vfat.h
 	gcc -c ${CFLAGS} vfat.c
 
 fatbuffer.o: fatbuffer.c

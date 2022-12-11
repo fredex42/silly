@@ -56,7 +56,6 @@ typedef struct ata_driver_state {
 #define ATA_OP_IGNORE     3
 
 #define ATA_STATUS_OK     0
-#define ATA_STATUS_ERR    1
 
 typedef struct ata_pending_operation {
   uint8_t type;

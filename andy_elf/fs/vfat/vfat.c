@@ -1,95 +1,177 @@
 #include <types.h>
-#include "vfat.h"
+#include <fs/vfat.h>
+#include <fs/fat_fs.h>
 #include <sys/mmgr.h>
 #include <drivers/generic_storage.h>
+#include "../drivers/ata_pio/ata_pio.h"
 #include <errors.h>
+#include <malloc.h>
 #include <memops.h>
+#include <stdio.h>
 
-/*
-Loads in the bootsector of the given drive, allocating a 4k page of RAM to put it on.
-Returns a pointer to the start of the 4k buffer. Remaining space in the 4k buffer can
-be used for other content.
-Arguments: drive_nr - drive number for the storage driver
-           drv      - pointer to a GenericStorageDriver structure giving the storage layer endpoints
-           callback - pointer to a function that is called with the storage layer status and a pointer to the 4k buffer
-Returns: byte pointer to the buffer.
+/**
+Step four - now the cluster map is loaded, we should be ready to go
 */
-int8_t load_bootsector(uint8_t drive_nr, const GenericStorageDriver *drv, void (*callback)(int8_t status, void *buffer))
+void _vfat_loaded_cluster_map(uint8_t status, void *buffer, void *extradata)
 {
-  void *buf = vm_alloc_pages(NULL, 1, MP_READWRITE);
-  if(buf==NULL) {
-    kputs("ERROR can't allocate memory for bootsector\r\n");
-    return -E_NOMEM;
+  FATFS* new_fs = (FATFS *)extradata;
+  kprintf("DEBUG vfat_mount clustermap load completed with status %d\r\n", status);
+
+
+  if(status!=0) {
+    kprintf("ERROR vfat_mount clustermap load failed\r\n");
+    if(buffer) free(buffer);
+    //free(new_fs->mount_data_ptr);
+    new_fs->mount_data_ptr = NULL;
+    new_fs->did_mount_cb(new_fs, status, new_fs->did_mount_cb_extradata);
+    return;
   }
 
-  memset(buf, 0, PAGE_SIZE);
-
-  //read just the first 4 sectors and return the buffer for it. Fire the callback when it's ready.
-  //That should occupy 2k of the buffer.
-  return drv->driver_start_read(drive_nr, 0, 4, buf, NULL, callback);
+  size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
+  size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
+  kprintf("DEBUG Cluster map is at 0x%x and is 0x%x bytes long\r\n", new_fs->cluster_map, fat_region_length_bytes);
+  new_fs->did_mount_cb(new_fs, 0, new_fs->did_mount_cb_extradata);
 }
 
-void interrogate_fat_filesystem(uint8_t status, void *buffer)
-{
-  char oem_name[9];
-  oem_name[9] = 0;
-
-  //FIXME: should validate status
-
-  //These parts are common to all versions
-  BootSectorStart *start = (BootSectorStart *)buffer;
-  BIOSParameterBlock *base_bpb = (BIOSParameterBlock *)((vaddr)buffer + sizeof(BootSectorStart));
-  ExtendedBiosParameterBlock *extended_bpb = (ExtendedBiosParameterBlock *)((vaddr)base_bpb + sizeof(BIOSParameterBlock));
-
-  //copy to local stack so it's null-terminated
-  memcpy(oem_name, start->oem_name, 8);
-
-  kprintf("Volume in drive has OEM name %s, bytes per sector is %d, sectors per cluster is %d\r\n",
-   oem_name, base_bpb->bytes_per_logical_sector, (uint16_t)base_bpb->logical_sectors_per_cluster);
-
-  kprintf("Reserved sector count %d, FAT count %d, root directory limit %d\r\n",
-    base_bpb->reserved_logical_sectors,
-    (uint16_t)base_bpb->fat_count,
-    base_bpb->max_root_dir_entries
-  );
-
-  kprintf("Total logical sectors %d\r\n", base_bpb->total_logical_sectors);
-
-  if(base_bpb->max_root_dir_entries) {
-    kputs("We have a FAT32 filesystem\r\n");
-    FAT32ExtendedBiosParameterBlock *f32 = (FAT32ExtendedBiosParameterBlock *)((vaddr)base_bpb + sizeof(BIOSParameterBlock));
-    kprintf("FAT32 FS Information Sector is at sector #%d\r\n", f32->fs_information_sector);
-
-  }
-}
-
-/*
-Callback that gets fired once the driver has loaded in the FAT portion of the disk
+/**
+Step three - once the basic parameters are loaded, we want to cache the cluster map in memory.
 */
-void vfat_load_buffer_filled(uint8_t status, void *buffer)
+void vfat_load_cluster_map(FATFS* new_fs)
 {
+  size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
+  size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
+  kprintf("INFO Cluster map region starts at sector 0x%x and is 0x%x sectors long\r\n", new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors);
 
-}
-
-/*
-Starts the process of loading the file-allocation table into memory.
-Arguments:
- - b - pointer to an initialised FATBuffer.
-*/
-int8_t start_load_fat(FATBuffer *b, BIOSParameterBlock *bpb, uint8_t drive_nr, const GenericStorageDriver *drv, void (*callback)(uint8_t status, void *data))
-{
-  //load in enough to fill the buffer.
-  uint32_t block_count = b->initial_length_bytes / (uint32_t)bpb->bytes_per_logical_sector;
-  kprintf("DEBUG start_load_fat loading %l blocks for %l bytes\r\n", block_count, b->initial_length_bytes);
-  uint32_t block_nr = bpb->reserved_logical_sectors; //FAT starts after the reserved area.
-
-  return drv->driver_start_read(drive_nr, block_nr, (uint8_t)block_count, b->buffer, NULL, &vfat_load_buffer_filled);
-}
-
-void test_vfat()
-{
-  int8_t error = load_bootsector(1, ata_pio_get_driver(), &interrogate_fat_filesystem);
-  if(error!=E_OK) {
-    kprintf("ERROR: Could not load bootsector of drive 1: code %d\r\n", (int16_t)error);
+  new_fs->cluster_map = malloc(fat_region_length_bytes);
+  if(!new_fs->cluster_map) {
+    new_fs->did_mount_cb(new_fs, 1, NULL);  //FIXME needs proper error code
+    return;
   }
+
+  ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map, (void*)new_fs, &_vfat_loaded_cluster_map);
+}
+
+/**
+Step two - once bootsector is loaded, divvy it up into the right chunks for the FS header
+*/
+void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
+{
+  FATFS* new_fs = (FATFS *)extradata;
+
+  kprintf("DEBUG vfat_mount bootsector load completed with status %d\r\n", status);
+  if(status!=0) {
+    kprintf("ERROR vfat_mount bootsector load failed\r\n");
+    if(buffer) free(buffer);
+    //free(new_fs->mount_data_ptr);
+    new_fs->mount_data_ptr = NULL;
+    new_fs->did_mount_cb(new_fs, status, new_fs->did_mount_cb_extradata);
+    return;
+  }
+
+  new_fs->start = (BootSectorStart*) malloc(sizeof(BootSectorStart));
+  memcpy(new_fs->start, buffer, sizeof(BootSectorStart));  //first part of the boot sector, unsurprisingly, is BootSectorStart.
+  new_fs->bpb = (BIOSParameterBlock*) malloc(sizeof(BIOSParameterBlock));
+  memcpy(new_fs->bpb, buffer + 0x0B, sizeof(BIOSParameterBlock));
+  if(new_fs->bpb->total_logical_sectors==0 && new_fs->bpb->logical_sectors_per_fat==0) {
+    kprintf("INFO vfat filesystem on drive %d is probably FAT32\r\n", new_fs->drive_nr);
+    new_fs->f32bpb = (FAT32ExtendedBiosParameterBlock *)malloc(sizeof(FAT32ExtendedBiosParameterBlock));
+    memcpy(new_fs->f32bpb, buffer + 0x24, sizeof(FAT32ExtendedBiosParameterBlock));
+  } else {
+    kprintf("INFO vfat filesystem on drive %d is probably not FAT32\r\n", new_fs->drive_nr);
+    new_fs->ebpb = (ExtendedBiosParameterBlock *) malloc(sizeof(ExtendedBiosParameterBlock));
+    memcpy(new_fs->ebpb, buffer + 0x24, sizeof(ExtendedBiosParameterBlock));
+  }
+  free(buffer);
+
+  kprintf("INFO Loading vfat filesystem from drive %d\r\n", new_fs->drive_nr);
+  /*
+  uint16_t bytes_per_logical_sector;  //Bytes per logical sector; the most common value is 512.
+                                      // logical sector size is often identical to a disk's physical sector size, but can be larger or smaller in some scenarios.
+  uint8_t logical_sectors_per_cluster;  //Allowed values are 1, 2, 4, 8, 16, 32, 64, and 128
+  uint16_t reserved_logical_sectors;    //The number of logical sectors before the first FAT in the file system image.
+  uint8_t fat_count;                    //Number of File Allocation Tables. Almost always 2; RAM disks might use 1. Most versions of MS-DOS/PC DOS do not support more than 2 FATs.
+  uint16_t max_root_dir_entries;        //Maximum number of FAT12 or FAT16 root directory entries. 0 for FAT32, where the root directory is stored in ordinary data clusters; see offset 0x02C in FAT32 EBPBs.
+  uint16_t total_logical_sectors;       //0 for FAT32. (If zero, use 4 byte value at offset 0x020)
+  uint8_t media_descriptor;             //see defines above
+  uint16_t logical_sectors_per_fat;     //FAT32 sets this to 0 and uses the 32-bit value at offset 0x024 instead.
+  */
+  kprintf("INFO FS has\r\n    %d bytes per logical sector\r\n    %d logical sectors per cluster\r\n    %d reserved logical sectors\r\n", new_fs->bpb->bytes_per_logical_sector, new_fs->bpb->logical_sectors_per_cluster, new_fs->bpb->reserved_logical_sectors);
+  kprintf("    %d FATs\r\n", new_fs->bpb->fat_count);
+
+  if(new_fs->ebpb) {
+    kprintf("INFO FS is a FAT12/FAT16 type\r\n");
+  }
+  if(new_fs->f32bpb) {
+    kprintf("INFO FS is a FAT32 type\r\n");
+  }
+  vfat_load_cluster_map(new_fs);
+}
+
+/**
+Step one - initialise mount operation
+*/
+void vfat_mount(FATFS *new_fs, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
+{
+  void *bootsector = malloc(512);
+  if(!bootsector) {
+    //free(new_fs->mount_data_ptr);
+    new_fs->did_mount_cb(new_fs, 1, new_fs->did_mount_cb_extradata);  //FIXME: needs proper error code
+    return;
+  }
+
+  kprintf("DEBUG vfat_mount loading first sector from drive %d\r\n", (uint32_t)drive_nr);
+  ata_pio_start_read(drive_nr, 0, 1, bootsector, (void*)new_fs, &_vfat_loaded_bootsector);
+}
+
+void vfat_unmount(struct fat_fs *fs_ptr)
+{
+  kprintf("ERROR vfat_unmount not implemented yet!\r\n");
+}
+
+/**
+Initialises a new FATFS structure, ready for mounting.  You should only initialise
+one per drive_nr.
+*/
+FATFS* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
+{
+  FATFS* root_fs = (FATFS* )malloc(sizeof(FATFS));
+  if(!root_fs) {
+    k_panic("Unable to allocate memory to mount root FS\r\n");
+  }
+
+  /*
+  void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
+  void (*unmount)(struct fat_fs *fs_ptr);
+  //void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
+
+  void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata);
+  void *did_mount_cb_extradata;
+
+  struct generic_storage_driver *storage;
+
+  uint8_t busy;
+
+  uint8_t reserved[16];
+  uint8_t drive_nr;
+  BootSectorStart *start;
+  BIOSParameterBlock *bpb;
+  ExtendedBiosParameterBlock *ebpb;
+  FAT32ExtendedBiosParameterBlock *f32bpb;
+  FSInformationSector *infosector;
+  uint32_t reserved_sectors;
+  struct vfat_cluster_map *cluster_map;
+
+  struct mount_transient_data *mount_data_ptr;
+
+  struct vfat_directory_cache *directory_cache;
+  */
+  memset(root_fs, 0, sizeof(FATFS));
+  root_fs->mount = &vfat_mount;
+  root_fs->unmount = &vfat_unmount;
+  root_fs->did_mount_cb = did_mount_cb;
+  root_fs->did_mount_cb_extradata = extradata;
+  root_fs->drive_nr = drive_nr;
+  // root_fs->mount_data_ptr = (struct mount_transient_data*) malloc(sizeof(struct mount_transient_data));
+  // memset(root_fs->mount_data_ptr, 0, sizeof(struct mount_transient_data));
+
 }

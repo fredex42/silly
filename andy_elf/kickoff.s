@@ -257,8 +257,8 @@ sti
 extern initialise_ata_driver
 call initialise_ata_driver
 
-extern test_vfat
-call test_vfat
+extern mount_root_device
+call mount_root_device
 
 extern scheduler_tick
 
