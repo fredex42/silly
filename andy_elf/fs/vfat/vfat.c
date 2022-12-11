@@ -139,39 +139,11 @@ FATFS* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struc
     k_panic("Unable to allocate memory to mount root FS\r\n");
   }
 
-  /*
-  void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
-  void (*unmount)(struct fat_fs *fs_ptr);
-  //void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
-
-  void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata);
-  void *did_mount_cb_extradata;
-
-  struct generic_storage_driver *storage;
-
-  uint8_t busy;
-
-  uint8_t reserved[16];
-  uint8_t drive_nr;
-  BootSectorStart *start;
-  BIOSParameterBlock *bpb;
-  ExtendedBiosParameterBlock *ebpb;
-  FAT32ExtendedBiosParameterBlock *f32bpb;
-  FSInformationSector *infosector;
-  uint32_t reserved_sectors;
-  struct vfat_cluster_map *cluster_map;
-
-  struct mount_transient_data *mount_data_ptr;
-
-  struct vfat_directory_cache *directory_cache;
-  */
   memset(root_fs, 0, sizeof(FATFS));
   root_fs->mount = &vfat_mount;
   root_fs->unmount = &vfat_unmount;
   root_fs->did_mount_cb = did_mount_cb;
   root_fs->did_mount_cb_extradata = extradata;
   root_fs->drive_nr = drive_nr;
-  // root_fs->mount_data_ptr = (struct mount_transient_data*) malloc(sizeof(struct mount_transient_data));
-  // memset(root_fs->mount_data_ptr, 0, sizeof(struct mount_transient_data));
 
 }

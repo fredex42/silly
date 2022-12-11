@@ -52,7 +52,7 @@ LoadElfBase:		;break 0x7d24
 	add dx, si
 	mov si, dx
 
-	mov ax, 0xE00			;COPY DEST move to conventional memory at 0xE000
+	mov ax, 0xF00			;COPY DEST move to conventional memory at 0xF000
 	mov es, ax
 	mov di, 0
 	rep movsw
