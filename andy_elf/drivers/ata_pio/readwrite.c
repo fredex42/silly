@@ -167,8 +167,6 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
 {
   ATAPendingOperation *op = (ATAPendingOperation *)t->data;
 
-  kprintf("DEBUG in disk read lower-half. Requested paging dir is 0x%x\r\n", op->paging_directory);
-
   vaddr old_pd = switch_paging_directory_if_required((vaddr)op->paging_directory);
 
   //need to make sure interrupts are disabled, otherwise we trigger the next data packet

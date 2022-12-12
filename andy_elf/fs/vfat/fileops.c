@@ -92,6 +92,7 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
       return;
     } else {
       size_t next_sector_number =  (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster;
+      //FIXME need to check return value for E_BUSY and reschedule if so
       ata_pio_start_read(fp->parent_fs->drive_nr, next_sector_number, 1, buffer, (void *)t, &_vfat_next_block_read);
     }
   }
