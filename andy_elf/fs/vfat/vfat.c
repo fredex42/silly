@@ -1,4 +1,5 @@
 #include <types.h>
+#include "cluster_map.h"
 #include <fs/vfat.h>
 #include <fs/fat_fs.h>
 #include <sys/mmgr.h>
@@ -12,11 +13,11 @@
 /**
 Step four - now the cluster map is loaded, we should be ready to go
 */
-void _vfat_loaded_cluster_map(uint8_t status, void *buffer, void *extradata)
+void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extradata)
 {
   FATFS* new_fs = (FATFS *)extradata;
   kprintf("DEBUG vfat_mount clustermap load completed with status %d\r\n", status);
-
+  uint8_t *buffer = (uint8_t *)untyped_buffer;
 
   if(status!=0) {
     kprintf("ERROR vfat_mount clustermap load failed\r\n");
@@ -27,9 +28,32 @@ void _vfat_loaded_cluster_map(uint8_t status, void *buffer, void *extradata)
     return;
   }
 
+  if(buffer[0]<0xF0) {
+    kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
+    if(buffer) free(buffer);
+    new_fs->mount_data_ptr = NULL;
+    new_fs->did_mount_cb(new_fs, 100, new_fs->did_mount_cb_extradata);  //FIXME: need proper error code!
+    return;
+  }
+  //see https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system, under "File allocation table"
+  if(buffer[1]==0xFF && buffer[2]==0xFF && buffer[3]!=0xFF) {
+    kprintf("INFO Detected a FAT12 filesystem\r\n");
+    new_fs->cluster_map->bitsize=12;
+  } else if(buffer[1]=0xFF && buffer[2]==0xFF && buffer[3]==0xFF && buffer[4]!=0x0F) {
+    kprintf("INFO Detected a FAT16 filesystem\r\n");
+    new_fs->cluster_map->bitsize=16;
+  } else if(buffer[1]=0xFF && buffer[2]==0xFF && buffer[3]==0x0F) {
+    kprintf("INFO Detected a FAT32 filesystem\r\n");
+    new_fs->cluster_map->bitsize=32;
+  } else {
+    kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
+    if(buffer) free(buffer);
+    new_fs->mount_data_ptr = NULL;
+    new_fs->did_mount_cb(new_fs, 100, new_fs->did_mount_cb_extradata); //FIXME: need proper error code!
+  }
   size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
   size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
-  kprintf("DEBUG Cluster map is at 0x%x and is 0x%x bytes long\r\n", new_fs->cluster_map, fat_region_length_bytes);
+  kprintf("DEBUG Cluster map is at 0x%x and is 0x%x bytes long\r\n", new_fs->cluster_map->buffer, fat_region_length_bytes);
   new_fs->did_mount_cb(new_fs, 0, new_fs->did_mount_cb_extradata);
 }
 
@@ -42,13 +66,18 @@ void vfat_load_cluster_map(FATFS* new_fs)
   size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
   kprintf("INFO Cluster map region starts at sector 0x%x and is 0x%x sectors long\r\n", new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors);
 
-  new_fs->cluster_map = malloc(fat_region_length_bytes);
+  new_fs->cluster_map = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
+  new_fs->cluster_map->buffer = (uint8_t*)malloc(fat_region_length_bytes);
+  new_fs->cluster_map->buffer_size = fat_region_length_bytes;
+  new_fs->cluster_map->parent_fs = new_fs;
+  new_fs->cluster_map->bitsize = 0; //we don't know the bit-size yet
+
   if(!new_fs->cluster_map) {
     new_fs->did_mount_cb(new_fs, 1, NULL);  //FIXME needs proper error code
     return;
   }
 
-  ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map, (void*)new_fs, &_vfat_loaded_cluster_map);
+  ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)new_fs, &_vfat_loaded_cluster_map);
 }
 
 /**
@@ -146,4 +175,5 @@ FATFS* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struc
   root_fs->did_mount_cb_extradata = extradata;
   root_fs->drive_nr = drive_nr;
 
+  return root_fs;
 }

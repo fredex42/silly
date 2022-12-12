@@ -5,12 +5,14 @@ all: libfs_vfat.a
 clean:
 	rm -f *.o *.a
 
-vfat.o: vfat.c ../../include/fs/vfat.h
+vfat.o: vfat.c ../../include/fs/vfat.h cluster_map.h
 	gcc -c ${CFLAGS} vfat.c
 
-fatbuffer.o: fatbuffer.c
-	gcc -c ${CFLAGS} fatbuffer.c
+fileops.o: fileops.c ../../include/fs/vfat.h ../../include/fs/fat_fileops.h cluster_map.h
+	gcc -c ${CFLAGS} fileops.c
 
+cluster_map.o: cluster_map.c cluster_map.h
+	gcc -c ${CFLAGS} cluster_map.c
 
-libfs_vfat.a: vfat.o
-	ar rcs libfs_vfat.a vfat.o
+libfs_vfat.a: vfat.o fileops.o cluster_map.o
+	ar rcs libfs_vfat.a vfat.o fileops.o cluster_map.o

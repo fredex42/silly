@@ -27,6 +27,7 @@ typedef struct fat_fs {
   uint8_t busy;
 
   uint8_t reserved[16];
+  size_t open_file_count;
   uint8_t drive_nr;
   BootSectorStart *start;
   BIOSParameterBlock *bpb;
@@ -34,11 +35,12 @@ typedef struct fat_fs {
   FAT32ExtendedBiosParameterBlock *f32bpb;
   FSInformationSector *infosector;
   uint32_t reserved_sectors;
-  void *cluster_map;
+  struct vfat_cluster_map *cluster_map;
 
   struct mount_transient_data *mount_data_ptr;
 
   struct vfat_directory_cache *directory_cache;
+
 } FATFS;
 
 /* Public functions */
@@ -54,4 +56,7 @@ typedef struct mount_transient_data {
 
 #define BYTES_PER_CLUSTER(fs_ptr) ((uint32_t)fs_ptr->bpb->bytes_per_logical_sector * (uint32_t)fs_ptr->bpb->logical_sectors_per_cluster)
 #define SECTOR_FOR_CLUSTER(fs_ptr, cluster_num) ((uint32_t)cluster_num * (uint32_t)fs_ptr->bpb->logical_sectors_per_cluster)
+
+#define ERR_FS_BUSY   1
+
 #endif
