@@ -13,7 +13,7 @@ uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_clust
 
   switch(m->bitsize) {
     case 12:
-      puts("ERROR fat12 not supported yet\n");
+      kprintf("ERROR fat12 not supported yet\r\n");
       return -1;
     case 16:
       offset = current_cluster_num*2;

@@ -8,7 +8,7 @@
 /**
 Low-level open function. This is used on files and directories.
 */
-VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
+VFatOpenFile* vfat_open_by_location(FATFS *fs_ptr, size_t cluster_location_start, size_t file_size)
 {
   VFatOpenFile *fp = (VFatOpenFile *)malloc(sizeof(VFatOpenFile));
   if(!fp) {
@@ -18,12 +18,18 @@ VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
 
   fp->parent_fs = fs_ptr;
   fs_ptr->open_file_count++;
-  fp->current_cluster_number = entry_to_open->low_cluster_num;
-  if(fs_ptr->f32bpb) fp->current_cluster_number += (entry_to_open->f32_high_cluster_num << 16);
+  fp->current_cluster_number = cluster_location_start;
   fp->sector_offset_in_cluster = 0;
   fp->byte_offset_in_cluster = 0;
-  fp->file_length = entry_to_open->file_size;
+  fp->file_length = file_size;
   return fp;
+}
+
+VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
+{
+  size_t cluster_number = entry_to_open->low_cluster_num;
+  if(fs_ptr->f32bpb) cluster_number += (entry_to_open->f32_high_cluster_num << 16); //FIXME - check the correct bitshift value
+  return vfat_open_by_location(fs_ptr, cluster_number, entry_to_open->file_size);
 }
 
 void vfat_close(VFatOpenFile *fp)

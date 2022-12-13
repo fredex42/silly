@@ -3,6 +3,7 @@
 section .text
 global memset
 global memcpy
+global memcpy_dw
 global mb       ;memory barrier
 global get_current_paging_directory
 global switch_paging_directory_if_required
