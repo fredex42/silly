@@ -185,8 +185,13 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     //reset the "pending operation" block for the next operation
     //memset((void *)op, 0, sizeof(ATAPendingOperation));
     op->type = ATA_OP_NONE;
+    kprintf("DEBUG op->extradata is 0x%x\r\n", op->extradata);
     //the operation is now completed
-    op->completed_func(ATA_STATUS_OK, op->buffer, op->extradata);
+    if(!op->completed_func) {
+      kprintf("ERROR disk operation with NULL callback, this causes a memory leak\r\n");
+    } else {
+      op->completed_func(ATA_STATUS_OK, op->buffer, op->extradata);
+    }
   }
 
   if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);

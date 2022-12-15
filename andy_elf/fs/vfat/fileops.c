@@ -97,7 +97,7 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
       free(t);
       return;
     } else {
-      size_t next_sector_number =  (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster;
+      uint64_t next_sector_number =  (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster;
       //FIXME need to check return value for E_BUSY and reschedule if so
       ata_pio_start_read(fp->parent_fs->drive_nr, next_sector_number, 1, buffer, (void *)t, &_vfat_next_block_read);
     }
@@ -116,6 +116,11 @@ void vfat_read_async(VFatOpenFile *fp, void* buf, size_t length, void* extradata
 
   fp->busy = 1;
   struct vfat_read_transient_data *t = (struct vfat_read_transient_data *)malloc(sizeof(struct vfat_read_transient_data));
+  if(!t) {
+    kprintf("ERROR Could not allocate space for vfat transient data\r\n");
+    return;
+  }
+  t->callback = callback;
   t->cb_extradata = extradata;
   t->real_buffer = buf;
   t->fp = fp;
@@ -125,7 +130,7 @@ void vfat_read_async(VFatOpenFile *fp, void* buf, size_t length, void* extradata
 
   void* sector_buffer = malloc(512);  //FIXME surely sector size is defined somewhere?
 
-  size_t initial_sector = (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster;
+  uint64_t initial_sector = (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster;
 
   ata_pio_start_read(fp->parent_fs->drive_nr, initial_sector, 1, sector_buffer, (void*) t, &_vfat_next_block_read);
 }

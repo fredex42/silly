@@ -10,6 +10,50 @@ struct opendir_transient_data {
   void(*callback)(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, void* extradata);
 };
 
+void vfat_decode_attributes(uint8_t attrs, char *buf)
+{
+  if(attrs&0x0F) {  //Read-only, hidden, system, volume label all set => LFN fragment
+    strcpy(buf, "!LFN");
+    return;
+  }
+  if(attrs&VFAT_ATTR_READONLY) {
+    buf[0]='R';
+  } else {
+    buf[0]='.';
+  }
+  if(attrs&VFAT_ATTR_HIDDEN) {
+    buf[1]='H';
+  } else {
+    buf[1]='.';
+  }
+  if(attrs&VFAT_ATTR_SYSTEM) {
+    buf[2]='S';
+  } else {
+    buf[2]='.';
+  }
+  if(attrs&VFAT_ATTR_VOLLABEL) {
+    buf[3]='L';
+  } else {
+    buf[3]='.';
+  }
+  if(attrs&VFAT_ATTR_SUBDIR) {
+    buf[4]='D';
+  } else {
+    buf[4]='.';
+  }
+  if(attrs&VFAT_ATTR_ARCHIVE) {
+    buf[5]='A';
+  } else {
+    buf[5]='.';
+  }
+  if(attrs&VFAT_ATTR_DEVICE) {
+    buf[6]='D';
+  } else {
+    buf[6]='.';
+  }
+  buf[7]=0;
+}
+
 void vfat_get_printable_filename(const DirectoryEntry *entry, char *buf, size_t bufsize)
 {
   register size_t i;
@@ -31,7 +75,11 @@ DirectoryEntry* vfat_read_dir_next(VFatOpenDir *dir)
 {
   size_t byte_offset = dir->current_dir_idx * sizeof(DirectoryEntry);
   if(byte_offset >= dir->length_in_bytes) return NULL;  //we got to the end of the directory
-  return &dir->buffer[dir->current_dir_idx]; //the buffer is typed to DirectoryEntry so we need a block offset not byte offset.
+
+  DirectoryEntry *result = &dir->buffer[dir->current_dir_idx]; //the buffer is typed to DirectoryEntry so we need a block offset not byte offset.
+  if(result->file_size==0 && result->attributes==0) return NULL;  //we got to the end of useful content
+  ++dir->current_dir_idx;
+  return result;
 }
 
 void vfat_dir_seek(VFatOpenDir *dir, size_t index)
@@ -90,7 +138,7 @@ void vfat_opendir_root(FATFS *fs_ptr, void* extradata, void(*callback)(VFatOpenF
     start_location_cluster = (fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->fat_count * fs_ptr->bpb->logical_sectors_per_fat)) / fs_ptr->bpb->logical_sectors_per_cluster;
   }
 
-  kprintf("DEBUG root directory location calculated at 0x%x\r\n", start_location_cluster);
+  kprintf("DEBUG root directory location calculated at cluster 0x%x\r\n", start_location_cluster);
   size_t root_dir_size;
   if(fs_ptr->f32bpb) {
     //we don't actually know the size, but need to impose a limit in order to know how much memory to allocate.

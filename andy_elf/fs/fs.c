@@ -24,22 +24,27 @@ void fs_initialise()
 void _fs_root_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, void* extradata)
 {
   char filename_buffer[32];
-  memset(filename_buffer, 0, 32);
+  char attrs[16];
 
+  memset(filename_buffer, 0, 32);
+  memset(attrs, 0, 16);
+  
   if(status!=0) {
     kprintf("ERROR Could not open root directory: error %d\r\n", status);
     vfat_close(fp);
     return;
   }
-
+  kprintf("INFO Root directory contents:\r\n");
   DirectoryEntry *entry = vfat_read_dir_next(dir);
   while(entry!=NULL) {
     if(entry->attributes != VFAT_ATTR_LFNCHUNK) {
       vfat_get_printable_filename(entry, filename_buffer, 32);
-      kprintf("DEBUG Found file %s\r\n", entry);
+      vfat_decode_attributes(entry->attributes, attrs);
+      kprintf("DEBUG Found file %s %s size %l\r\n", entry, attrs, entry->file_size);
     }
     entry = vfat_read_dir_next(dir);
   }
+  kprintf("INFO Root directory contents list completed\r\n");
 }
 
 void _fs_root_device_mounted(struct fat_fs *fs_ptr, uint8_t status, void *extradata)

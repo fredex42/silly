@@ -16,5 +16,6 @@ void vfat_dir_close(VFatOpenDir *dir);
 void vfat_dir_seek(VFatOpenDir *dir, size_t index);
 DirectoryEntry* vfat_read_dir_next(VFatOpenDir *dir);
 void vfat_get_printable_filename(const DirectoryEntry *entry, char *buf, size_t bufsize);
+void vfat_decode_attributes(uint8_t attrs, char *buf);
 
 #endif

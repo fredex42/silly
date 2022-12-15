@@ -637,4 +637,6 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   for(i=0x70;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
   for(i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
   for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
+  //TEMP: protect whole first Mb
+  //for(i=0;i<=0xFF;i++) physical_memory_map[i].in_use = 1;
 }

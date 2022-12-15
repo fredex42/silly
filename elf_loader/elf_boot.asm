@@ -18,9 +18,9 @@ TIMES 24 db 0	;no extended parameter block
 _bootsect:
 ; set up code segment for bootloader
 ; set up stack
-mov ax, 0x150 ;4k stack space below the boot-loader, grows downwards to 0x50
+mov ax, 0x7000 ;4k stack space below the boot-loader, grows downwards to 0x50
 mov ss, ax
-mov sp, 0x1000
+mov sp, 0
 
 ; set up data segment registers
 mov ax, 0x4000	;area below our stack and well above our code, which is at 0x7C00 (seg. 0x7C0) and the loading area at 0x7E00. Gives 192k of load space.
