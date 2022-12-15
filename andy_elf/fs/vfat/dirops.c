@@ -4,6 +4,7 @@
 #include <fs/fat_fileops.h>
 #include <fs/fat_dirops.h>
 #include <fs/fat_fs.h>
+#include <stdio.h>
 
 struct opendir_transient_data {
   void* extradata;

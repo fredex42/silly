@@ -9,7 +9,7 @@
 #include <malloc.h>
 #include <memops.h>
 #include <stdio.h>
-
+#include <panic.h>
 /**
 Step four - now the cluster map is loaded, we should be ready to go
 */

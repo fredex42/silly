@@ -7,6 +7,8 @@
 #ifndef __FS_VFAT_H
 #define __FS_VFAT_H
 
+struct fat_fs* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
+
 /*
 See https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system
 */

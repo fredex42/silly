@@ -1,6 +1,7 @@
 #include <types.h>
 #include <fs/vfat.h>
 #include <fs/fat_fs.h>
+#include <stdio.h>
 #include "cluster_map.h"
 
 /**

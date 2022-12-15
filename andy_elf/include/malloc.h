@@ -1,4 +1,5 @@
 #include <types.h>
+#include <sys/mmgr.h>
 #ifndef __MALLOC_H
 #define __MALLOC_H
 

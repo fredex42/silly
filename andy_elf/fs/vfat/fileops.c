@@ -1,8 +1,11 @@
 #include <types.h>
 #include <malloc.h>
 #include <memops.h>
+#include "../drivers/ata_pio/ata_pio.h"
 #include <fs/fat_fs.h>
 #include <fs/fat_fileops.h>
+#include <stdio.h>
+#include <panic.h>
 #include "cluster_map.h"
 
 /**

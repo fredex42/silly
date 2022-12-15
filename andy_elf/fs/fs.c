@@ -4,6 +4,7 @@
 #include <fs/fat_dirops.h>
 #include <memops.h>
 #include <malloc.h>
+#include <stdio.h>
 #include "../drivers/ata_pio/ata_pio.h"
 #include "fs.h"
 
@@ -28,7 +29,7 @@ void _fs_root_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, voi
 
   memset(filename_buffer, 0, 32);
   memset(attrs, 0, 16);
-  
+
   if(status!=0) {
     kprintf("ERROR Could not open root directory: error %d\r\n", status);
     vfat_close(fp);
@@ -45,6 +46,8 @@ void _fs_root_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, voi
     entry = vfat_read_dir_next(dir);
   }
   kprintf("INFO Root directory contents list completed\r\n");
+  vfat_dir_close(dir);
+  vfat_close(fp);
 }
 
 void _fs_root_device_mounted(struct fat_fs *fs_ptr, uint8_t status, void *extradata)
