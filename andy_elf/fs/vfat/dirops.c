@@ -5,6 +5,7 @@
 #include <fs/fat_dirops.h>
 #include <fs/fat_fs.h>
 #include <stdio.h>
+#include <errors.h>
 
 struct opendir_transient_data {
   void* extradata;
@@ -123,7 +124,6 @@ void _vfat_dir_read_completed(VFatOpenFile *fp, uint8_t status, size_t bytes_rea
   */
   dir->current_dir_idx = 0;
   dir->length_in_bytes = fp->file_length;
-  dir->length_in_dirs = 0;  //FIXME, maybe we don't need this?
   dir->buffer = buf;
   t->callback(fp, 0, dir, t->extradata);
   free(t);
@@ -149,21 +149,20 @@ void vfat_opendir_root(FATFS *fs_ptr, void* extradata, void(*callback)(VFatOpenF
 
   VFatOpenFile *fp = vfat_open_by_location(fs_ptr, start_location_cluster, root_dir_size);
   if(!fp) {
-    kprintf("ERROR Could not open root directory area.\r\n");
-    callback(NULL, 1, NULL, extradata); //FIXME: need a proper error code
+    callback(NULL, E_NOMEM, NULL, extradata);
     return;
   }
 
   void* buffer = malloc(root_dir_size);
   if(!buffer) {
     kprintf("ERROR Could not allocate RAM for root dir\r\n");
-    callback(fp, 1, NULL, extradata); //FIXME: need a proper error code
+    callback(fp, E_NOMEM, NULL, extradata);
     return;
   }
   struct opendir_transient_data *t = (struct opendir_transient_data *)malloc(sizeof(struct opendir_transient_data));
   if(!t) {
     kprintf("ERROR Could not allocate RAM for transient data\r\n");
-    callback(fp, 1, NULL, extradata); //FIXME: need a proper error code
+    callback(fp, E_NOMEM, NULL, extradata);
     return;
   }
   t->extradata = extradata;

@@ -7,7 +7,6 @@
 typedef struct vfat_open_dir {
   size_t current_dir_idx;
   size_t length_in_bytes;
-  size_t length_in_dirs;
   DirectoryEntry* buffer;
 } VFatOpenDir;
 

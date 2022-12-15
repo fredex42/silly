@@ -31,7 +31,7 @@ VFatOpenFile* vfat_open_by_location(FATFS *fs_ptr, size_t cluster_location_start
 VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
 {
   size_t cluster_number = entry_to_open->low_cluster_num;
-  if(fs_ptr->f32bpb) cluster_number += (entry_to_open->f32_high_cluster_num << 16); //FIXME - check the correct bitshift value
+  if(fs_ptr->f32bpb) cluster_number += (entry_to_open->f32_high_cluster_num << 16);
   return vfat_open_by_location(fs_ptr, cluster_number, entry_to_open->file_size);
 }
 
@@ -130,7 +130,7 @@ void vfat_read_async(VFatOpenFile *fp, void* buf, size_t length, void* extradata
   t->buffer_write_offset = 0;
   t->disk_read_offset = 0;  //FIXME we should be able to read from arbitary location
 
-  void* sector_buffer = malloc(512);  //FIXME surely sector size is defined somewhere?
+  void* sector_buffer = malloc(ATA_SECTOR_SIZE);
 
   uint64_t initial_sector = (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster;
 

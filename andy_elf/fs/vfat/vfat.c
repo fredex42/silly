@@ -31,7 +31,7 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
     kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
     if(buffer) free(buffer);
     new_fs->mount_data_ptr = NULL;
-    new_fs->did_mount_cb(new_fs, 100, new_fs->did_mount_cb_extradata);  //FIXME: need proper error code!
+    new_fs->did_mount_cb(new_fs, E_VFAT_NOT_RECOGNIZED, new_fs->did_mount_cb_extradata);
     return;
   }
   //see https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system, under "File allocation table"
@@ -48,7 +48,7 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
     kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
     if(buffer) free(buffer);
     new_fs->mount_data_ptr = NULL;
-    new_fs->did_mount_cb(new_fs, 100, new_fs->did_mount_cb_extradata); //FIXME: need proper error code!
+    new_fs->did_mount_cb(new_fs, E_VFAT_NOT_RECOGNIZED, new_fs->did_mount_cb_extradata);
   }
   size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
   size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
@@ -65,15 +65,21 @@ void vfat_load_cluster_map(FATFS* new_fs)
   kprintf("INFO Cluster map region starts at sector 0x%x and is 0x%x sectors long\r\n", new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors);
 
   new_fs->cluster_map = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
+  if(!new_fs->cluster_map) {
+    new_fs->did_mount_cb(new_fs, E_NOMEM, NULL);
+    return;
+  }
+
   new_fs->cluster_map->buffer = (uint8_t*)malloc(fat_region_length_bytes);
+  if(!new_fs->cluster_map->buffer) {
+    free(new_fs->cluster_map);
+    new_fs->did_mount_cb(new_fs, E_NOMEM, NULL);
+    return;
+  }
+
   new_fs->cluster_map->buffer_size = fat_region_length_bytes;
   new_fs->cluster_map->parent_fs = new_fs;
   new_fs->cluster_map->bitsize = 0; //we don't know the bit-size yet
-
-  if(!new_fs->cluster_map) {
-    new_fs->did_mount_cb(new_fs, 1, NULL);  //FIXME needs proper error code
-    return;
-  }
 
   ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)new_fs, &_vfat_loaded_cluster_map);
 }
@@ -140,8 +146,7 @@ void vfat_mount(FATFS *new_fs, uint8_t drive_nr, void *extradata, void (*callbac
 {
   void *bootsector = malloc(512);
   if(!bootsector) {
-    //free(new_fs->mount_data_ptr);
-    new_fs->did_mount_cb(new_fs, 1, new_fs->did_mount_cb_extradata);  //FIXME: needs proper error code
+    new_fs->did_mount_cb(new_fs, E_NOMEM, new_fs->did_mount_cb_extradata);
     return;
   }
 

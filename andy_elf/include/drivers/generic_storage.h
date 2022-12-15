@@ -3,6 +3,7 @@
 #ifndef __DRIVER_GENERIC_STORAGE_H
 #define __DRIVER_GENERIC_STORAGE_H
 
+#define ATA_SECTOR_SIZE 512
 /*
 This structure contains function pointers to low-level driver functions.
 It allows us to abstract the low-level driver from the filesystem
