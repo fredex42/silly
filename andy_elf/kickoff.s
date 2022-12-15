@@ -304,7 +304,21 @@ db 0x10		;base bits 16-23. Start from end of kernel DS
 db 0x84		;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=0
 db 0x40		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
+;entry 5 (segment 0x28): User-mode CS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x0000	;base bits 16-23
+db 0xFA		;access byte. Set Pr, Privl=3, S=1, Ex=1, DC=0, RW=1, Ac=0
+db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 6 (segment 0x30): User-mode DS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x00		;base bits 16-23. Start from 0meg.
+db 0xF2		;access byte. Set Pr, Privl=3, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
 
 SimpleGDTPtr:
-dw 0x28		;length in bytes
+dw 0x38		;length in bytes
 dd 0x0		;offset, filled in by code
