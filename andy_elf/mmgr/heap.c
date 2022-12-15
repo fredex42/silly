@@ -118,10 +118,10 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
       if(p==NULL) break; else continue;
     }
 
-    //kprintf("DEBUG proceeding with alloc\r\n");
+    kprintf("DEBUG proceeding with alloc\r\n");
     //great, this alloc fits.
     remaining_length = p->block_length - bytes;
-    //kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
+    kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
     p->block_length = bytes + sizeof(struct PointerHeader);
     p->in_use = 1;
     zone->allocated += bytes;

@@ -257,11 +257,8 @@ sti
 extern initialise_ata_driver
 call initialise_ata_driver
 
-; extern run_inkernel_memory_tests
-; call run_inkernel_memory_tests
-
-extern test_read
-call test_read
+extern mount_root_device
+call mount_root_device
 
 extern scheduler_tick
 

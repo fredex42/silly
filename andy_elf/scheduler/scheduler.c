@@ -39,7 +39,6 @@ void scheduler_tick()
 
     ++global_scheduler_state->tasks_in_progress;
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
-    kprintf("Completed scheduled task");
     --global_scheduler_state->tasks_in_progress;
   }
 }
@@ -59,7 +58,6 @@ SchedulerTask *new_scheduler_task(uint8_t task_type, void (*task_proc)(struct sc
 
   SchedulerTaskBuffer *current_buffer = global_scheduler_state->buffers[global_scheduler_state->current_buffer];
 
-  kputs("creating new scheduler task\r\n");
   while(current_buffer->buffer_idx + sizeof(SchedulerTaskBuffer) > PAGE_SIZE*TASK_BUFFER_SIZE_IN_PAGES) {
     ++current_buffer->buffer_idx;
     if(current_buffer->buffer_idx > BUFFER_COUNT) {
@@ -98,8 +96,6 @@ void schedule_task(SchedulerTask *t)
       kputs("ERROR Tried to schedule an invalid task with type TASK_NONE\r\n");
       return;
     case TASK_ASAP:
-      //cli();
-      kputs("scheduling asap task\r\n");
       if(global_scheduler_state->task_asap_list==NULL) {
         global_scheduler_state->task_asap_list = t;
       } else {
@@ -112,7 +108,6 @@ void schedule_task(SchedulerTask *t)
         //task_list now points to the last item on the linked list
         task_list->next = t;
       }
-      kputs("done.\r\n");
       //sti();
       return;
     case TASK_DEADLINE:

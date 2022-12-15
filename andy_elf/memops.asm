@@ -3,6 +3,7 @@
 section .text
 global memset
 global memcpy
+global memcpy_dw
 global mb       ;memory barrier
 global get_current_paging_directory
 global switch_paging_directory_if_required
@@ -76,6 +77,33 @@ memcpy:
   pop edi
   pop ebp
   ret
+
+;same as memcopy but copies a number of DWORDS instead of bytes. More efficient for e.g. disk blocks.
+memcpy_dw:
+push ebp
+mov ebp, esp
+push edi
+push esi
+push es
+push eax
+push ecx
+
+xor ecx, ecx
+mov cx, ds
+mov es, cx
+mov edi, [ebp+8]  ;first arg - destination buffer
+mov esi, [ebp+12]  ;second arg - source buffer
+mov ecx, dword [ebp+16]
+
+rep movsd
+
+pop ecx
+pop eax
+pop es
+pop esi
+pop edi
+pop ebp
+ret
 
 ;Purpose: returns the current paging directory pointer. This should be stored in CR3.
 get_current_paging_directory:

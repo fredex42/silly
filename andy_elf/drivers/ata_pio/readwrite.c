@@ -60,7 +60,7 @@ This should be called with interrupts disabled.
 It will return E_BUSY if another operation is already pending, for this reason should be considered
 "internal" as it needs queueing in front of it.
 */
-int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer))
+int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
 {
   uint16_t base_addr;
   uint8_t selector;
@@ -70,8 +70,6 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
     k_panic("ERROR Requested disk read before ATA subsystem was initialised\r\n");
     return E_BUSY;
   }
-
-  //kprintf("DEBUG bus_nr is %d\r\n", (uint16_t) bus_nr);
 
   //if we have an operation already pending the caller must wait for that to finish
   if(master_driver_state->pending_disk_operation[bus_nr]->type != ATA_OP_NONE) {
@@ -90,6 +88,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
   op->sector_count = sector_count;
   op->device = drive_nr & 0x1;  //just take the leftmost bit, 0=>master, 1=>slave
   op->buffer = buffer;
+  op->extradata = extradata;
   op->paging_directory = get_current_paging_directory();
   op->buffer_loc = 0;
   op->base_addr = base_addr;
@@ -105,7 +104,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
   outb(ATA_COMMAND(base_addr), ATA_CMD_READ_SECTORS);
 }
 
-int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void (*callback)(uint8_t status, void *buffer))
+int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
 {
   uint16_t base_addr;
   uint8_t selector;
@@ -138,6 +137,7 @@ int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t secto
   op->paging_directory = get_current_paging_directory();
   op->buffer_loc = 0;
   op->base_addr = base_addr;
+  op->extradata = extradata;
   op->sectors_read = 0;
   op->completed_func = callback;
 
@@ -165,8 +165,6 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
 {
   ATAPendingOperation *op = (ATAPendingOperation *)t->data;
 
-  kprintf("DEBUG in disk read lower-half. Requested paging dir is 0x%x\r\n", op->paging_directory);
-
   vaddr old_pd = switch_paging_directory_if_required((vaddr)op->paging_directory);
 
   //need to make sure interrupts are disabled, otherwise we trigger the next data packet
@@ -186,7 +184,11 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     //memset((void *)op, 0, sizeof(ATAPendingOperation));
     op->type = ATA_OP_NONE;
     //the operation is now completed
-    op->completed_func(ATA_STATUS_OK, op->buffer);
+    if(!op->completed_func) {
+      kprintf("ERROR disk operation with NULL callback, this causes a memory leak\r\n");
+    } else {
+      op->completed_func(ATA_STATUS_OK, op->buffer, op->extradata);
+    }
   }
 
   if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
@@ -249,7 +251,7 @@ void ata_complete_write_lowerhalf(SchedulerTask *t)
 
   if(op->sectors_read>=op->sector_count) {
     //the operation is now completed
-    op->completed_func(ATA_STATUS_OK, op->buffer);
+    op->completed_func(ATA_STATUS_OK, op->buffer, op->extradata);
     //reset the "pending operation" block for the next operation
     op->type = ATA_OP_NONE;
   } else {
