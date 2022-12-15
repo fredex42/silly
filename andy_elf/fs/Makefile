@@ -4,7 +4,7 @@ CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables
 
 all: vfat fs.o
 
-fs.o: fs.c fs.h
+fs.o: fs.c ../include/fs.h
 	gcc -c ${CFLAGS} fs.c
 
 vfat:

@@ -6,7 +6,7 @@
 #include <malloc.h>
 #include <stdio.h>
 #include "../drivers/ata_pio/ata_pio.h"
-#include "fs.h"
+#include <fs.h>
 
 //pointer to the filesystem for each device
 static struct fat_fs* device_fs_map[MAX_DEVICE];
@@ -16,6 +16,14 @@ static const GenericStorageDriver ata_driver = {
   &ata_pio_start_write,
   &print_drive_info
 };
+
+/**
+Returns the FS pointer for the given device, or NULL if there is not a mounted FS
+*/
+const FATFS* fs_for_device(uint8_t device_no) {
+  if(device_no > MAX_DEVICE) return NULL;
+  return device_fs_map[device_no];
+}
 
 void fs_initialise()
 {
