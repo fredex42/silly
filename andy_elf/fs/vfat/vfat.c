@@ -16,7 +16,6 @@ Step four - now the cluster map is loaded, we should be ready to go
 void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extradata)
 {
   FATFS* new_fs = (FATFS *)extradata;
-  kprintf("DEBUG vfat_mount clustermap load completed with status %d\r\n", status);
   uint8_t *buffer = (uint8_t *)untyped_buffer;
 
   if(status!=0) {
@@ -53,7 +52,6 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
   }
   size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
   size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
-  kprintf("DEBUG Cluster map is at 0x%x and is 0x%x bytes long\r\n", new_fs->cluster_map->buffer, fat_region_length_bytes);
   new_fs->did_mount_cb(new_fs, 0, new_fs->did_mount_cb_extradata);
 }
 
@@ -87,7 +85,6 @@ void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
 {
   FATFS* new_fs = (FATFS *)extradata;
 
-  kprintf("DEBUG vfat_mount bootsector load completed with status %d\r\n", status);
   if(status!=0) {
     kprintf("ERROR vfat_mount bootsector load failed\r\n");
     if(buffer) free(buffer);
@@ -148,7 +145,6 @@ void vfat_mount(FATFS *new_fs, uint8_t drive_nr, void *extradata, void (*callbac
     return;
   }
 
-  kprintf("DEBUG vfat_mount loading first sector from drive %d\r\n", (uint32_t)drive_nr);
   ata_pio_start_read(drive_nr, 0, 1, bootsector, (void*)new_fs, &_vfat_loaded_bootsector);
 }
 

@@ -97,7 +97,6 @@ void vfat_dir_close(VFatOpenDir *dir)
 void _vfat_dir_read_completed(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)
 {
   struct opendir_transient_data *t = (struct opendir_transient_data *)extradata;
-  kprintf("DEBUG Directory read completed with status %d\r\n", status);
 
   if(status!=0) {
     kprintf("ERROR Directory read failed\r\n");
@@ -138,7 +137,6 @@ void vfat_opendir_root(FATFS *fs_ptr, void* extradata, void(*callback)(VFatOpenF
     start_location_cluster = (fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->fat_count * fs_ptr->bpb->logical_sectors_per_fat)) / fs_ptr->bpb->logical_sectors_per_cluster;
   }
 
-  kprintf("DEBUG root directory location calculated at cluster 0x%x\r\n", start_location_cluster);
   size_t root_dir_size;
   if(fs_ptr->f32bpb) {
     //we don't actually know the size, but need to impose a limit in order to know how much memory to allocate.
@@ -147,7 +145,6 @@ void vfat_opendir_root(FATFS *fs_ptr, void* extradata, void(*callback)(VFatOpenF
   } else {
     root_dir_size = fs_ptr->bpb->max_root_dir_entries * 32;
   }
-  kprintf("DEBUG root directory size (limit) calculated at 0x%x\r\n",root_dir_size);
 
   VFatOpenFile *fp = vfat_open_by_location(fs_ptr, start_location_cluster, root_dir_size);
   if(!fp) {

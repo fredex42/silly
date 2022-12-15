@@ -71,8 +71,6 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
     return E_BUSY;
   }
 
-  //kprintf("DEBUG bus_nr is %d\r\n", (uint16_t) bus_nr);
-
   //if we have an operation already pending the caller must wait for that to finish
   if(master_driver_state->pending_disk_operation[bus_nr]->type != ATA_OP_NONE) {
     kprintf("DEBUG pending operation is type %d\r\n", (uint16_t)master_driver_state->pending_disk_operation[bus_nr]->type  );
@@ -185,7 +183,6 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     //reset the "pending operation" block for the next operation
     //memset((void *)op, 0, sizeof(ATAPendingOperation));
     op->type = ATA_OP_NONE;
-    kprintf("DEBUG op->extradata is 0x%x\r\n", op->extradata);
     //the operation is now completed
     if(!op->completed_func) {
       kprintf("ERROR disk operation with NULL callback, this causes a memory leak\r\n");

@@ -51,7 +51,6 @@ struct vfat_read_transient_data {
 void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
 {
   struct vfat_read_transient_data* t = (struct vfat_read_transient_data *)extradata;
-  kprintf("DEBUG read block from file. Status was %d, transient data at 0x%x, buffer at 0x%x\r\n", status, extradata, buffer);
 
   if(status!=0) {
     kprintf("ERROR reading from file 0x%x at offset 0x%d.\r\n", t->fp, t->buffer_write_offset);

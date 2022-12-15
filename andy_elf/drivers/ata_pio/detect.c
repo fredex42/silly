@@ -146,7 +146,6 @@ void initialise_ata_driver()
   uint16_t *info;
   kputs("Initialising simple ATA driver...\r\n");
   master_driver_state = (ATADriverState*)malloc(sizeof(ATADriverState));
-  kprintf("DEBUG ATA driver master state initialised at 0x%x\r\n", master_driver_state);
   ata_pio_driver.driver_start_read = &ata_pio_start_read;
   ata_pio_driver.driver_start_write = &ata_pio_start_write;
   ata_pio_driver.driver_print_drive_info = &print_drive_info;
@@ -158,7 +157,6 @@ void initialise_ata_driver()
 
   memset((void *)master_driver_state, 0, sizeof(ATADriverState));
 
-  kprintf("\tDEBUG ATA driver state ptr is 0x%x\r\n", master_driver_state);
   for(register int i=0;i<4; i++) {
     master_driver_state->pending_disk_operation[i] = (ATAPendingOperation*) malloc(sizeof(ATAPendingOperation));
     memset(master_driver_state->pending_disk_operation[i], 0, sizeof(ATAPendingOperation));
