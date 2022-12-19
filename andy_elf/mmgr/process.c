@@ -5,6 +5,8 @@
 
 //store a static pointer to the kernel process table
 static struct ProcessTableEntry* process_table;
+static uint16_t current_running_processid;
+static uint16_t last_assigned_processid;
 
 void initialise_process_table(uint32_t* kernel_paging_directory)
 {
@@ -23,6 +25,7 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
   kprintf("Process table is at 0x%x\r\n", process_table);
 
   //process 0 is kernel
+  current_running_processid = 0;
   process_table->root_paging_directory = kernel_paging_directory;
   process_table->status = PROCESS_READY;
 }

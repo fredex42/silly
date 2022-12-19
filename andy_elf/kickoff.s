@@ -268,7 +268,7 @@ call scheduler_tick	;check if we have any work to do
 hlt									;pause processor until an interrupt comes along. We will be regularly woken by the timer interrupt.
 jmp idle_loop
 
-section .data
+section .rodata
 HelloString: db 'Hello world', 0x0a, 0x0d, 0
 
 ;basic GDT configuration. Each entry is 8 bytes long

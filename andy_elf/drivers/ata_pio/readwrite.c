@@ -65,6 +65,9 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
   uint16_t base_addr;
   uint8_t selector;
 
+  kprintf("DEBUG ata_pio_start_read drive_nr %d, LBA address (lower) 0x%x\r\n", (uint32_t) drive_nr, (uint32_t)lba_address);
+  kprintf("DEBUG ata_pio_start_read  sector count 0x%x, buffer at 0x%x\r\n", (uint32_t)sector_count, buffer );
+
   uint8_t bus_nr = (uint8_t) ((drive_nr & 0xF) >> 1);
   if(master_driver_state==NULL || master_driver_state->pending_disk_operation[drive_nr >> 1]==NULL) {
     k_panic("ERROR Requested disk read before ATA subsystem was initialised\r\n");
