@@ -129,8 +129,4 @@ typedef struct elf_section_header_i386 {
   uint32_t sh_entsize;    //if the section contains fixed-size entries, the size of each entry.
 } __attribute__((packed)) ElfSectionHeader32;
 
-typedef struct elf_section_header_list {
-  struct elf_section_header_list* next;
-  ElfSectionHeader32* section;
-} ElfSectionHeaderList;
 #endif

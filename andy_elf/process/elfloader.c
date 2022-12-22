@@ -11,14 +11,70 @@
 struct elf_load_transient_data {
   ElfFileHeader *file_header;
   ElfProgramHeader32 *program_header;
+  void *section_headers_buffer;
+  size_t section_headers_count;
 
   void *extradata;
   void (*callback)(uint8_t status, void*something, void*extradata);
 };
 
+/**
+Returns an ElfSectionHeader32 struct from the buffer in `t`.
+Returns NULL if the index is invalid.
+*/
+ElfSectionHeader32* elf_get_section_header_by_index(struct elf_load_transient_data *t, size_t idx)
+{
+  if(idx>t->section_headers_count) return NULL;
+  ElfSectionHeader32 *section = (ElfSectionHeader32 *)(t->section_headers_buffer + idx*sizeof(ElfSectionHeader32));
+  return section;
+}
+
+void elf_load_program_header(VFatOpenFile *fp, struct elf_load_transient_data *t)
+{
+  kprintf("Loading in program header...\r\n");
+  if(!t->file_header) {
+    kprintf("ERROR elf_load_program_header called with NULL file header, can't continue");
+    return;
+  }
+  void *program_header_buffer = malloc(t->file_header->i386_subheader.program_header_table_entry_size);
+}
+
+void _elf_loaded_section_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
+  struct elf_load_transient_data *t = (struct elf_load_transient_data *)extradata;
+  uint8_t failed = 0;
+
+  if(status!=E_OK) {
+    kprintf("ERROR: Could not load section headers, error code was 0x%x\r\n", (uint32_t)status);
+    t->callback(status, t, t->extradata);
+    if(t->file_header) free(t->file_header);
+    if(t->program_header) free(t->program_header);
+    free(t);
+    return;
+  }
+
+  t->section_headers_buffer = buf;
+  elf_load_program_header(fp, t);
+}
+
 void elf_load_section_headers(VFatOpenFile *fp, struct elf_load_transient_data *t)
 {
   kprintf("Loading in section headers...\r\n");
+  if(!t->file_header) {
+    kprintf("ERROR elf_load_section_headers called with NULL file header, can't continue");
+    return;
+  }
+
+  size_t header_block_length = t->file_header->i386_subheader.section_header_table_entry_size * t->file_header->i386_subheader.section_header_table_entry_count;
+  void *section_header_buffer = malloc(header_block_length);
+  if(!section_header_buffer) {
+    kprintf("ERROR Unable to allocate memory for section headers\r\n");
+    return;
+  }
+  t->section_headers_count = t->file_header->i386_subheader.section_header_table_entry_count;
+  vfat_seek(fp, t->file_header->i386_subheader.section_header_offset, SEEK_SET);
+
+  kprintf("DEBUG Loading in %l section headers of %l bytes each\r\n", t->file_header->i386_subheader.section_header_table_entry_count, t->file_header->i386_subheader.section_header_table_entry_size);
+  vfat_read_async(fp, section_header_buffer, header_block_length, (void *)t, &_elf_loaded_section_headers);
 }
 
 void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
