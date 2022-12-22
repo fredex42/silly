@@ -9,7 +9,6 @@ typedef struct vfat_open_file {
   size_t sector_offset_in_cluster;
   size_t byte_offset_in_sector;
 
-  size_t byte_offset_in_cluster;
   size_t file_length;
   size_t first_cluster;
 

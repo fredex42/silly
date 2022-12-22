@@ -41,7 +41,7 @@ VFatOpenFile* vfat_open_by_location(FATFS *fs_ptr, size_t cluster_location_start
   fs_ptr->open_file_count++;
   fp->current_cluster_number = cluster_location_start;
   fp->sector_offset_in_cluster = 0;
-  fp->byte_offset_in_cluster = 0;
+  fp->byte_offset_in_sector = 0;
   fp->first_cluster = cluster_location_start;
   fp->file_length = file_size;
   fp->fs_sector_offset = sector_offset;
@@ -96,7 +96,7 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
     //quick GOOJ: if we are not doing a whole block then copy by byte instead.
     bytes_to_copy = 512 - t->disk_read_offset;
     if(bytes_to_copy +  t->buffer_write_offset > t->requested_length) bytes_to_copy = t->requested_length - t->buffer_write_offset;
-    kprintf("DEBUG Copying 0x%x bytes to buffer, from offset 0x%x\r\n", bytes_to_copy, t->buffer_write_offset);
+    kprintf("DEBUG Copying 0x%x bytes. Buffer offset 0x%x, source offset 0x%x\r\n", bytes_to_copy, t->buffer_write_offset, t->disk_read_offset);
     memcpy(t->real_buffer + t->buffer_write_offset, buffer + t->disk_read_offset, bytes_to_copy);
     t->buffer_write_offset += bytes_to_copy;
   }
@@ -118,7 +118,7 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
       fp->sector_offset_in_cluster = 0;
       fp->current_cluster_number = vfat_cluster_map_next_cluster(fp->parent_fs->cluster_map, fp->current_cluster_number);
     }
-    kprintf("DEBUG at sector offset %d in cluster 0x%x\r\n", fp->sector_offset_in_cluster, fp->current_cluster_number);
+    //kprintf("DEBUG at sector offset %d in cluster 0x%x\r\n", fp->sector_offset_in_cluster, fp->current_cluster_number);
     if(fp->current_cluster_number==CLUSTER_MAP_EOF_MARKER) {
       //we are done!
       free(buffer);
@@ -127,8 +127,9 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
       free(t);
       return;
     } else {
-      uint64_t next_sector_number =  (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster + fp->fs_sector_offset;
-      kprintf("DEBUG Current cluster number os 0x%x, sectors per cluster is %d, next sector number is 0x%x\r\n", fp->current_cluster_number, fp->parent_fs->bpb->logical_sectors_per_cluster, (uint32_t)next_sector_number);
+      fp->byte_offset_in_sector = 0;
+      uint64_t next_sector_number = (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster + fp->fs_sector_offset;
+      kprintf("DEBUG Current cluster number is 0x%x, sectors per cluster is %d, next sector number is 0x%x\r\n", fp->current_cluster_number, fp->parent_fs->bpb->logical_sectors_per_cluster, (uint32_t)next_sector_number);
       //FIXME need to check return value for E_BUSY and reschedule if so
       ata_pio_start_read(fp->parent_fs->drive_nr, next_sector_number, 1, buffer, (void *)t, &_vfat_next_block_read);
     }
@@ -158,9 +159,11 @@ void vfat_read_async(VFatOpenFile *fp, void* buf, size_t length, void* extradata
   t->fp = fp;
   t->requested_length = length;
   t->buffer_write_offset = 0;
-  t->disk_read_offset = 0;  //FIXME we should be able to read from arbitary location
+  t->disk_read_offset = fp->byte_offset_in_sector;  //FIXME we should be able to read from arbitary location
 
   void* sector_buffer = malloc(ATA_SECTOR_SIZE);
+
+  kprintf("DEBUG cluster number is 0x%x plus sector offset 0x%x plus FS offset 0x%x\r\n", fp->current_cluster_number, fp->sector_offset_in_cluster, fp->fs_sector_offset);
 
   uint64_t initial_sector = (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster + fp->fs_sector_offset;
 
@@ -187,14 +190,18 @@ uint8_t vfat_seek(VFatOpenFile *fp, size_t offset, uint8_t whence)
   size_t total_offset_in_sectors = offset / fp->parent_fs->bpb->bytes_per_logical_sector;
   size_t total_offset_in_clusters = total_offset_in_sectors / fp->parent_fs->bpb->logical_sectors_per_cluster;
 
+  kprintf("DEBUG offset in bytes 0x%x\r\n", offset);
+  kprintf("DEBUG offset in sectors 0x%x\r\n", total_offset_in_sectors);
+  kprintf("DEBUG offset in clusters 0x%x\r\n", total_offset_in_clusters);
+
   //the above calculations are integer division so the result here should be less than or equal to the total offset
-  size_t cluster_offset_in_sectors = total_offset_in_sectors * fp->parent_fs->bpb->logical_sectors_per_cluster;
-  size_t sector_offset_in_bytes = cluster_offset_in_sectors * fp->parent_fs->bpb->bytes_per_logical_sector;
-  kprintf("DEBUG vfat_seek requested offset is 0x%x bytes, which is equal to 0x%x clusters + 0x%x sectors + 0x%x bytes\r\n");
+  size_t cluster_offset_in_sectors =  total_offset_in_sectors - total_offset_in_clusters * fp->parent_fs->bpb->logical_sectors_per_cluster;
+  size_t sector_offset_in_bytes = offset - (cluster_offset_in_sectors * fp->parent_fs->bpb->bytes_per_logical_sector) - (total_offset_in_clusters * fp->parent_fs->bpb->logical_sectors_per_cluster * fp->parent_fs->bpb->bytes_per_logical_sector);
+  kprintf("DEBUG vfat_seek requested offset is 0x%x bytes, which is equal to 0x%x clusters + 0x%x sectors + 0x%x bytes\r\n", offset, total_offset_in_clusters, cluster_offset_in_sectors, sector_offset_in_bytes);
 
   switch(whence) {
     case SEEK_SET:  //set the position relative to the start of the file
-      fp->current_cluster_number = _vfat_scroll_clusters(total_offset_in_clusters, fp->first_cluster);
+      fp->current_cluster_number = _vfat_scroll_clusters(fp, total_offset_in_clusters, fp->first_cluster);
       fp->sector_offset_in_cluster = cluster_offset_in_sectors;
       fp->byte_offset_in_sector = sector_offset_in_bytes; //FIXME the read operation does not respect this at the moment
       return fp->current_cluster_number==CLUSTER_MAP_EOF_MARKER ? 1 : 0;
@@ -207,9 +214,9 @@ uint8_t vfat_seek(VFatOpenFile *fp, size_t offset, uint8_t whence)
       fp->sector_offset_in_cluster += cluster_offset_in_sectors;
       while(fp->sector_offset_in_cluster > fp->parent_fs->bpb->logical_sectors_per_cluster) {
         fp->current_cluster_number = vfat_cluster_map_next_cluster(fp->parent_fs->cluster_map, fp->current_cluster_number);
-        fp->sector_offset_in_cluster = fp->sector_offset_in_cluster - p->parent_fs->bpb->logical_sectors_per_cluster;
+        fp->sector_offset_in_cluster = fp->sector_offset_in_cluster - fp->parent_fs->bpb->logical_sectors_per_cluster;
       }
-      fp->current_cluster_number = _vfat_scroll_clusters(total_offset_in_clusters, fp->current_cluster_number);
+      fp->current_cluster_number = _vfat_scroll_clusters(fp, total_offset_in_clusters, fp->current_cluster_number);
       return fp->current_cluster_number==CLUSTER_MAP_EOF_MARKER ? 1 : 0;
     default:
       kprintf("ERROR vfat_seek unrecognised `whence` parameter\r\n");

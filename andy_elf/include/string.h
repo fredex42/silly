@@ -5,6 +5,6 @@
 #define __STRING_H
 
 size_t strncpy(char *dest, char *src, size_t len);
-int8_t strncmp(char *a, char *b, size_t max);
+size_t strncmp(char *a, char *b, size_t max);
 
 #endif

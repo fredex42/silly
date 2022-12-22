@@ -29,6 +29,22 @@ ElfSectionHeader32* elf_get_section_header_by_index(struct elf_load_transient_da
   return section;
 }
 
+/**
+Invokes the provided callback once for each section
+*/
+uint32_t elf_sections_foreach(struct elf_load_transient_data *t, void *extradata, void (*callback)(struct elf_load_transient_data *t, void *extradata, uint32_t idx, ElfSectionHeader32* section))
+{
+  size_t i;
+  if(!t->section_headers_buffer) return 0;
+  ElfSectionHeader32 *section = (ElfSectionHeader32 *)t->section_headers_buffer;
+
+  for(i=0; i<t->section_headers_count; i++) {
+    callback(t, extradata, i, section);
+    section++;
+  }
+  return i;
+}
+
 void elf_load_program_header(VFatOpenFile *fp, struct elf_load_transient_data *t)
 {
   kprintf("Loading in program header...\r\n");
@@ -37,6 +53,12 @@ void elf_load_program_header(VFatOpenFile *fp, struct elf_load_transient_data *t
     return;
   }
   void *program_header_buffer = malloc(t->file_header->i386_subheader.program_header_table_entry_size);
+}
+
+void _elf_show_section(struct elf_load_transient_data *t, void *extradata, uint32_t idx, ElfSectionHeader32 *section)
+{
+  kprintf("ELF section %d:\r\n", idx);
+  kprintf("    Type is %d, flags are 0x%x, load address 0x%x, file offset 0x%x\r\n", section->sh_type, section->sh_flags, section->sh_addr, section->sh_offset);
 }
 
 void _elf_loaded_section_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
@@ -52,8 +74,10 @@ void _elf_loaded_section_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
     return;
   }
 
+  kprintf("DEBUG: Section headers in buffer at 0x%x\r\n", buf);
   t->section_headers_buffer = buf;
-  elf_load_program_header(fp, t);
+  elf_sections_foreach(t, NULL, &_elf_show_section);
+  //elf_load_program_header(fp, t);
 }
 
 void elf_load_section_headers(VFatOpenFile *fp, struct elf_load_transient_data *t)
