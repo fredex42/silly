@@ -167,6 +167,18 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
 }
 
 /**
+Convenience method that maps a physical page onto a target virtual address by calculating
+the paging directory offsets
+*/
+void *k_map_page_bytes(uint32_t *root_page_dir, void *phys_addr, void *target_virt_addr, uint32_t flags)
+{
+  uint16_t pagedir_idx, pageent_idx;
+  _resolve_vptr(target_virt_addr, &pagedir_idx, &pageent_idx);
+
+  return k_map_page(root_page_dir, phys_addr, pagedir_idx, pageent_idx, flags);
+}
+
+/**
 map a page of physical memory into the given memory space
 this is a basic low-level function and no checks are performed, careful!
 Arguments:
@@ -221,6 +233,11 @@ void vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags)
   memset(allocd_page_content, 0, PAGE_SIZE);  //ensure that the page content is blanked
 
   root_page_dir[idx] = ((size_t) phys_ptr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
+}
+
+void *k_map_next_unallocated_pages(uint32_t flags, void **phys_addr, size_t pages)
+{
+  return vm_map_next_unallocated_pages(kernel_paging_directory, flags, phys_addr, pages);
 }
 
 /**

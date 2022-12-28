@@ -19,13 +19,15 @@ struct ProcessTableEntry {
   //saved register states are on the process's stack
   size_t esp;
   uint16_t ecs;
+  size_t stack_page_count;
 
   //process state
   uint8_t status;
 
   //memory location and stats
-  void* root_paging_directory;
-  void* heap_start;
+  void* root_paging_directory_phys; //physical RAM address of the root paging directory
+  void* root_paging_directory_kmem; //virtual RAM address of the root paging directory, in kernel space.
+  void* heap_start;                 //location of the heap, in process space
   size_t heap_allocated;
   size_t heap_used;
 } __attribute__((packed));

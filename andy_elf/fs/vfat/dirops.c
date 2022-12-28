@@ -20,6 +20,7 @@ void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir
 {
   struct find_8point3_file_transient_data* transient = (struct find_8point3_file_transient_data *)extradata;
   size_t i=0;
+  char printable[64];
 
   if(status!=0) {
     if(dir!=NULL) vfat_dir_close(dir);
@@ -39,7 +40,8 @@ void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir
     if(entry->attributes != VFAT_ATTR_LFNCHUNK && strncmp(entry->short_name, transient->filename, filename_len)==0 && strncmp(entry->short_xtn, transient->xtn, xtn_len)==0) {
       //we found it! Might as well free the directory contents before we fire the callback, but since `entry` is a reference
       //into `dir`'s buffer we must copy it first
-      kprintf("Found file at entry %d: %s %s\r\n", i, entry->short_name, entry->short_xtn);
+      vfat_get_printable_filename(entry, printable, 64);
+      kprintf("Found file at entry %d: %s\r\n", i, printable);
       DirectoryEntry *copied_entry = (DirectoryEntry *)malloc(sizeof(DirectoryEntry));
       memcpy(copied_entry, entry, sizeof(DirectoryEntry));
       vfat_dir_close(dir);
@@ -67,8 +69,9 @@ void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, char *xtn, voi
   }
 
   memset(transient, 0, sizeof(struct find_8point3_file_transient_data));
-  strncpy(filename, transient->filename, 8);
-  strncpy(xtn, transient->xtn, 3);
+  strncpy(transient->filename, filename, 9);
+  strncpy(transient->xtn, xtn, 4);
+
   transient->extradata = extradata;
   transient->callback = callback;
   vfat_opendir_root(fs_ptr, (void *)transient, &_vfat_find_8point3_dir_opened);
@@ -120,19 +123,21 @@ void vfat_decode_attributes(uint8_t attrs, char *buf)
 
 void vfat_get_printable_filename(const DirectoryEntry *entry, char *buf, size_t bufsize)
 {
+  memset(buf, 0, bufsize);
+
   register size_t i;
   for(i=0;i<8;i++) {
     if(entry->short_name[i]==0x20 || entry->short_name[i]==0) break;
     buf[i] = entry->short_name[i];
   }
   if(entry->short_xtn[0]!=0x20 && entry->short_xtn[0]!=0) {
-    i++;
     buf[i] = '.';
     for(register size_t j=0; j<3; j++) {
       if(entry->short_xtn[j]==0x20 || entry->short_xtn[j]==0) break;
       buf[i+j+1] = entry->short_xtn[j];
     }
   }
+  buf[bufsize-1] = 0; //ensure null-termination
 }
 
 struct opendir_transient_data {

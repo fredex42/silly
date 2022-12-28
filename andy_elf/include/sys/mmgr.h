@@ -84,8 +84,30 @@ remove the given page mapping
 */
 void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageent_idx);
 
+/**
+Maps the given physical address(es) into the next (contigous block of) free page of the given root page directory
+Arguments:
+- root_page_dir - pointer to the root page directory to use. Null will cause a crash.
+- flags - MP_* flags to apply to the allocated Memory
+- phys_addr - a pointer to an array of physical RAM pointers. These must be 4k aligned, and available.
+- pages - the length of the phys_addr array.
+Returns:
+- a virtual memory pointer to the mapped region, or NULL if there were not enough pages of
+virtual memory to complete or `pages` was 0.
+*/
+void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, void **phys_addr, size_t pages);
+
 /* internal functions */
 void setup_paging();
 uint8_t find_next_unallocated_page(uint32_t *base_directory, int16_t *dir, int16_t *off);
+/**
+internal function to resolve a virtual memory pointer into a directory and page
+location.
+Arguments:
+- vmem_ptr - pointer to resolve
+- dir - pointer to 16-bit integer to receive the directory index
+- off - pointer to a 16-bit integer to receive the offset within the given directory
+*/
+uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off);
 
 #endif

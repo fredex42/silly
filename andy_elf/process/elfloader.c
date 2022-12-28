@@ -18,6 +18,14 @@ struct elf_load_transient_data {
   void (*callback)(uint8_t status, void*something, void*extradata);
 };
 
+void delete_elf_load_transient_data(struct elf_load_transient_data *t)
+{
+  if(t->file_header) free(t->file_header);
+  if(t->program_header) free(t->program_header);
+  if(t->section_headers_buffer) free(t->section_headers_buffer);
+  free(t);
+}
+
 /**
 Returns an ElfSectionHeader32 struct from the buffer in `t`.
 Returns NULL if the index is invalid.
@@ -45,14 +53,38 @@ uint32_t elf_sections_foreach(struct elf_load_transient_data *t, void *extradata
   return i;
 }
 
+void _elf_loaded_program_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)
+{
+  struct elf_load_transient_data *t = (struct elf_load_transient_data *)extradata;
+
+  kprintf("Program header loaded.\r\n");
+  if(status != E_OK) {
+    t->callback(status, t, t->extradata);
+    if(buf) free(buf);
+    delete_elf_load_transient_data(t);
+    return;
+  }
+  t->program_header = (ElfProgramHeader32 *)buf;
+
+}
+
 void elf_load_program_header(VFatOpenFile *fp, struct elf_load_transient_data *t)
 {
   kprintf("Loading in program header...\r\n");
   if(!t->file_header) {
     kprintf("ERROR elf_load_program_header called with NULL file header, can't continue");
+    delete_elf_load_transient_data(t);
     return;
   }
   void *program_header_buffer = malloc(t->file_header->i386_subheader.program_header_table_entry_size);
+  if(!program_header_buffer) {
+    kprintf("ERROR Could not allocate memory for program header\r\n");
+    delete_elf_load_transient_data(t);
+    return;
+  }
+  //FIXME: Check for EOF
+  vfat_seek(fp, t->file_header->i386_subheader.program_header_offset, SEEK_SET);
+  vfat_read_async(fp, program_header_buffer, t->file_header->i386_subheader.program_header_table_entry_size, (void *)t, &_elf_loaded_program_header);
 }
 
 void _elf_show_section(struct elf_load_transient_data *t, void *extradata, uint32_t idx, ElfSectionHeader32 *section)
@@ -68,16 +100,14 @@ void _elf_loaded_section_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
   if(status!=E_OK) {
     kprintf("ERROR: Could not load section headers, error code was 0x%x\r\n", (uint32_t)status);
     t->callback(status, t, t->extradata);
-    if(t->file_header) free(t->file_header);
-    if(t->program_header) free(t->program_header);
-    free(t);
+    delete_elf_load_transient_data(t);
     return;
   }
 
   kprintf("DEBUG: Section headers in buffer at 0x%x\r\n", buf);
   t->section_headers_buffer = buf;
   elf_sections_foreach(t, NULL, &_elf_show_section);
-  //elf_load_program_header(fp, t);
+  elf_load_program_header(fp, t);
 }
 
 void elf_load_section_headers(VFatOpenFile *fp, struct elf_load_transient_data *t)
@@ -85,6 +115,7 @@ void elf_load_section_headers(VFatOpenFile *fp, struct elf_load_transient_data *
   kprintf("Loading in section headers...\r\n");
   if(!t->file_header) {
     kprintf("ERROR elf_load_section_headers called with NULL file header, can't continue");
+    delete_elf_load_transient_data(t);
     return;
   }
 
@@ -92,9 +123,12 @@ void elf_load_section_headers(VFatOpenFile *fp, struct elf_load_transient_data *
   void *section_header_buffer = malloc(header_block_length);
   if(!section_header_buffer) {
     kprintf("ERROR Unable to allocate memory for section headers\r\n");
+    delete_elf_load_transient_data(t);
     return;
   }
   t->section_headers_count = t->file_header->i386_subheader.section_header_table_entry_count;
+
+  //FIXME: check for EOF
   vfat_seek(fp, t->file_header->i386_subheader.section_header_offset, SEEK_SET);
 
   kprintf("DEBUG Loading in %l section headers of %l bytes each\r\n", t->file_header->i386_subheader.section_header_table_entry_count, t->file_header->i386_subheader.section_header_table_entry_size);
@@ -110,7 +144,7 @@ void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read
     if(buf) free(buf);
     vfat_close(fp);
     t->callback(status, NULL, extradata);
-    free(t);
+    delete_elf_load_transient_data(t);
     return;
   }
 
@@ -125,7 +159,7 @@ void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read
     if(buf) free(buf);
     vfat_close(fp);
     t->callback(E_BAD_EXECUTABLE, NULL, extradata);
-    free(t);
+    delete_elf_load_transient_data(t);
     return;
   }
 
