@@ -24,8 +24,8 @@ strncpy:
   xor edx,edx
   xor eax, eax
   _strncpy_next_byte:
-  test edx, ecx
-  jz _strncpy_done  ;we ran out of len
+  cmp edx, ecx
+  jz _strncpy_nolen  ;we ran out of len
 
   lodsb
   test al,al
@@ -35,6 +35,8 @@ strncpy:
   inc edx
   jmp _strncpy_next_byte
 
+  _strncpy_nolen:
+  dec edi         ;make sure that there is room to store the terminating null.
   _strncpy_done:
   xor al,al
   stosb           ;ensure we store a terminating null

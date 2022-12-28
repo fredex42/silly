@@ -64,20 +64,20 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
   register uint32_t i;
   uint32_t page_count = size / 4096;
   uint32_t block_ptr = from & MP_ADDRESS_MASK;
-  char range_ctr=0;
-  char write_protect=0;
+  uint8_t range_ctr=0;
+  uint8_t write_protect=0;
   //see https://wiki.osdev.org/Memory_Map_(x86). This takes the format of a collection
   //of pairs of page indices, start, end, start, end etc.  Everything
   //between a 'start' and and 'end' is write-protected. These are the 'special' ranges
   //of the first MiB.  We are allowed to write to the video framebuffer between A0000 and C0000 though,
-  static uint32_t protected_pages[] = {0x7, 0xa, 0x80, 0xA0, 0xC0, 0xFF};
+  uint32_t protected_pages[] = {0x7, 0x11, 0x80, 0xA0, 0xC0, 0xFF};
   #define PROTECTED_PAGES_COUNT 5
   for(i=0;i<page_count;i++) {
     if(range_ctr<PROTECTED_PAGES_COUNT && i==protected_pages[range_ctr]) {
       ++range_ctr;
       write_protect = !write_protect;
     }
-    //if(write_protect) kprintf("    DEBUG: protecting page %d.  \r\n", i);
+    //if(write_protect) kprintf("    DEBUG: protecting page 0x%x.  \r\n", i);
     register uint32_t value = write_protect ? block_ptr | MP_PRESENT : block_ptr | MP_PRESENT| MP_READWRITE ;
     //kprintf("DEBUG: page %d value 0x%x   \r\n", i, value);
     first_pte[i] = value;
