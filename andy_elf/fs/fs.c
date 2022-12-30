@@ -59,13 +59,14 @@ void _fs_root_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, voi
   vfat_close(fp);
 }
 
-void _fs_shell_app_loaded(uint8_t status, void*something, void *extradata)
+void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* something, void *extradata)
 {
   if(status!=E_OK) {
     kprintf("ERROR Could not load SHELL.APP: error %d\r\n", (uint16_t)status);
     return;
   }
   kprintf("SHELL.APP loaded\r\n");
+  
 }
 
 void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extradata)

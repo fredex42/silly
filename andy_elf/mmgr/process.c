@@ -100,6 +100,16 @@ struct ProcessTableEntry* new_process()
   return e;
 }
 
+pid_t internal_create_process(struct elf_parsed_data *elf)
+{
+  struct ProcessTableEntry *new_entry = new_process();
+  if(new_entry==NULL) {
+    kputs("ERROR No process slots available!\r\n");
+    return 0;
+  }
+
+  
+}
 void remove_process(struct ProcessTableEntry* e)
 {
   //FIXME: need to de-alloc pages etc.
