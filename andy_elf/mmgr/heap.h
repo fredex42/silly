@@ -38,4 +38,10 @@ void free_for_process(uint16_t pid, void *ptr);
 //frees from the kernel heap; calls free_for_process with pid=0
 void free(void* ptr);
 
+//checks that the given pointer is valid (i.e. has magicnumber in header) and
+//that it is in-use.
+//Returns 1 if it is valid, 0 otherwise. If the `panic` flag is not 0, then it will
+//trigger a kernel panic and not return.
+uint8_t validate_pointer(void *ptr, uint8_t panic);
+
 #endif
