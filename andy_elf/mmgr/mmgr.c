@@ -241,7 +241,8 @@ void *k_map_next_unallocated_pages(uint32_t flags, void **phys_addr, size_t page
 }
 
 /**
-Maps the given physical address(es) into the next (contigous block of) free page of the given root page directory
+Maps the given physical address(es) into the next (contigous block of) free page of the given root page directory.
+You should ensure that interrupts are disabled when calling this function.
 Arguments:
 - root_page_dir - pointer to the root page directory to use. Null will cause a crash.
 - flags - MP_* flags to apply to the allocated Memory
@@ -258,7 +259,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   size_t continuous_page_count = 0;
   uint16_t starting_page_dir = 0xFFFF;
   uint16_t starting_page_off = 0xFFFF;
-  size_t *pagedir_entry = 0;
+  uint32_t *pagedir_entry_phys, *pagedir_entry_vptr = NULL;
 
   if(pages==0) return NULL; //don't try and map no Memory
 
@@ -271,12 +272,12 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
       //kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
       vm_add_dir(root_page_dir, i, flags);  //if we don't have a virtual memory directory then add one
     }
-    pagedir_entry = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
-    kprintf("    DEBUG page %d entry is at 0x%x\r\n", i, (vaddr)pagedir_entry);
+    pagedir_entry_phys = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
+    pagedir_entry_vptr = k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
+    kprintf("    DEBUG page %d entry is at 0x%x and mapped to 0x%x\r\n", i, (vaddr)pagedir_entry_phys, (vaddr)pagedir_entry_vptr);
 
     for(j=0;j<1024;j++) {
-      //FIXME: this only works if pagedir_entry is identity-mapped. We should map the page to read it.
-      if( ! (pagedir_entry[j] & MP_PRESENT) ) {
+      if( ! (pagedir_entry_vptr[j] & MP_PRESENT) ) {
         // kprintf("    DEBUG entry %d of page %d value is 0x%x\r\n", j, i, pagedir_entry[j]);
         if(starting_page_dir==0xFFFF) starting_page_dir = i;
         if(starting_page_off==0xFFFF) starting_page_off = j;
@@ -298,9 +299,9 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   i = starting_page_dir;
   j = starting_page_off;
   for(p=0;p<pages;p++) {
-    //FIXME: this only works if directory_ptr is identity-mapped. We should map the page to read it.
-    size_t *pagedir_entry = (size_t *) (root_page_dir[i] & MP_ADDRESS_MASK);
-    pagedir_entry[j] = ((vaddr)phys_addr[p] & MP_ADDRESS_MASK) | MP_PRESENT | flags;
+    pagedir_entry_phys = (size_t *) (root_page_dir[i] & MP_ADDRESS_MASK);
+    pagedir_entry_vptr = k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
+    pagedir_entry_vptr[j] = ((vaddr)phys_addr[p] & MP_ADDRESS_MASK) | MP_PRESENT | flags;
     j++;
     if(j>1024) {
       i++;
@@ -310,7 +311,8 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
 
   //now calculate the virtual pointer
   void *ptr = (void *)(starting_page_dir*PAGE_SIZE*1024 + starting_page_off*PAGE_SIZE);
-  memset(ptr, 0, pages*PAGE_SIZE);
+  //we can't zero the memory here because ptr might be in a different paging directory.
+
   return ptr;
 }
 
@@ -403,7 +405,7 @@ void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageen
     kprintf("ERROR cannot unmap page %d-%d from root dir 0x%x as it is not present\r\n",pagedir_idx, pageent_idx, root_page_dir);
     return;
   }
-  uint32_t *pagedir_ent = k_map_if_required(root_page_dir, pagedir_ent_phys, MP_READWRITE);
+  uint32_t *pagedir_ent = k_map_if_required(NULL, pagedir_ent_phys, MP_READWRITE);
   pagedir_ent[pageent_idx] = 0;
 }
 
@@ -442,31 +444,39 @@ if the given physical address is already mapped, then returns the virtual addres
 that it is mapped to.  If not then it finds an unallocated page, maps it and
 returns that.
 Arguments:
-- base_directory - pointer to the base virtual memory directory to use. If NULL then uses the kernel one.
-- phys_addr - pointer to the physical memory block to map
-- flags     - extra MP_ flags to apply
+- base_directory_vptr - pointer (in kernel vmem) to the base virtual memory directory to use. If NULL then uses the kernel one.
+- phys_addr           - pointer to the physical memory block to map
+- flags               - extra MP_ flags to apply
 Returns:
 - a virtual memory pointer to the mapped block, or NULL on failure
 */
-void* k_map_if_required(uint32_t *base_directory, void *phys_addr, uint32_t flags)
+void* k_map_if_required(uint32_t *base_directory_vptr, void *phys_addr, uint32_t flags)
 {
   //save the offset within the page
   uint32_t page_offset = (uint32_t) phys_addr & ~MP_ADDRESS_MASK;
   //now search the page directory to try and find the physical address
   uint32_t page_value = (uint32_t) phys_addr & MP_ADDRESS_MASK;
 
-  if(base_directory==NULL) base_directory = (uint32_t *)&kernel_paging_directory;
+  if(base_directory_vptr==NULL) base_directory_vptr = (uint32_t *)&kernel_paging_directory;
 
   for(register int i=0;i<1023;i++) {
-    if(! (base_directory[i] & MP_PRESENT)) continue;  //don't bother searching empty directories
-    //FIXME: this only works if directory_ptr is identity-mapped. We should map the page to read it.
-    uint32_t *pagedir_entry = (uint32_t *)(base_directory[i] & MP_ADDRESS_MASK);
-    if(pagedir_entry==NULL) {
+    if(! (base_directory_vptr[i] & MP_PRESENT)) continue;  //don't bother searching empty directories
+
+    uint32_t *pagedir_entry_phys = (uint32_t *)(base_directory_vptr[i] & MP_ADDRESS_MASK);
+    if(pagedir_entry_phys==NULL) {
       kprintf("WARNING unexpected present but nil pointer in directory entry %d\r\n", i);
       continue;
     }
+    uint32_t *pagedir_entry_vptr;
+    if(pagedir_entry_phys==first_pagedir_entry) {
+      pagedir_entry_vptr = pagedir_entry_phys;  //this is identity-mapped
+    } else {
+      //we can't guarantee an identity map, so we must translate the physical entry to a vptr in order to modify it
+      pagedir_entry_vptr = k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
+    }
+
     for(register int j=0;j<1023;j++) {
-      if( (pagedir_entry[j] & MP_ADDRESS_MASK) == page_value) {
+      if( (pagedir_entry_vptr[j] & MP_ADDRESS_MASK) == page_value) {
         vaddr v_addr = (vaddr)(i*0x400000 + j*4096) + (vaddr)page_offset;
         return (void *)v_addr;
       }
@@ -476,37 +486,38 @@ void* k_map_if_required(uint32_t *base_directory, void *phys_addr, uint32_t flag
   int16_t dir=0;
   int16_t off=0;
 
-  if(find_next_unallocated_page(base_directory, &dir,&off)==0) {
+  if(find_next_unallocated_page(base_directory_vptr, &dir,&off)==0) {
     //allocation worked
-    void *mapped_page_addr = k_map_page(base_directory, (void *)page_value, dir, off, flags);
+    void *mapped_page_addr = k_map_page(base_directory_vptr, (void *)page_value, dir, off, flags);
     return mapped_page_addr +page_offset;
   } else {
-    kprintf("ERROR Could not allocate any more virtual RAM in base directory %x\r\n", base_directory);
+    kprintf("ERROR Could not allocate any more virtual RAM in base directory %x\r\n", base_directory_vptr);
     return NULL;
   }
-
 }
 
 /**
 Finds the next unallocated page in virtual memory.
 Arguments:
-- base_directory - pointer to the base virtual memory directory to use.
-- dir            - pointer to directory offset at which to start searching base_directory. On successful return, this will contain the directory to map.
-- off            - page offset within the given directory at which to start searching
+- base_directory_vptr - pointer to the base virtual memory directory to use.
+- dir                 - pointer to directory offset at which to start searching base_directory. On successful return, this will contain the directory to map.
+- off                 - page offset within the given directory at which to start searching
 Returns:
 0 if successful, 1 on failure.
 */
-uint8_t find_next_unallocated_page(uint32_t *base_directory, int16_t *dir, int16_t *off)
+uint8_t find_next_unallocated_page(uint32_t *base_directory_vptr, int16_t *dir, int16_t *off)
 {
   register int16_t j=*off;
 
   for(register int16_t i=*dir; i<1024; i++) {
     //kprintf("%d %d\n", i, j);
-    if(! (base_directory[i] & MP_PRESENT)) continue;
+    if(! (base_directory_vptr[i] & MP_PRESENT)) continue;
     //FIXME: this only works if directory_ptr is identity-mapped. We should map the page to read it.
-    uint32_t *directory_ptr = (uint32_t *)(base_directory[i] & MP_ADDRESS_MASK);
+    uint32_t *directory_phys_ptr = (uint32_t *)(base_directory_vptr[i] & MP_ADDRESS_MASK);
+    uint32_t *directory_vptr = k_map_if_required(NULL, directory_phys_ptr, MP_READWRITE);
+
     while(j<1024) {
-      if(! (directory_ptr[j] & MP_PRESENT)) {
+      if(! (directory_vptr[j] & MP_PRESENT)) {
         *dir = i;
         *off = j;
         return 0;

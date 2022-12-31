@@ -36,7 +36,7 @@ void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
     return;
   }
 
-  ElfProgramHeader32 *seg = t->program_headers[t->_scanned_segment_count];
+  ElfProgramHeader32 *seg = &t->program_headers[t->_scanned_segment_count];
 
   kprintf("ELF program header:\r\n");
   kprintf("    Type is %d, offset is 0x%x, virtual load address is 0x%x\r\n", seg->p_type, seg->p_offset, seg->p_vaddr);
@@ -53,9 +53,9 @@ void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
   t->loaded_segments[t->_loaded_segment_count] = (ElfLoadedSegment *)malloc(sizeof(ElfLoadedSegment));
 
   size_t required_pages = seg->p_memsz / PAGE_SIZE;
-  size_t pages_spare = seg->p->memsz % PAGE_SIZE;
+  size_t pages_spare = seg->p_memsz % PAGE_SIZE;
   if(pages_spare!=0) ++required_pages;
-  
+
 }
 
 /**
@@ -100,7 +100,7 @@ void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
 
   t->loaded_segments = (ElfLoadedSegment **)malloc(t->program_headers_count * sizeof(ElfLoadedSegment *));
   if(!t->loaded_segments) {
-    t->callback(E_NOMEM, t, t->cb_extradata);
+    t->callback(E_NOMEM, t, t->extradata);
     delete_elf_parsed_data(t);
     return;
   }
@@ -171,7 +171,8 @@ void elf_load_section_headers(VFatOpenFile *fp, struct elf_parsed_data *t, size_
   }
 }
 
-void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
+void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)
+{
   struct elf_parsed_data *t = (struct elf_parsed_data *)extradata;
   uint8_t failed = 0;
   kprintf("File header loaded (%l bytes), inspecting...\r\n", bytes_read);
