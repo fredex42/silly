@@ -28,21 +28,40 @@ void delete_elf_parsed_data(struct elf_parsed_data *t)
   free(t);
 }
 
+void _elf_next_segment_loaded(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)
+{
+  struct elf_parsed_data *t = (struct elf_parsed_data *)extradata;
+
+  if(status != E_OK) {
+    t->callback(status, t, t->extradata);
+    delete_elf_parsed_data(t);
+  }
+
+  kprintf("INFO Segment %l loaded.\r\n", t->_loaded_segment_count);
+  ++t->_loaded_segment_count;
+  if(t->_loaded_segment_count < t->program_headers_count) {
+    elf_load_next_segment(fp, t);
+  } else {
+    kprintf("INFO All segments now loaded\r\n");
+  }
+}
+
 void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
 {
+
   if(t->_scanned_segment_count>=t->program_headers_count) {
     kprintf("DEBUG elf_load_next_segment Loaded all %l section headers.\r\n", t->program_headers_count);
     t->callback(E_OK, t, t->extradata);
     return;
   }
 
-  ElfProgramHeader32 *seg = &t->program_headers[t->_scanned_segment_count];
+  ElfProgramHeader32 *hdr = &t->program_headers[t->_scanned_segment_count];
 
   kprintf("ELF program header:\r\n");
-  kprintf("    Type is %d, offset is 0x%x, virtual load address is 0x%x\r\n", seg->p_type, seg->p_offset, seg->p_vaddr);
-  kprintf("      on-disk size 0x%x, in-memory size 0x%x, flags are 0x%x\r\n", seg->p_filesz, seg->p_memsz, seg->p_flags);
+  kprintf("    Type is %d, offset is 0x%x, virtual load address is 0x%x\r\n", hdr->p_type, hdr->p_offset, hdr->p_vaddr);
+  kprintf("      on-disk size 0x%x, in-memory size 0x%x, flags are 0x%x\r\n", hdr->p_filesz, hdr->p_memsz, hdr->p_flags);
 
-  if(seg->p_type!=PT_LOAD) {
+  if(hdr->p_type!=PT_LOAD) {
     kprintf("DEBUG elf_load_next_segment segment %l is not loadable, moving on to next\r\n", t->_scanned_segment_count);
     ++t->_scanned_segment_count;
     elf_load_next_segment(fp, t);
@@ -51,11 +70,63 @@ void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
 
   kprintf("DEBUG elf_load_next_segment segment %l is loadable\r\n", t->_scanned_segment_count);
   t->loaded_segments[t->_loaded_segment_count] = (ElfLoadedSegment *)malloc(sizeof(ElfLoadedSegment));
+  ElfLoadedSegment *seg = t->loaded_segments[t->_loaded_segment_count];
 
-  size_t required_pages = seg->p_memsz / PAGE_SIZE;
-  size_t pages_spare = seg->p_memsz % PAGE_SIZE;
-  if(pages_spare!=0) ++required_pages;
+  //Step one - work out how many pages we need and reserve them
+  seg->page_count = hdr->p_memsz / PAGE_SIZE;
+  size_t pages_spare = hdr->p_memsz % PAGE_SIZE;
+  if(pages_spare!=0) ++seg->page_count;
+  kprintf("DEBUG elf_load_next_segment required pages is %l\r\n", seg->page_count);
 
+  seg->content_phys_pages = (void **)malloc(seg->page_count*sizeof(void *));
+  if(!seg->content_phys_pages) {
+    t->callback(E_NOMEM, t, t->extradata);
+    delete_elf_parsed_data(t);
+    return;
+  }
+
+  cli();
+  size_t allocd_pages = allocate_free_physical_pages(seg->page_count, seg->content_phys_pages);
+  sti();
+  if(allocd_pages!=seg->page_count) {
+    kprintf("ERROR Could not allocate pages for app. Required %l but got %l.\r\n", seg->page_count, allocd_pages);
+    cli();
+    deallocate_physical_pages(allocd_pages, seg->content_phys_pages);
+    sti();
+    free(seg->content_phys_pages);
+    seg->content_phys_pages = NULL;
+    t->callback(E_NOMEM,t, t->extradata);
+    delete_elf_parsed_data(t);
+    return;
+  }
+
+  kprintf("DEBUG allocated %d pages, first one is at 0x%x phys\r\n", allocd_pages, seg->content_phys_pages[0]);
+
+  //Step two - (temporarily) map into kernel space as R/W so we can load them
+  cli();
+  seg->content_virt_page = vm_map_next_unallocated_pages(NULL, MP_READWRITE, seg->content_phys_pages, seg->page_count);
+  sti();
+  if(seg->content_virt_page==NULL) {
+    kprintf("ERROR Could not map allocated pages into kernel-space\r\n");
+    cli();
+    deallocate_physical_pages(allocd_pages, seg->content_phys_pages);
+    sti();
+    free(seg->content_phys_pages);
+    seg->content_phys_pages = NULL;
+    t->callback(E_NOMEM,t, t->extradata);
+    delete_elf_parsed_data(t);
+    return;
+  }
+  kprintf("DEBUG Mapped load-space into kernel at 0x%x\r\n", seg->content_virt_page);
+  size_t offset = hdr->p_vaddr % PAGE_SIZE;
+  seg->content_virt_ptr = seg->content_virt_page + offset;
+  kprintf("DEBUG Segment load-in address is 0x%x\r\n", seg->content_virt_ptr);
+
+  //Step three - initiate the load.
+  //fixme: check for EOF
+  vfat_seek(fp, hdr->p_offset, SEEK_SET);
+
+  vfat_read_async(fp, seg->content_virt_ptr, hdr->p_filesz, (void *)t, &_elf_next_segment_loaded);
 }
 
 /**

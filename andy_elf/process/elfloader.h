@@ -131,6 +131,7 @@ typedef struct elf_section_header_i386 {
 
 typedef struct ElfLoadedSegment {
   ElfSectionHeader32 *header;
+  size_t page_count;
   void **content_phys_pages;  //physical pages which contain the content. May be shared with other sections.
   void *content_virt_page;  //address of the page base in kernel virtual RAM. May be shared with other sections.
   void *content_virt_ptr;   //actual pointer to the data within the page - i.e. content_virt_page + offset.
