@@ -3,6 +3,8 @@
 #ifndef __PROCESS_H
 #define __PROCESS_H
 
+#include <exeformats/elf.h>
+
 #define PID_MAX 256
 
 #define PROCESS_NONE    0
@@ -34,5 +36,7 @@ struct ProcessTableEntry {
 
 void initialise_process_table(uint32_t* kernel_paging_directory);
 struct ProcessTableEntry* get_process(uint16_t pid);
+
+pid_t internal_create_process(struct elf_parsed_data *elf);
 
 #endif

@@ -1,5 +1,6 @@
 #include <types.h>
 #include <sys/mmgr.h>
+#include "process.h"
 
 #ifndef __MMGR_HEAP_H
 #define __MMGR_HEAP_H
@@ -26,7 +27,7 @@ typedef struct PointerHeader {
   struct PointerHeader* next_ptr;
 } PointerHeader;
 
-struct HeapZoneStart* initialise_heap(size_t initial_pages);
+struct HeapZoneStart* initialise_heap(struct ProcessTableEntry *process, size_t initial_pages);
 
 //allocates onto the heap of the given process, which must exist.
 void* malloc_for_process(uint16_t pid, size_t bytes);

@@ -129,30 +129,6 @@ typedef struct elf_section_header_i386 {
   uint32_t sh_entsize;    //if the section contains fixed-size entries, the size of each entry.
 } __attribute__((packed)) ElfSectionHeader32;
 
-typedef struct ElfLoadedSegment {
-  ElfSectionHeader32 *header;
-  size_t page_count;
-  void **content_phys_pages;  //physical pages which contain the content. May be shared with other sections.
-  void *content_virt_page;  //address of the page base in kernel virtual RAM. May be shared with other sections.
-  void *content_virt_ptr;   //actual pointer to the data within the page - i.e. content_virt_page + offset.
-} ElfLoadedSegment;
-
-typedef struct elf_parsed_data {
-  ElfFileHeader *file_header;
-  ElfProgramHeader32 *program_headers;
-  size_t program_headers_count;
-
-  void *section_headers_buffer;
-  size_t section_headers_count;
-
-  ElfLoadedSegment **loaded_segments;
-  size_t _loaded_segment_count;
-  size_t _scanned_segment_count;
-
-  void *extradata;
-  void (*callback)(uint8_t status, struct elf_parsed_data* parsed_data, void* extradata);
-} ElfParsedData;
-
-
+#include <exeformats/elf.h>
 
 #endif

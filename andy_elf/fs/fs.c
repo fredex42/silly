@@ -8,6 +8,7 @@
 #include "../drivers/ata_pio/ata_pio.h"
 #include <fs.h>
 #include <errors.h>
+#include "../mmgr/process.h"
 
 //pointer to the filesystem for each device
 static struct fat_fs* device_fs_map[MAX_DEVICE];
@@ -59,14 +60,15 @@ void _fs_root_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, voi
   vfat_close(fp);
 }
 
-void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* something, void *extradata)
+void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* parsed_app, void *extradata)
 {
   if(status!=E_OK) {
     kprintf("ERROR Could not load SHELL.APP: error %d\r\n", (uint16_t)status);
     return;
   }
   kprintf("SHELL.APP loaded\r\n");
-  
+
+  internal_create_process(parsed_app);
 }
 
 void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extradata)

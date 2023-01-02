@@ -17,15 +17,17 @@ MMGR_PARANOID - combines MMGR_VALIDATE_PRE and MMGR_VALIDATE_POST to validate be
 #define MMGR_VERBOSE
 #endif
 
-struct HeapZoneStart * initialise_heap(size_t initial_pages)
+struct HeapZoneStart * initialise_heap(struct ProcessTableEntry *process, size_t initial_pages)
 {
-  kprintf("Initialising kernel heap at %l pages....\r\n", initial_pages);
+  kprintf("Initialising heap at %l pages....\r\n", initial_pages);
 
   //NULL => kernel's paging dir. Note need MP_USER if this is not for kernel
-  void *slab = vm_alloc_pages(NULL, initial_pages, MP_PRESENT|MP_READWRITE);
-  if(!slab) k_panic("Unable to allocate kernel heap!\r\n");
+  uint32_t flags = MP_PRESENT|MP_READWRITE;
+  if(process->root_paging_directory_kmem!=NULL) flags |= MP_USER; //if not allocating for kernel then allow user-write
+  void *slab = vm_alloc_pages(process->root_paging_directory_kmem, initial_pages, flags);
+  if(!slab) k_panic("Unable to allocate heap!\r\n");
 
-  kprintf("Kernel heap start at 0x%x\r\n", slab);
+  kprintf("Heap start at 0x%x\r\n", slab);
 
   struct HeapZoneStart* zone = (struct HeapZoneStart *)slab;
   zone->magic = HEAP_ZONE_SIG;
@@ -42,9 +44,8 @@ struct HeapZoneStart * initialise_heap(size_t initial_pages)
 
   zone->first_ptr = ptr;
 
-  struct ProcessTableEntry *kernel_process = get_process(0);
-  kernel_process->heap_start = zone;
-  kernel_process->heap_allocated = zone->zone_length;
+  process->heap_start = zone;
+  process->heap_allocated = zone->zone_length;
 
   return zone;
 }
@@ -203,7 +204,7 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
 
     remaining_length = p->block_length - bytes;
     //kprintf("DEBUG remaining length is 0x%x (%l)\r\n", remaining_length, remaining_length);
-    p->block_length = bytes + sizeof(struct PointerHeader);
+    p->block_length = bytes;
     p->in_use = 1;
     zone->allocated += bytes;
     zone->dirty = 1;

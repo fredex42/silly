@@ -14,7 +14,15 @@ void delete_loaded_segments(ElfLoadedSegment **ptr, size_t max_size)
   if(!ptr) return;
 
   for(size_t i=0; i<max_size; i++) {
-    if(ptr[i]) free(ptr);
+    if(ptr[i]) {
+      cli();
+      ptr[i]->content_virt_ptr = NULL;
+      if(ptr[i]->content_virt_page) {
+
+      }
+      sti();
+      free(ptr);
+    }
   }
   free(ptr);
 }
@@ -44,6 +52,9 @@ void _elf_next_segment_loaded(VFatOpenFile *fp, uint8_t status, size_t bytes_rea
   } else {
     kprintf("INFO All segments now loaded\r\n");
   }
+  vfat_close(fp);
+  t->callback(status, t, t->extradata);
+  //the caller will have to free the parsed_data structure.
 }
 
 void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
