@@ -8,6 +8,11 @@
 #ifndef __SYS_MMGR_H
 #define __SYS_MMGR_H
 
+/** gets the page directory index for the given virtual address  */
+#define ADDR_TO_PAGEDIR_IDX(addr) (size_t)addr >> 22;
+/** gets the page index within the page directory for the given address */
+#define ADDR_TO_PAGEDIR_OFFSET(addr) ((size_t)addr >> 12) & 0x03FF
+
 /**
 data structure for a memory region obtained from INT 0x15, EAX = 0xE820
 See https://wiki.osdev.org/Detecting_Memory_(x86)#Getting_an_E820_Memory_Map

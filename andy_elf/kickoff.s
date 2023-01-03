@@ -7,9 +7,98 @@ global _start
 
 extern early_serial_lowlevel_init
 
+global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
+
 %include "basic_console.inc"
 %include "memlayout.inc"
 %include "exceptions.inc"
+
+jmp _start
+
+; We want to keep the GDT and TSS where we can easily access them with 16-bit offsets
+; to make life easier with the assembler / linker.
+
+;basic GDT configuration. Each entry is 8 bytes long
+SimpleGDT:
+;entry 0: null entry
+dd 0
+dd 0
+;entry 1 (segment 0x08): kernel CS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x0000	;base bits 16-23
+db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
+db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x00		;base bits 16-23. Start from 0meg.
+db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
+dw 0xFFFF	; limit bits 0-15.
+dw 0x0000	; base bits 0-15
+db 0x0A		; base bits 16-23. Start from 0x0A0000
+db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
+dw 0x68		;limit (TSS size) bits 0-15. 104 bytes = 0x68 (note last 2 fields are word not dword)
+dw SimpleTSS	;base (TSS location) bits 0-15.
+db 0x00		;base bits (TSS location) 16-23.
+db 0x89		;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=1
+db 0x40		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector], available=1
+db 0x00		;base bits 24-31
+;entry 5 (segment 0x28): User-mode CS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x0000	;base bits 16-23
+db 0xFA		;access byte. Set Pr, Privl=3, S=1, Ex=1, DC=0, RW=1, Ac=0
+db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 6 (segment 0x30): User-mode DS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x00		;base bits 16-23. Start from 0meg.
+db 0xF2		;access byte. Set Pr, Privl=3, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+
+SimpleGDTPtr:
+dw 0x38		;length in bytes
+dd 0x0		;offset, filled in by code
+
+SimpleTSS:
+dd 0x00 	 ;link to previous TSS, not used
+dd 0x7FFF0 ;our stack pointer. This needs to be over-written every time we switch to ring3 with the current SP position
+dd 0x10    ;our stack segment
+;everything else is unused
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dd 0x00
+dw 0x00
+dw 0x00
 
 ;assuming that DH is still the cursor row and DL is still the cursor position
 _start:
@@ -270,55 +359,3 @@ jmp idle_loop
 
 section .rodata
 HelloString: db 'Hello world', 0x0a, 0x0d, 0
-
-;basic GDT configuration. Each entry is 8 bytes long
-SimpleGDT:
-;entry 0: null entry
-dd 0
-dd 0
-;entry 1 (segment 0x08): kernel CS
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x0000	;base bits 16-23
-db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
-db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x00		;base bits 16-23. Start from 0meg.
-db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
-dw 0xFFFF	; limit bits 0-15.
-dw 0x0000	; base bits 0-15
-db 0x0A		; base bits 16-23. Start from 0x0A0000
-db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
-dw 0x68		;limit bits 0-15
-dw 0xff00	;base bits 0-15.
-db 0x10		;base bits 16-23. Start from end of kernel DS
-db 0x84		;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=0
-db 0x40		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 5 (segment 0x28): User-mode CS
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x0000	;base bits 16-23
-db 0xFA		;access byte. Set Pr, Privl=3, S=1, Ex=1, DC=0, RW=1, Ac=0
-db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 6 (segment 0x30): User-mode DS
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x00		;base bits 16-23. Start from 0meg.
-db 0xF2		;access byte. Set Pr, Privl=3, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-
-SimpleGDTPtr:
-dw 0x38		;length in bytes
-dd 0x0		;offset, filled in by code

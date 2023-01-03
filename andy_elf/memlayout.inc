@@ -1,6 +1,7 @@
 %define IDTOffset    0x500	;where we store the interrupt descriptor table in our data segment
 %define IDTSize      0x800	;256 entries of 8 bytes each
 %define IDTPtr	     0xd00	;IDT pointer block goes straight after the IDT
+
 %define TSS_Selector 0x20	;TSS starts at offset 0 in this selector
 %define CursorRowPtr 0xe00	;where we store screen cursor row in kernel data segment
 %define CursorColPtr 0xe01	;where we store cursor col in kernel data segment

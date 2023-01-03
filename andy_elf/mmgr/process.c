@@ -1,5 +1,6 @@
 #include <types.h>
 #include <sys/mmgr.h>
+#include <sys/gdt.h>
 #include <panic.h>
 #include "heap.h"
 #include "process.h"
@@ -11,13 +12,13 @@ static uint16_t last_assigned_processid;
 
 void initialise_process_table(uint32_t* kernel_paging_directory)
 {
-  kprintf("Initialising process table\r\n");
+  kprintf("INFO Initialising process table\r\n");
   size_t pages_required = (sizeof(struct ProcessTableEntry) * PID_MAX) / PAGE_SIZE;
 
-  kprintf("DEBUG require %d pages of RAM for process table\r\n", pages_required);
+  //kprintf("DEBUG require %d pages of RAM for process table\r\n", pages_required);
   process_table = (struct ProcessTableEntry*) vm_alloc_pages(NULL, pages_required+1, MP_PRESENT|MP_READWRITE);
 
-  kprintf("Process table is at 0x%x\r\n", process_table);
+  kprintf("INFO Process table is at 0x%x\r\n", process_table);
   memset(process_table, 0, sizeof(struct ProcessTableEntry)*PID_MAX);
   for(size_t i=0; i<PID_MAX; i++) {
     process_table[i].magic = PROCESS_TABLE_ENTRY_SIG;
@@ -48,7 +49,7 @@ This should be treated as non-interruptable and therefore called with interrupts
 */
 struct ProcessTableEntry *get_next_available_process()
 {
-  kprintf("DEBUG get_next_available_process process table at 0x%x, last assigned PID is %d\r\n", process_table, last_assigned_processid);
+  //kprintf("DEBUG get_next_available_process process table at 0x%x, last assigned PID is %d\r\n", process_table, last_assigned_processid);
   for(uint16_t i=last_assigned_processid+1; i<PID_MAX; i++) {
     if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("Process table corruption detected\r\n");
     if(process_table[i].status==PROCESS_NONE) {
@@ -106,7 +107,6 @@ struct ProcessTableEntry* new_process()
   //mb();
   for(size_t i=0;i<256;i++) {
     page_one[i] = (i << 12) | MP_PRESENT | MP_READWRITE;  //r/w only applies to kernel here of course because no MP_USER
-    kprintf("[0x%x] = 0x%x\r\n", &page_one[i], page_one[i]);
   }
   for(size_t i=256;i<1024;i++) {
     page_one[i] = 0;
@@ -118,17 +118,14 @@ struct ProcessTableEntry* new_process()
   //now set up stack at the end of the process's VRAM
   kputs("DEBUG new_process setting up process stack\r\n");
   void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[2], 1023, 1023, MP_USER|MP_READWRITE);
-  kprintf("DEBUG Set up 4k stack at 0x%x in process space\r\n", process_stack);
+  kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
   e->stack_page_count = 1;
   e->esp = 0xFFFFFFFF;
-
-  //now set up a heap
-  kputs("DEBUG new_process setting up process heap\r\n");
-  //the app prolog itself should configure the app heap, we just allocate it here.
-  e->heap_start = vm_alloc_pages(e->root_paging_directory_kmem, MIN_ZONE_SIZE_PAGES, MP_USER|MP_READWRITE);
-  kprintf("DEBUG new_process heap is at 0x%x [process-space]\r\n", e->heap_start);
-  sti();
-  kprintf("DEBUG new_process process initialised at 0x%x\r\n", e);
+  e->stack_phys_ptr = phys_ptrs[2];
+  e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[2], 1);
+  if(e->stack_kmem_ptr==NULL) {
+    kputs("ERROR new_process could not map process stack into kmem for setup\r\n");
+  }
   return e;
 }
 
@@ -140,7 +137,53 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     return 0;
   }
 
+  for(size_t i=0; i<elf->_loaded_segment_count; i++) {
+    ElfLoadedSegment *seg = elf->loaded_segments[i];
 
+    size_t flags = MP_USER|MP_PRESENT;
+    if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+    kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
+    kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
+    for(size_t p=0; p<seg->page_count; ++p) {
+      k_map_page_bytes(new_entry->root_paging_directory_kmem, seg->content_phys_pages[p], seg->header->p_vaddr + p*PAGE_SIZE, flags);
+    }
+    if(seg->content_virt_page!=NULL) {
+      k_unmap_page_ptr(NULL, seg->content_virt_page);
+      seg->content_virt_page = NULL;
+      seg->content_virt_ptr = NULL;
+    }
+  }
+
+  //now set up a heap
+  kputs("DEBUG new_process setting up process heap\r\n");
+  //the app prolog itself should configure the app heap, we just allocate it here.
+  new_entry->heap_start = vm_alloc_pages(new_entry->root_paging_directory_kmem, MIN_ZONE_SIZE_PAGES, MP_USER|MP_READWRITE);
+  new_entry->heap_allocated = MIN_ZONE_SIZE_PAGES;
+  new_entry->heap_used = 0;
+
+  kprintf("DEBUG new_process heap is at 0x%x [process-space]\r\n", new_entry->heap_start);
+
+  //Finally, we must configure a stack frame so that the kernel can jump into the entrypoint of the app.
+  //The jump is done by selecting the app paging directory, then its stack pointer and executing "IRET".
+  //The "iret" instruction expects data selector, stack pointer, eflags, code selector and execute address in that order.
+  //See https://wiki.osdev.org/Getting_to_Ring_3#Entering_Ring_3
+  uint32_t *process_stack_temp = (uint32_t *)((void *)new_entry->stack_kmem_ptr + 0x0FFC);  //one dword below top of stack
+  *process_stack_temp = GDT_USER_DS | 3;  //user DS
+  process_stack_temp -= 4;
+  *process_stack_temp = new_entry->esp;           //process stack pointer, once return data is popped off
+  process_stack_temp -= 4;
+  *process_stack_temp = 0x0;              //EFLAGS. FIXME: we should get the actual eflags value here.
+  process_stack_temp -= 4;
+  *process_stack_temp = GDT_USER_CS | 3;  //user CS
+  process_stack_temp -= 4;
+  *process_stack_temp = elf->file_header->i386_subheader.entrypoint;
+  //the stack should now be ready for `iret`, we don't need access to it any more.
+  k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
+  new_entry->stack_kmem_ptr = NULL;
+
+  new_entry->status = PROCESS_READY;
+  sti();
+  kprintf("DEBUG new_process process initialised at 0x%x\r\n", new_entry);
 }
 
 void remove_process(struct ProcessTableEntry* e)

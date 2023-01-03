@@ -30,10 +30,6 @@ static uint32_t *first_pagedir_entry;    //first directory entry on page 1
 struct PhysMapEntry *physical_memory_map = NULL;
 static size_t physical_page_count = 0;
 
-/** gets the page directory index for the given virtual address  */
-#define ADDR_TO_PAGEDIR_IDX(addr) (size_t)addr >> 22;
-/** gets the page index within the page directory for the given address */
-#define ADDR_TO_PAGEDIR_OFFSET(addr) ((size_t)addr >> 12) & 0x03FF
 
 void idpaging(uint32_t *first_pte, vaddr from, int size);
 void allocate_physical_map(struct BiosMemoryMap *ptr);
@@ -99,8 +95,6 @@ void setup_paging() {
   kernel_paging_directory = (uint32_t *) ROOT_PAGE_DIR_LOCATION;
   first_pagedir_entry = (uint32_t *) FIRST_PAGEDIR_ENTRY_LOCATION;
 
-  kprintf("DEBUG kernel_paging_directory is 0x%x, first_pagedir_entry is 0x%x\r\n", kernel_paging_directory, first_pagedir_entry);
-
   /**
   initialise the directory to 0 then set up the first "special" page
   */
@@ -148,7 +142,7 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks)
   for(register size_t i=0x30;i<physical_page_count;i++) {
     if(physical_memory_map[i].in_use==0) {
       if(temp<5) {
-        kprintf("  DEBUG Physical page 0x%x is available, taking it\r\n", i);
+        //kprintf("  DEBUG Physical page 0x%x is available, taking it\r\n", i);
         temp++;
       }
       physical_memory_map[i].in_use=1;
@@ -218,9 +212,9 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
   }
 
   uint32_t *pagedir_phys = (uint32_t *)(actual_root[pagedir_idx] & MP_ADDRESS_MASK);
-  kprintf("DEBUG k_map_page pagedir_phys for index %d is 0x%x\r\n", pagedir_idx, pagedir_phys);
+  //kprintf("DEBUG k_map_page pagedir_phys for index %d is 0x%x\r\n", pagedir_idx, pagedir_phys);
   uint32_t *pagedir = (uint32_t *)k_map_if_required(NULL, pagedir_phys, MP_READWRITE);
-  kprintf("DEBUG k_map_page pagedir VM for index %d is 0x%x\r\n", pagedir_idx, pagedir);
+  //kprintf("DEBUG k_map_page pagedir VM for index %d is 0x%x\r\n", pagedir_idx, pagedir);
 
   //FIXME: we should map the physical pagedir pointer to a temporary location
   pagedir[pageent_idx] = ((vaddr)phys_addr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
@@ -284,15 +278,15 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //discontinues phys_addr pointers onto them with the given flags.
   //then, return the vmem ptr to the first one.
   for(i=0;i<1024;i++) {
-    kprintf("    DEBUG root_page_dir is 0x%x\r\n", root_page_dir);
-    kprintf("    DEBUG page %d entry is 0x%x\r\n", i, (uint32_t) root_page_dir[i]);
+    //kprintf("    DEBUG root_page_dir is 0x%x\r\n", root_page_dir);
+    //kprintf("    DEBUG page %d entry is 0x%x\r\n", i, (uint32_t) root_page_dir[i]);
     if(!((vaddr)root_page_dir[i] & MP_PRESENT)) {
       kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
       vm_add_dir(root_page_dir, i, flags);  //if we don't have a virtual memory directory then add one
     }
     pagedir_entry_phys = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
     pagedir_entry_vptr = (uint32_t *)k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
-    kprintf("    DEBUG page %d entry is at 0x%x and mapped to 0x%x\r\n", i, (vaddr)pagedir_entry_phys, (vaddr)pagedir_entry_vptr);
+    //kprintf("    DEBUG page %d entry is at 0x%x and mapped to 0x%x\r\n", i, (vaddr)pagedir_entry_phys, (vaddr)pagedir_entry_vptr);
 
     for(j=0;j<1024;j++) {
       if( ! (pagedir_entry_vptr[j] & MP_PRESENT) ) {
@@ -310,12 +304,12 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     }
     if(continuous_page_count>=pages) break;
   }
-  kprintf("    DEBUG found %d continous pages from %d,%d to %d,%d\r\n", continuous_page_count, starting_page_dir, starting_page_off, i, j);
+  //kprintf("    DEBUG found %d continous pages from %d,%d to %d,%d\r\n", continuous_page_count, starting_page_dir, starting_page_off, i, j);
   if(continuous_page_count<pages) {
     kprintf("    ERROR Found %l pages but need %l\r\n", continuous_page_count, pages);
     return NULL;
   }
-  kprintf("    DEBUG Enough space to map %d pages\r\n", pages);
+  //kprintf("    DEBUG Enough space to map %d pages\r\n", pages);
 
   //now map the pages
   i = starting_page_dir;
@@ -331,11 +325,11 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     }
   }
 
-  kprintf("    DEBUG mapped from dir %d off %d\r\n", starting_page_dir, starting_page_off);
+  //kprintf("    DEBUG mapped from dir %d off %d\r\n", starting_page_dir, starting_page_off);
 
   //now calculate the virtual pointer
   void *ptr = (void *)(((vaddr)starting_page_dir) << 22 | ((vaddr)starting_page_off) << 12);
-  kprintf("    DEBUG vptr is 0x%x\r\n", ptr);
+  //kprintf("    DEBUG vptr is 0x%x\r\n", ptr);
 
   //we can't zero the memory here because ptr might be in a different paging directory.
 
@@ -354,7 +348,7 @@ uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off)
 {
   size_t dir_idx = (size_t)vmem_ptr >> 22;
   size_t dir_off = (size_t)vmem_ptr >> 12 & 0x03FF;
-  kprintf("DEBUG _resolve_vptr for ptr 0x%x idx is 0x%x and offset is 0x%x\r\n", vmem_ptr, dir_idx, dir_off);
+  //kprintf("DEBUG _resolve_vptr for ptr 0x%x idx is 0x%x and offset is 0x%x\r\n", vmem_ptr, dir_idx, dir_off);
 
   *dir = (uint16_t)dir_idx;
   *off = (uint16_t)dir_off;
@@ -419,7 +413,7 @@ void k_unmap_page_ptr(uint32_t *root_page_dir, void *vptr)
 {
   size_t idx = ADDR_TO_PAGEDIR_IDX(vptr);
   size_t off = ADDR_TO_PAGEDIR_OFFSET(vptr);
-  kprintf("DEBUG k_unmap_page_ptr 0x%x corresponds to index %l, offset %l\r\n", vptr, idx, off);
+  //kprintf("DEBUG k_unmap_page_ptr 0x%x corresponds to index %l, offset %l\r\n", vptr, idx, off);
   k_unmap_page(root_page_dir, idx, off);
 }
 
@@ -553,7 +547,7 @@ void* k_map_if_required(uint32_t *base_directory_vptr, void *phys_addr, uint32_t
   int16_t dir=0;
   int16_t off=1;
 
-  kprintf("DEBUG k_map_if_required no existing mapping found for 0x%x, creating a new one\r\n", phys_addr);
+  //kprintf("DEBUG k_map_if_required no existing mapping found for 0x%x, creating a new one\r\n", phys_addr);
   if(find_next_unallocated_page(base_directory_vptr, &dir,&off)==0) {
     //allocation worked
     void *mapped_page_addr = k_map_page(base_directory_vptr, (void *)page_value, dir, off, flags);
@@ -684,7 +678,7 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
 
   size_t highest_value = 0;
 
-  kprintf("DEBUG allocate_physical_map ptr is 0x%x, entry count is %d\r\n", ptr, entry_count);
+  //kprintf("DEBUG allocate_physical_map ptr is 0x%x, entry count is %d\r\n", ptr, entry_count);
 
   for(i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];

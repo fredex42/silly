@@ -96,6 +96,7 @@ void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
     return;
   }
 
+  seg->header = hdr;
   cli();
   size_t allocd_pages = allocate_free_physical_pages(seg->page_count, seg->content_phys_pages);
   sti();
