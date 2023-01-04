@@ -44,61 +44,11 @@ db 0x0A		; base bits 16-23. Start from 0x0A0000
 db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
 db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 db 0x00		;base bits 24-31
-;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
-dw 0x68		;limit (TSS size) bits 0-15. 104 bytes = 0x68 (note last 2 fields are word not dword)
-dw SimpleTSS	;base (TSS location) bits 0-15.
-db 0x00		;base bits (TSS location) 16-23.
-db 0x89		;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=1
-db 0x40		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector], available=1
-db 0x00		;base bits 24-31
-;entry 5 (segment 0x28): User-mode CS
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x0000	;base bits 16-23
-db 0xFA		;access byte. Set Pr, Privl=3, S=1, Ex=1, DC=0, RW=1, Ac=0
-db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 6 (segment 0x30): User-mode DS
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x00		;base bits 16-23. Start from 0meg.
-db 0xF2		;access byte. Set Pr, Privl=3, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
+
 
 SimpleGDTPtr:
-dw 0x38		;length in bytes
+dw 0x20		;length in bytes
 dd 0x0		;offset, filled in by code
-
-SimpleTSS:
-dd 0x00 	 ;link to previous TSS, not used
-dd 0x7FFF0 ;our stack pointer. This needs to be over-written every time we switch to ring3 with the current SP position
-dd 0x10    ;our stack segment
-;everything else is unused
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dd 0x00
-dw 0x00
-dw 0x00
 
 ;assuming that DH is still the cursor row and DL is still the cursor position
 _start:
@@ -322,6 +272,57 @@ mov dword [IDTPtr+2], IDTOffset	;IDT offset
 lidt [IDTPtr]
 
 pop es
+
+;Set up a TSS. We'll need this in order to jump from ring 3 to ring 0 for interrupts etc.
+mov edi, FullTSS
+mov eax, 0					;link to previous TSS, not used
+stosd
+mov eax, 0x7FFF0		;our stack pointer. This needs to be over-written every time we switch to ring3 with the current SP position
+stosd
+mov eax, 0x10				;our stack segment
+stosd
+;everything else is unused
+xor eax, eax
+mov ecx, 24
+rep stosd
+
+;Now set up a proper GDT.  We copy over the whole of SimpleGDT using movsd
+;and then add in sections for TSS, user-mode CS and user-mode DS.
+;This is done so we can protect the kernel code from tampering.
+cld										;clear direction flag, we want to write forwards
+mov edi, FullGDT			;movsd destination
+mov esi, SimpleGDT		;movsd source
+mov ecx, 8
+rep movsd
+
+;edi should not be pointing to FullGDT+0x20
+;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
+mov word [edi], 0x68				;limit (TSS size) bits 0-15. 104 bytes = 0x68 (note last 2 fields are word not dword)
+mov word [edi+2], FullTSS		;base (TSS location) bits 0-15.
+mov byte [edi+4], 0					;base (TSS location) bits 0-15.
+mov byte [edi+5], 0x89			;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=1
+mov byte [edi+6], 0x40			;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector], available=1
+mov byte [edi+7], 0x00			;base bits 24-31
+;entry 5 (segment 0x28): User-mode CS
+mov word [edi+8], 0xFFFF    ;limit bits 0-15
+mov word [edi+10], 0x0000	;base bits 0-15
+mov byte [edi+12], 0x0000	;base bits 16-23
+mov byte [edi+13], 0xFA		;access byte. Set Pr, Privl=3, S=1, Ex=1, DC=0, RW=1, Ac=0
+mov byte [edi+14], 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov byte [edi+15], 0x00		;base bits 24-31
+;entry 6 (segment 0x30): User-mode DS
+mov word [edi+16], 0xffff	;limit bits 0-15
+mov word [edi+18],  0x0000	;base bits 0-15
+mov byte [edi+20],  0x00		;base bits 16-23. Start from 0meg.
+mov byte [edi+21],  0xF2		;access byte. Set Pr, Privl=3, S=1, Ex=0, DC=0, RW=1, Ac=0
+mov byte [edi+22], 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov byte [edi+23], 0x00		;base bits 24-31
+
+;OK, that's set up, now tell the processor
+mov edi, FullGDTPtr
+mov word [edi], 0x38				;length in bytes
+mov dword [edi+2], FullGDT	;memory location
+lgdt [edi]
 
 extern initialise_mmgr
 

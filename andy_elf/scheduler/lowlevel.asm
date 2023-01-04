@@ -2,7 +2,7 @@
 
 global exit_to_process
 
-extern SimpleTSS  ;defined in kickoff.s
+%include "../memlayout.inc"
 
 ;Purpose: Executes an IRET to exit kernel mode into user-mode on the given process.
 ;Expects the process stack frame to be configured for the return already; this is either
@@ -19,7 +19,7 @@ exit_to_process:
   mov gs, ax
 
   mov edi, [esp+4]  ;grab the first argument from the stack
-  mov esi, SimpleTSS
+  mov esi, FullTSS
   ;Set the current stack pointer in the TSS. When we return to the kernel we
   ;will effectively have exited from this function.
   mov eax, esp

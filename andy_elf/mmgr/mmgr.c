@@ -72,8 +72,7 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
   //between a 'start' and and 'end' is write-protected. These are the 'special' ranges
   //of the first MiB.  We are allowed to write to the video framebuffer between A0000 and C0000 though,
 
-  //FIXME: temporarily unprotected page 7, need to put it back again
-  uint32_t protected_pages[] = {0x8, 0x11, 0x80, 0xA0, 0xC0, 0xFF};
+  uint32_t protected_pages[] = {0x7, 0x11, 0x80, 0xA0, 0xC0, 0xFF};
   #define PROTECTED_PAGES_COUNT 5
   for(i=0;i<page_count;i++) {
     if(range_ctr<PROTECTED_PAGES_COUNT && i==protected_pages[range_ctr]) {
