@@ -99,7 +99,7 @@ struct ProcessTableEntry* new_process()
   kprintf("DEBUG process paging directory at physical address 0x%x\r\n", e->root_paging_directory_phys);
 
   e->root_paging_directory_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &e->root_paging_directory_phys, 1);
-  ((uint32_t *)e->root_paging_directory_kmem)[0] = (uint32_t)phys_ptrs[1] | MP_PRESENT; //we need kernel-only access to page 0 so that we can use interrupts
+  ((uint32_t *)e->root_paging_directory_kmem)[0] = (uint32_t)phys_ptrs[1] | MP_PRESENT | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
 
   //identity-map the kernel space so interrupts etc. will work
   uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &phys_ptrs[1], 1);
@@ -165,18 +165,19 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
 
   //Finally, we must configure a stack frame so that the kernel can jump into the entrypoint of the app.
   //The jump is done by selecting the app paging directory, then its stack pointer and executing "IRET".
-  //The "iret" instruction expects data selector, stack pointer, eflags, code selector and execute address in that order.
+  //The "iret" instruction expects stack selector, stack pointer, eflags, code selector and execute address in that order.
   //See https://wiki.osdev.org/Getting_to_Ring_3#Entering_Ring_3
-  uint32_t *process_stack_temp = (uint32_t *)((void *)new_entry->stack_kmem_ptr + 0x0FFC);  //one dword below top of stack
+  uint32_t *process_stack_temp = (uint32_t *)((void *)new_entry->stack_kmem_ptr + 0x0FFB);  //one dword below top of stack
   *process_stack_temp = GDT_USER_DS | 3;  //user DS
-  process_stack_temp -= 4;
-  *process_stack_temp = new_entry->esp;           //process stack pointer, once return data is popped off
-  process_stack_temp -= 4;
+  process_stack_temp -= 1;    //moves back 1 uint32_t i.e. 4 bytes
+  *process_stack_temp = new_entry->esp - 0x04;           //process stack pointer, once return data is popped off
+  process_stack_temp -= 1;
   *process_stack_temp = 0x0;              //EFLAGS. FIXME: we should get the actual eflags value here.
-  process_stack_temp -= 4;
+  process_stack_temp -= 1;
   *process_stack_temp = GDT_USER_CS | 3;  //user CS
-  process_stack_temp -= 4;
+  process_stack_temp -= 1;
   *process_stack_temp = elf->file_header->i386_subheader.entrypoint;
+  new_entry->esp -= 20;
   //the stack should now be ready for `iret`, we don't need access to it any more.
   k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
   new_entry->stack_kmem_ptr = NULL;

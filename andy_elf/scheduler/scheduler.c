@@ -6,8 +6,12 @@
 #include "scheduler_task_internals.h"
 #include <cfuncs.h>
 #include "../8259pic/picroutines.h"
+#include "../mmgr/process.h"
+#include "lowlevel.h"
 
 static SchedulerState *global_scheduler_state;
+static pid_t last_run_pid;
+static pid_t active_process;
 
 void initialise_scheduler()
 {
@@ -17,8 +21,13 @@ void initialise_scheduler()
   for(int i=0;i<BUFFER_COUNT;i++) {
     global_scheduler_state->buffers[i] = new_scheduler_task_buffer();
   }
+  last_run_pid = 0;
+  active_process = 0;
 }
 
+/*
+This is expected to be run from IRQ0, i.e. every 55ms or so.
+*/
 void scheduler_tick()
 {
   SchedulerTask *to_run;
@@ -120,4 +129,34 @@ void schedule_task(SchedulerTask *t)
       kprintf("ERROR tried to schedule an invalid task with type %d\r\n", (uint16_t) t->task_type);
       return;
   }
+}
+
+//finds the next runnable process (in a round-robin fashion) and attempts to enter it
+void enter_next_process()
+{
+  pid_t i, temp;
+  struct ProcessTableEntry* process = NULL;
+
+  cli();
+  for(i=last_run_pid+1;i<PID_MAX;i++) {
+    temp = i;
+    process = get_process(i);
+    if(process->status==PROCESS_READY) break;
+  }
+  if(process->status!=PROCESS_READY) { //still not found one? Re-start the list. Ignore process 0 as that's us (the kernel)
+    for(i=1;i<=last_run_pid;i++) {
+      temp = i;
+      process = get_process(i);
+      if(process->status==PROCESS_READY) break;
+    }
+  }
+  if(process->status!=PROCESS_READY){
+    sti();
+    return; //OK, nothing doing. Go back to the kernel idle loop.
+  }
+
+  //Right, we have something.
+  last_run_pid = temp;
+  kprintf("DEBUG Exiting into process 0x%x\r\n", process);
+  exit_to_process(process);
 }

@@ -44,4 +44,7 @@ void schedule_task(SchedulerTask *t); //pushes the task onto the relevant queue 
 
 uint64_t get_scheduler_ticks();
 
+//finds the next runnable process (in a round-robin fashion) and attempts to enter it
+void enter_next_process();
+
 #endif

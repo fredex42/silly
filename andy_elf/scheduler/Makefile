@@ -5,7 +5,7 @@ all: libscheduler.a
 clean:
 	rm -f *.o *.a
 
-lowlevel.o:
+lowlevel.o: lowlevel.asm
 	nasm -f elf32 lowlevel.asm
 
 process.o: process.c process.h

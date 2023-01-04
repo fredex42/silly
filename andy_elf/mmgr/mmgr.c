@@ -63,7 +63,7 @@ This assumes that page sizes are 4k.
 */
 void idpaging(uint32_t *first_pte, vaddr from, int size) {
   register uint32_t i;
-  uint32_t page_count = size / 4096;
+  uint32_t page_count = size / PAGE_SIZE;
   uint32_t block_ptr = from & MP_ADDRESS_MASK;
   uint8_t range_ctr=0;
   uint8_t write_protect=0;
@@ -71,7 +71,9 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
   //of pairs of page indices, start, end, start, end etc.  Everything
   //between a 'start' and and 'end' is write-protected. These are the 'special' ranges
   //of the first MiB.  We are allowed to write to the video framebuffer between A0000 and C0000 though,
-  uint32_t protected_pages[] = {0x7, 0x11, 0x80, 0xA0, 0xC0, 0xFF};
+
+  //FIXME: temporarily unprotected page 7, need to put it back again
+  uint32_t protected_pages[] = {0x8, 0x11, 0x80, 0xA0, 0xC0, 0xFF};
   #define PROTECTED_PAGES_COUNT 5
   for(i=0;i<page_count;i++) {
     if(range_ctr<PROTECTED_PAGES_COUNT && i==protected_pages[range_ctr]) {
@@ -82,7 +84,7 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
     register uint32_t value = write_protect ? block_ptr | MP_PRESENT : block_ptr | MP_PRESENT| MP_READWRITE ;
     //kprintf("DEBUG: page %d value 0x%x   \r\n", i, value);
     first_pte[i] = value;
-    block_ptr+=4096;
+    block_ptr+=PAGE_SIZE;
   }
 }
 
@@ -208,7 +210,9 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
   if(pagedir_idx>1023 || pageent_idx>1023) return NULL; //out of bounds
 
   if(! (actual_root[pagedir_idx] & MP_PRESENT)){
-    vm_add_dir(actual_root, pagedir_idx, MP_READWRITE);
+    uint32_t dir_flags = MP_READWRITE;
+    if(flags&MP_USER) dir_flags |= MP_USER;
+    vm_add_dir(actual_root, pagedir_idx, dir_flags);
   }
 
   uint32_t *pagedir_phys = (uint32_t *)(actual_root[pagedir_idx] & MP_ADDRESS_MASK);
