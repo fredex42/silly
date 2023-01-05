@@ -146,85 +146,106 @@ mov es, ax
 mov edi, IDivZero
 mov bl, 0x0F	;trap gate (Present flag is set by CreateIA32IDTEntry)
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IDebug
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, INMI
 mov bl, 0x0E	;interrupt gate
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IBreakPoint
 mov bl, 0x0F	;trap gate
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IOverflow
 mov bl, 0x0F	;trap gate
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IBoundRange
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IOpcodeInval
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IDevNotAvail
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IDoubleFault
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IInvalidTSS
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, ISegNotPresent
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IStackSegFault
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IGPF
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IPageFault
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IFloatingPointExcept
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IAlignmentCheck
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IMachineCheck
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, ISIMDFPExcept
 mov bl, 0x0F
+mov cl,3	;allow ring3
 xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IVirtExcept
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 ;next 8 interrupts are all reserved
 mov dx, 9
@@ -232,6 +253,7 @@ _idt_reserv_loop:
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 dec dx
 test dx, dx	;got to 0 yet?
@@ -239,31 +261,25 @@ jnz _idt_reserv_loop
 mov edi, ISecurityExcept
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
-;That is the end of the system exceptions part. Next is what we will configure the PIC to write IRQs to
-;IRQ0 - system timer
+;That is the end of the system exceptions part. Hardware interrupts are configured in the 8259pic driver.
+;Ensure that all other interrupts are configured to point to the "ignored" handler
+mov dx, 0xE0
+_idt_reserv_loop_two:
 mov edi, IReserved
-mov bl,0x0F
-xor cx,cx
-call CreateIA32IDTEntry
-;IRQ1 - keyboard
-mov edi, IKeyboard
-mov bl,0x0F
-xor cx,cx
-call CreateIA32IDTEntry
-mov dx, 14
-_irq_reserv_loop:
-mov edi, IReserved
-mov bl, 0x0F
+mov bl, 0x0E
 xor cx, cx
+mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 dec dx
 test dx, dx	;got to 0 yet?
-jnz _irq_reserv_loop
+jnz _idt_reserv_loop_two
 
 
 ;Configure IDT pointer
@@ -323,6 +339,10 @@ mov edi, FullGDTPtr
 mov word [edi], 0x38				;length in bytes
 mov dword [edi+2], FullGDT	;memory location
 lgdt [edi]
+
+;And tell the processor the correct TSS to use
+mov ax, TSS_Selector
+ltr ax
 
 extern initialise_mmgr
 

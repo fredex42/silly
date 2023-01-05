@@ -20,12 +20,12 @@ exit_to_process:
 
   mov edi, [esp+4]  ;grab the first argument from the stack
   mov esi, FullTSS
-  ;Set the current stack pointer in the TSS. When we return to the kernel we
-  ;will effectively have exited from this function.
-  mov eax, esp
-  mov DWORD [esi+0x04], eax
+  ;Set the current stack pointer in the TSS TO THE APPLICATION STACK. When we return to the kernel we
+  ;will effectively have exited from this function. in the stack context of the application.
   ;Get the application stack pointer and store it in a register
   mov ebx, [edi+0x04]
+  ;mov eax, esp
+  mov DWORD [esi+0x04], ebx
   ;Get hold of the application paging directory physical address and activate it.
   ;This will remove access to the kernel stack.
   mov eax, [edi+0x10]

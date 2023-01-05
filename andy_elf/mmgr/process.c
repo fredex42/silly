@@ -105,9 +105,14 @@ struct ProcessTableEntry* new_process()
   uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &phys_ptrs[1], 1);
   //memset(page_one, 0, PAGE_SIZE);
   //mb();
-  for(size_t i=0;i<256;i++) {
+  //FIXME... need MP_USER on the IDT but MP_READWRITE (NOT MP_USER) on the GDT. So they need to be on different pages
+  //this page contains the GDT and IDT tables
+  page_one[0] = MP_PRESENT | MP_READWRITE;  //kernel needs r/w in order to modify the access flag in the GDT. User-mode blocked.
+  page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
+  for(size_t i=2;i<256;i++) {
     page_one[i] = (i << 12) | MP_PRESENT | MP_READWRITE;  //r/w only applies to kernel here of course because no MP_USER
   }
+
   for(size_t i=256;i<1024;i++) {
     page_one[i] = 0;
   }
@@ -172,7 +177,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   process_stack_temp -= 1;    //moves back 1 uint32_t i.e. 4 bytes
   *process_stack_temp = new_entry->esp - 0x04;           //process stack pointer, once return data is popped off
   process_stack_temp -= 1;
-  *process_stack_temp = 0x0;              //EFLAGS. FIXME: we should get the actual eflags value here.
+  *process_stack_temp = (1<<12) | (1<<13) | (1<<9);              //EFLAGS. Set IOPL to 3, IF is 1 and everything else 0.
   process_stack_temp -= 1;
   *process_stack_temp = GDT_USER_CS | 3;  //user CS
   process_stack_temp -= 1;

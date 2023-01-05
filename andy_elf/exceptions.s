@@ -62,6 +62,7 @@ CreateIA32IDTEntry:
 ;output the given message and hang.
 ;expects the message pointer in the string table in eax, it applies the string table offset itself. Does not return.
 FatalMsg:
+	sti
 	mov esi, eax
 	call PMPrintString
 	nop
@@ -74,65 +75,93 @@ IReserved:
 
 ;Trap handlers
 IDivZero:
+	mov ax, 0x10
+	mov ds, ax
 	call c_except_div0	;helpfully, the CPU has already arranged a stack frame for us that is compatible with GCC
 	mov eax, DivZeroMsg
 	jmp FatalMsg
 
 IDebug:
+	mov ax, 0x10
+	mov ds, ax
 	mov eax, DebugMsg
 	jmp FatalMsg
 
 INMI:	;technically an interrupt, not a trap
+	mov ax, 0x10
+	mov ds, ax
 	mov eax, NMIMsg
 	jmp FatalMsg
 
 IBreakPoint:
+	mov ax, 0x10
+	mov ds, ax
 	mov eax, BreakPointMsg
 	jmp FatalMsg
 
 IOverflow:
+	mov ax, 0x10
+	mov ds, ax
 	mov eax, OverflowMsg
 	jmp FatalMsg
 
 IBoundRange:
+	mov ax, 0x10
+	mov ds, ax
 	mov eax, BoundRangeMsg
 	jmp FatalMsg
 
 IOpcodeInval:
+	mov ax, 0x10
+	mov ds, ax
   call c_except_invalidop
 	mov eax, InvalidOpcodeMsg
 	jmp FatalMsg
 
 IDevNotAvail:
+	mov ax, 0x10
+	mov ds, ax
 	mov eax, DevNotAvailMsg
 	jmp FatalMsg
 
 IDoubleFault:	;leaves error code
+	mov ax, 0x10
+	mov ds, ax
 	pop edx	;move error code into edx
 	mov eax, DoubleFaultMsg
 	jmp FatalMsg
 
 IInvalidTSS:	;leaves error code
+	mov ax, 0x10
+	mov ds, ax
 	pop edx
 	mov eax, InvalidTSSMsg
 	jmp FatalMsg
 
 ISegNotPresent:	;leaves error code
+	mov ax, 0x10
+	mov ds, ax
 	pop edx
 	mov eax, SegmentNotPresentMsg
 	jmp FatalMsg
 
 IStackSegFault: ;leaves error code
+	mov ax, 0x10
+	mov ds, ax
 	pop edx
 	mov eax, StackSegmentFaultMsg
 	jmp FatalMsg
 
 IGPF:		;leaves error code
+	mov ax, 0x10
+	mov ds, ax
 	call c_except_gpf
 	mov eax, GPFMsg
 	jmp FatalMsg
 
 IPageFault:	;leaves error code
+	mov ax, 0x10
+	mov ds, ax
 	mov eax, cr2
 	push eax
 	call c_except_pagefault
