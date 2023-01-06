@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include "../drivers/ata_pio/ata_pio.h"
 #include <fs.h>
+#include <errors.h>
+#include "../mmgr/process.h"
 
 //pointer to the filesystem for each device
 static struct fat_fs* device_fs_map[MAX_DEVICE];
@@ -58,12 +60,38 @@ void _fs_root_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, voi
   vfat_close(fp);
 }
 
+void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* parsed_app, void *extradata)
+{
+  if(status!=E_OK) {
+    kprintf("ERROR Could not load SHELL.APP: error %d\r\n", (uint16_t)status);
+    return;
+  }
+  kprintf("SHELL.APP loaded\r\n");
+
+  internal_create_process(parsed_app);
+}
+
+void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extradata)
+{
+  if(status!=E_OK) {
+    kprintf("ERROR Could not find SHELL.APP in the root directory: error code %d\r\n", status);
+    return;
+  }
+  if(dir_entry==NULL) {
+    kprintf("ERROR SHELL.APP did not exist in the root directory.\r\n");
+    return;
+  }
+
+  kprintf("Loading in root shell...\r\n");
+  elf_load_and_parse(0, dir_entry, NULL, &_fs_shell_app_loaded);
+}
+
 void _fs_root_device_mounted(struct fat_fs *fs_ptr, uint8_t status, void *extradata)
 {
   kprintf("INFO Root FS mount completed with status %d\r\n", status);
   device_fs_map[0] = fs_ptr;
 
-  vfat_opendir_root(fs_ptr, NULL, &_fs_root_dir_opened);
+  vfat_find_8point3_in_root_dir(fs_ptr, "SHELL", "APP", NULL, &_fs_shell_app_found);
 }
 
 void mount_root_device()

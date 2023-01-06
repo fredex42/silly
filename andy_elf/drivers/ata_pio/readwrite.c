@@ -73,7 +73,6 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
 
   //if we have an operation already pending the caller must wait for that to finish
   if(master_driver_state->pending_disk_operation[bus_nr]->type != ATA_OP_NONE) {
-    kprintf("DEBUG pending operation is type %d\r\n", (uint16_t)master_driver_state->pending_disk_operation[bus_nr]->type  );
     return E_BUSY;
   }
 
@@ -212,8 +211,6 @@ void ata_continue_write(ATAPendingOperation *op)
   //before we stored the last word of this one, meaning that we miss data.
   cli();
 
-  //kprintf("DEBUG sectors written %d sectors total to write %d\r\n", op->sectors_read, op->sector_count);
-
   //each sector is 512 bytes (or 256 words)
   uint16_t *buf = (uint16_t *)op->buffer;
   for(register size_t i=op->buffer_loc; i<op->buffer_loc+256;i++) {
@@ -246,8 +243,6 @@ Returns: Nothing
 void ata_complete_write_lowerhalf(SchedulerTask *t)
 {
   ATAPendingOperation *op = (ATAPendingOperation *)t->data;
-
-  kprintf("DEBUG in disk write lower-half. Requested paging dir is 0x%x\r\n", op->paging_directory);
 
   if(op->sectors_read>=op->sector_count) {
     //the operation is now completed

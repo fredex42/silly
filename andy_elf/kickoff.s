@@ -7,9 +7,50 @@ global _start
 
 extern early_serial_lowlevel_init
 
+global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
+
 %include "basic_console.inc"
 %include "memlayout.inc"
 %include "exceptions.inc"
+
+jmp _start
+
+; We want to keep the GDT where we can easily access them with 16-bit offsets
+; to make life easier with the assembler / linker, but we need more functionality later.
+; SimpleGDT is used to bootstrap protected mode, then later on the GDT is shifted to "FullGDT" which
+; includes ring3 code/data selectors and a Task Segment Selector as well.
+
+;basic GDT configuration. Each entry is 8 bytes long
+SimpleGDT:
+;entry 0: null entry
+dd 0
+dd 0
+;entry 1 (segment 0x08): kernel CS
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x0000	;base bits 16-23
+db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
+db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
+dw 0xffff	;limit bits 0-15
+dw 0x0000	;base bits 0-15
+db 0x00		;base bits 16-23. Start from 0meg.
+db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
+dw 0xFFFF	; limit bits 0-15.
+dw 0x0000	; base bits 0-15
+db 0x0A		; base bits 16-23. Start from 0x0A0000
+db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+db 0x00		;base bits 24-31
+
+
+SimpleGDTPtr:
+dw 0x20		;length in bytes
+dd 0x0		;offset, filled in by code
 
 ;assuming that DH is still the cursor row and DL is still the cursor position
 _start:
@@ -51,7 +92,7 @@ int 0x10
 mov eax, cr0
 or al, 1
 mov cr0, eax	;hello protected mode
-jmp 0x08:_pm_start	;Here goes nothing! break 0x00007cb4
+jmp 0x08:_pm_start	;Here goes nothing!
 
 ;retrieve the BIOS memory map. This must be compiled and run in 16-bit mode, easiest way
 ;is to call it before the switch to PM.
@@ -205,26 +246,18 @@ mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
 call CreateIA32IDTEntry
-;That is the end of the system exceptions part. Next is what we will configure the PIC to write IRQs to
-;IRQ0 - system timer
+;That is the end of the system exceptions part. Hardware interrupts are configured in the 8259pic driver.
+;Ensure that all other interrupts are initialised to point to the "ignored" handler
+mov dx, 0xE0
+_idt_reserv_loop_two:
 mov edi, IReserved
-mov bl,0x0F
-xor cx,cx
-call CreateIA32IDTEntry
-;IRQ1 - keyboard
-mov edi, IKeyboard
-mov bl,0x0F
-xor cx,cx
-call CreateIA32IDTEntry
-mov dx, 14
-_irq_reserv_loop:
-mov edi, IReserved
-mov bl, 0x0F
+mov bl, 0x0E
 xor cx, cx
+mov cl, 3			;allow ring3
 call CreateIA32IDTEntry
 dec dx
 test dx, dx	;got to 0 yet?
-jnz _irq_reserv_loop
+jnz _idt_reserv_loop_two
 
 
 ;Configure IDT pointer
@@ -233,6 +266,61 @@ mov dword [IDTPtr+2], IDTOffset	;IDT offset
 lidt [IDTPtr]
 
 pop es
+
+;Set up a TSS. We'll need this in order to jump from ring 3 to ring 0 for interrupts etc.
+mov edi, FullTSS
+mov eax, 0					;link to previous TSS, not used
+stosd
+mov eax, 0x7FFF0		;our stack pointer. This needs to be over-written every time we switch to ring3 with the current SP position
+stosd
+mov eax, 0x10				;our stack segment
+stosd
+;everything else is unused
+xor eax, eax
+mov ecx, 24
+rep stosd
+
+;Now set up a proper GDT.  We copy over the whole of SimpleGDT using movsd
+;and then add in sections for TSS, user-mode CS and user-mode DS.
+;This is done so we can protect the kernel code from tampering.
+cld										;clear direction flag, we want to write forwards
+mov edi, FullGDT			;movsd destination
+mov esi, SimpleGDT		;movsd source
+mov ecx, 8
+rep movsd
+
+;edi should now be pointing to FullGDT+0x20
+;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
+mov word [edi], 0x68				;limit (TSS size) bits 0-15. 104 bytes = 0x68 (note last 2 fields are word not dword)
+mov word [edi+2], FullTSS		;base (TSS location) bits 0-15.
+mov byte [edi+4], 0					;base (TSS location) bits 0-15.
+mov byte [edi+5], 0x89			;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=1
+mov byte [edi+6], 0x40			;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector], available=1
+mov byte [edi+7], 0x00			;base bits 24-31
+;entry 5 (segment 0x28): User-mode CS
+mov word [edi+8], 0xFFFF    ;limit bits 0-15
+mov word [edi+10], 0x0000	;base bits 0-15
+mov byte [edi+12], 0x0000	;base bits 16-23
+mov byte [edi+13], 0xFA		;access byte. Set Pr, Privl=3, S=1, Ex=1, DC=0, RW=1, Ac=0
+mov byte [edi+14], 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov byte [edi+15], 0x00		;base bits 24-31
+;entry 6 (segment 0x30): User-mode DS
+mov word [edi+16], 0xffff	;limit bits 0-15
+mov word [edi+18],  0x0000	;base bits 0-15
+mov byte [edi+20],  0x00		;base bits 16-23. Start from 0meg.
+mov byte [edi+21],  0xF2		;access byte. Set Pr, Privl=3, S=1, Ex=0, DC=0, RW=1, Ac=0
+mov byte [edi+22], 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov byte [edi+23], 0x00		;base bits 24-31
+
+;OK, that's set up, now tell the processor
+mov edi, FullGDTPtr
+mov word [edi], 0x38				;length in bytes
+mov dword [edi+2], FullGDT	;memory location
+lgdt [edi]
+
+;And tell the processor the correct TSS to use
+mov ax, TSS_Selector
+ltr ax
 
 extern initialise_mmgr
 
@@ -261,50 +349,14 @@ extern mount_root_device
 call mount_root_device
 
 extern scheduler_tick
+extern enter_next_process
 
 idle_loop:
 sti
 call scheduler_tick	;check if we have any work to do
+call enter_next_process	;check if there is another process we need to go to
 hlt									;pause processor until an interrupt comes along. We will be regularly woken by the timer interrupt.
 jmp idle_loop
 
-section .data
+section .rodata
 HelloString: db 'Hello world', 0x0a, 0x0d, 0
-
-;basic GDT configuration. Each entry is 8 bytes long
-SimpleGDT:
-;entry 0: null entry
-dd 0
-dd 0
-;entry 1 (segment 0x08): kernel CS
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x0000	;base bits 16-23
-db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
-db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x00		;base bits 16-23. Start from 0meg.
-db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
-dw 0xFFFF	; limit bits 0-15.
-dw 0x0000	; base bits 0-15
-db 0x0A		; base bits 16-23. Start from 0x0A0000
-db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
-dw 0x68		;limit bits 0-15
-dw 0xff00	;base bits 0-15.
-db 0x10		;base bits 16-23. Start from end of kernel DS
-db 0x84		;access byte. Set Pr, Privl=0, S=0, Ex=0, DC=0, RW=1,Ac=0
-db 0x40		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-
-SimpleGDTPtr:
-dw 0x28		;length in bytes
-dd 0x0		;offset, filled in by code

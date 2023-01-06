@@ -113,6 +113,7 @@ __stack_chk_fail:
 	call PMPrintString
 	jmp $
 
-section .data
+section .rodata
 numerals: db '0123456789abcdef'
+
 overflow: db 'PANIC - kernel stack overflow\r\n'

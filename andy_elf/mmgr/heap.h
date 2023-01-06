@@ -1,5 +1,6 @@
 #include <types.h>
 #include <sys/mmgr.h>
+#include "process.h"
 
 #ifndef __MMGR_HEAP_H
 #define __MMGR_HEAP_H
@@ -26,7 +27,7 @@ typedef struct PointerHeader {
   struct PointerHeader* next_ptr;
 } PointerHeader;
 
-struct HeapZoneStart* initialise_heap(size_t initial_pages);
+struct HeapZoneStart* initialise_heap(struct ProcessTableEntry *process, size_t initial_pages);
 
 //allocates onto the heap of the given process, which must exist.
 void* malloc_for_process(uint16_t pid, size_t bytes);
@@ -37,5 +38,11 @@ void* malloc(size_t bytes);
 void free_for_process(uint16_t pid, void *ptr);
 //frees from the kernel heap; calls free_for_process with pid=0
 void free(void* ptr);
+
+//checks that the given pointer is valid (i.e. has magicnumber in header) and
+//that it is in-use.
+//Returns 1 if it is valid, 0 otherwise. If the `panic` flag is not 0, then it will
+//trigger a kernel panic and not return.
+uint8_t validate_pointer(void *ptr, uint8_t panic);
 
 #endif

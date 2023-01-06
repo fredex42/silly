@@ -4,15 +4,30 @@
 #include <panic.h>
 #include "process.h"
 
-struct HeapZoneStart * initialise_heap(size_t initial_pages)
+/**
+Note the following compilation flags to aid in mmgr debugging:
+MMGR_VERBOSE  - output extra debugging information
+MMGR_VALIDATE_PRE - perform a full validation on the given heap zone before an allocate or free is done
+MMGR_VALIDATE_POST - perform a full validation on the given heap zone after an allocate or free is done
+MMGR_PARANOID - combines MMGR_VALIDATE_PRE and MMGR_VALIDATE_POST to validate before and after validation.
+*/
+#ifdef MMGR_PARANOID
+#define MMGR_VALIDATE_PRE
+#define MMGR_VALIDATE_POST
+#define MMGR_VERBOSE
+#endif
+
+struct HeapZoneStart * initialise_heap(struct ProcessTableEntry *process, size_t initial_pages)
 {
-  kprintf("Initialising kernel heap at %d pages....\r\n", initial_pages);
+  kprintf("Initialising heap at %l pages....\r\n", initial_pages);
 
   //NULL => kernel's paging dir. Note need MP_USER if this is not for kernel
-  void *slab = vm_alloc_pages(NULL, initial_pages, MP_PRESENT|MP_READWRITE);
-  if(!slab) k_panic("Unable to allocate kernel heap!\r\n");
+  uint32_t flags = MP_PRESENT|MP_READWRITE;
+  if(process->root_paging_directory_kmem!=NULL) flags |= MP_USER; //if not allocating for kernel then allow user-write
+  void *slab = vm_alloc_pages(process->root_paging_directory_kmem, initial_pages, flags);
+  if(!slab) k_panic("Unable to allocate heap!\r\n");
 
-  kprintf("Kernel heap start at 0x%x\r\n", slab);
+  kprintf("Heap start at 0x%x\r\n", slab);
 
   struct HeapZoneStart* zone = (struct HeapZoneStart *)slab;
   zone->magic = HEAP_ZONE_SIG;
@@ -29,9 +44,8 @@ struct HeapZoneStart * initialise_heap(size_t initial_pages)
 
   zone->first_ptr = ptr;
 
-  struct ProcessTableEntry *kernel_process = get_process(0);
-  kernel_process->heap_start = zone;
-  kernel_process->heap_allocated = zone->zone_length;
+  process->heap_start = zone;
+  process->heap_allocated = zone->zone_length;
 
   return zone;
 }
@@ -48,6 +62,63 @@ struct PointerHeader* _last_pointer_of_zone(struct HeapZoneStart* zone)
   return ptr;
 }
 
+uint8_t validate_pointer(void *ptr, uint8_t panic)
+{
+  struct PointerHeader *hdr = ptr - sizeof(struct PointerHeader);
+  if(hdr->magic != HEAP_PTR_SIG) {
+    kprintf("ERROR pointer 0x%x is not valid, magicnumber not present\r\n", ptr);
+    if(panic) {
+      k_panic("Heap corruption detected");
+    } else {
+      return 0;
+    }
+  }
+
+  if(hdr->in_use==0) {
+    kprintf("ERROR pointer 0x%x is not valid, marked as not in use\r\n", ptr);
+    if(panic) {
+      k_panic("Heap corruption detected");
+    } else {
+      return 0;
+    }
+  }
+  #ifdef MMGR_VERBOSE
+  kprintf("DEBUG pointer 0x%x is valid\r\n", ptr);
+  #endif
+  return 1;
+}
+
+void validate_zone(struct HeapZoneStart* zone)
+{
+  struct PointerHeader *ptr = zone->first_ptr;
+  struct PointerHeader *prev_ptr = NULL;
+
+  size_t i=0;
+  #ifdef MMGR_VERBOSE
+  kprintf("> START OF ZONE\r\n");
+  #endif
+  while(ptr!=NULL) {
+    #ifdef MMGR_VERBOSE
+    kprintf(">    Zone 0x%x block index %l at 0x%x block length is 0x%x in_use %d\r\n", zone, i, ptr, ptr->block_length, (uint16_t)ptr->in_use);
+    #endif
+    if(prev_ptr!=NULL) {
+      if((void *)prev_ptr + prev_ptr->block_length > (void*) ptr) {
+        kprintf("!!!!! OVERLAPPING BLOCK DETECTED\r\n");
+        k_panic("Heap corruption detected.\r\n");
+      }
+    }
+    if(ptr->block_length > zone->zone_length) {
+      kprintf("!!!   OVERLARGE BLOCK DETECTED, block 0x%x zone 0x%x\r\n", ptr->block_length, zone->allocated);
+      k_panic("Heap corruption detected.\r\n");
+    }
+    i++;
+    prev_ptr = ptr;
+    ptr=ptr->next_ptr;
+  }
+  #ifdef MMGR_VERBOSE
+  kprintf("> END OF ZONE\r\n");
+  #endif
+}
 /**
 Allocates page_count more RAM pages. If they are continuous with the given heap zone,
 then they are added onto it.  Otherwise, a new heap zone is created.
@@ -62,19 +133,19 @@ struct HeapZoneStart* _expand_zone(struct HeapZoneStart* zone, size_t page_count
   if(!slab) return NULL;
 
   if((char*)zone + zone->zone_length == (char *)slab) {
-    kprintf("DEBUG _expand_zone zone is continous\r\n");
     zone->zone_length+=page_count*PAGE_SIZE;
     zone->dirty=1;
     struct PointerHeader* ptr = _last_pointer_of_zone(zone);
     if(ptr->in_use) { //end of the zone is in use, we should add another PointerHeader after it.
 
     } else { //end of the zone is not in use, we should expand the free pointer region
+      #ifdef MMGR_VERBOSE
       kprintf("DEBUG _expand_zone last block not in use, expanding");
+      #endif
       ptr->block_length += page_count*PAGE_SIZE;
       return zone;
     }
   } else {
-    kprintf("DEBUG _expand_zone new memory is discontinous, making a new zone\r\n");
     struct HeapZoneStart *new_zone = (struct HeapZoneStart*)slab;
     new_zone->magic = HEAP_ZONE_SIG;
     new_zone->zone_length = page_count*PAGE_SIZE;
@@ -102,8 +173,6 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
   size_t remaining_length = 0;
   struct PointerHeader* new_ptr=NULL;
 
-  kprintf("DEBUG allocating %d bytes into zone 0x%x...\r\n", bytes, zone);
-
   struct PointerHeader *p=zone->first_ptr;
   while(1) {
     if(p->magic!=HEAP_PTR_SIG) k_panic("Kernel heap corrupted\r\n");
@@ -112,34 +181,46 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
       p=p->next_ptr;
       if(p==NULL) break; else continue;
     }
+
+    #ifdef MMGR_VERBOSE
+    kprintf("DEBUG Block at 0x%x of zone 0x%x not in use.\r\n", p, zone);
+    kprintf("DEBUG Free block length is 0x%x\r\n", p->block_length);
+    #endif
+
     //ok, this block is not in use, can we fit this alloc into it?
     if(p->block_length<bytes){
       p = p->next_ptr;
       if(p==NULL) break; else continue;
     }
 
-    kprintf("DEBUG proceeding with alloc\r\n");
     //great, this alloc fits.
+    //remaining_length takes us right up to the next block so we must make sure we have enough space for the buffer and the new header to go with it.
+
     remaining_length = p->block_length - bytes;
-    kprintf("DEBUG remaining length is 0x%x (%d)\r\n", remaining_length, remaining_length);
-    p->block_length = bytes + sizeof(struct PointerHeader);
+    p->block_length = bytes;
     p->in_use = 1;
     zone->allocated += bytes;
     zone->dirty = 1;
 
-    if(remaining_length>sizeof(struct PointerHeader)) {
+    if(remaining_length > 2*sizeof(struct PointerHeader)) {
       //we can fit another block in the remaining space.
       new_ptr = (struct PointerHeader *)((void *)p + sizeof(struct PointerHeader) + p->block_length);
+
       new_ptr->magic = HEAP_PTR_SIG;
-      new_ptr->block_length = remaining_length + sizeof(struct PointerHeader);
+      //the existing remaining_length does NOT include the existing header, so we should subtract 2* the header size from it
+      new_ptr->block_length = remaining_length - 2*sizeof(struct PointerHeader);
       new_ptr->in_use = 0;
       new_ptr->next_ptr = p->next_ptr;
       p->next_ptr = new_ptr;
-    } else {
-      kputs("INFO not enough remaining length to allocate a new block\r\n");
     }
+
     //return pointer to the data zone
-    return (void *)p + sizeof(struct PointerHeader);
+    void *ptr= (void *)p + sizeof(struct PointerHeader);
+    #ifdef MMGR_VERBOSE
+    kprintf("DEBUG Success, block start is 0x%x and ptr is 0x%x\r\n", p, ptr);
+    #endif
+
+    return ptr;
   }
   kputs("ERROR ran out of space in the zone, this should not happen\r\n");
   return NULL;
@@ -161,7 +242,9 @@ void _zone_dealloc(struct HeapZoneStart *zone, void* ptr)
 
   if(ptr_info->next_ptr && ptr_info->next_ptr->in_use==0) {
     //there is a following block. If this is also free, then we should coalesce them to fight fragmentation.
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG Pointer 0x%x following 0x%x is free too, coalescing\r\n", ptr_info->next_ptr, ptr_info);
+    #endif
     if(ptr_info->next_ptr->magic != HEAP_PTR_SIG) {
       kprintf("ERROR Pointer at 0x%x following 0x%x appears corrupted\r\n", ptr_info->next_ptr, ptr_info);
       return;
@@ -197,6 +280,12 @@ void heap_free(struct HeapZoneStart *heap, void* ptr)
     return;
   }
   _zone_dealloc(zone, ptr);
+  #ifdef MMGR_VERBOSE
+  kprintf("INFO Freed block 0x%x\r\n", ptr - sizeof(struct PointerHeader));
+  #endif
+  #ifdef MMGR_VALIDATE_POST
+  validate_zone(zone);
+  #endif
 }
 
 /**
@@ -209,14 +298,32 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
   struct HeapZoneStart* z=heap;
   while(1) {
     if(z->magic!=HEAP_ZONE_SIG) k_panic("Kernel heap corrupted\r\n");
+    #ifdef MMGR_VERBOSE
+    kprintf("DEBUG heap_alloc space is %l / %l for zone 0x%x\r\n", z->allocated, z->zone_length, z);
+    #endif
+
     if(z->zone_length - z->allocated > bytes) {
-      return _zone_alloc(z, bytes);
+      #ifdef MMGR_VALIDATE_PRE
+      kprintf("DEBUG !! Pre-alloc\r\n");
+      validate_zone(z);
+      #endif
+      void* result = _zone_alloc(z, bytes);
+      #ifdef MMGR_VALIDATE_POST
+      kprintf("DEBUG !! Post-alloc\r\n");
+      validate_zone(z);
+      #endif
+      #ifdef MMGR_VERBOSE
+      kprintf("INFO heap_alloc used space in zone 0x%x is now 0x%x (%l) out of 0x%x\r\n", z, z->allocated, z->allocated, z->zone_length);
+      #endif
+      return result;
     }
     if(z->next_zone==NULL) break;
     z=z->next_zone;
   }
 
+  #ifdef MMGR_VERBOSE
   kputs("DEBUG No existing heap zones had space, expanding last zone\r\n");
+  #endif
   //if we get here, then no zones had available space. z should be set to the last zone.
   size_t pages_required = bytes / PAGE_SIZE;
   //always allocate at least MIN_ZONE_SIZE_PAGES
@@ -224,7 +331,17 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
   z = _expand_zone(z, pages_to_alloc);
   //at this point, z might be the previous zone; it might be a new one; or it might be NULL if something went wrong.
   if(!z) return NULL;
-  return _zone_alloc(z, bytes);
+  void* result = _zone_alloc(z, bytes);
+  #ifdef MMGR_VERBOSE
+  kprintf("INFO Allocated block 0x%x\r\n", result - sizeof(struct PointerHeader));
+  #endif
+  #ifdef MMGR_VALIDATE_POST
+  validate_zone(z);
+  #endif
+  #ifdef MMGR_VERBOSE
+  kprintf("INFO heap_alloc used space in zone 0x%x is now 0x%x (%l) out of 0x%x\r\n", z, z->allocated, z->allocated, z->zone_length);
+  #endif
+  return result;
 }
 
 void* malloc_for_process(uint16_t pid, size_t bytes)

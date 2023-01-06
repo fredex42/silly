@@ -1,6 +1,8 @@
 #include <types.h>
 #include <fs/fat_fileops.h>
 #include <fs/vfat.h>
+#include <fs/fat_fs.h>
+
 #ifndef __FS_FAT_DIROPS_H
 #define __FS_FAT_DIROPS_H
 
@@ -27,5 +29,7 @@ which attribute bits are set. `buf` must be a pointer to a string buffer 8 bytes
 The function will null-terminate it.
 */
 void vfat_decode_attributes(uint8_t attrs, char *buf);
+
+void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, char *xtn, void *extradata, void (*callback)(uint8_t status, DirectoryEntry *dir_entry, char *extradata));
 
 #endif

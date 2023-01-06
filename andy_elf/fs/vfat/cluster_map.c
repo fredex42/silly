@@ -19,7 +19,11 @@ uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_clust
     case 16:
       offset = current_cluster_num*2;
       uint16_t wvalue = ((uint16_t *)m->buffer)[current_cluster_num];
-      if(wvalue==0xFFFF) {
+      #ifdef VFAT_VERBOSE
+      kprintf("DEBUG vfat_cluster_map_next_cluster current_cluster_num is 0x%x (sector 0x%x) at offset 0x%x giving next cluster as 0x%x (sector 0x%x)\r\n", current_cluster_num, current_cluster_num*4, offset, (uint32_t) wvalue, ((uint32_t) wvalue)*4);
+      #endif
+      
+      if(wvalue==0xFFFF || wvalue==0) {
         return CLUSTER_MAP_EOF_MARKER;
       } else {
         return (uint32_t) wvalue;

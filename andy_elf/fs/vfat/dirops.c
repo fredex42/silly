@@ -4,13 +4,78 @@
 #include <fs/fat_fileops.h>
 #include <fs/fat_dirops.h>
 #include <fs/fat_fs.h>
+#include <fs/vfat.h>
 #include <stdio.h>
 #include <errors.h>
+#include <string.h>
 
-struct opendir_transient_data {
-  void* extradata;
-  void(*callback)(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, void* extradata);
+struct find_8point3_file_transient_data {
+  char filename[9];
+  char xtn[4];
+  void *extradata;
+  void (*callback)(uint8_t status, DirectoryEntry *dir_entry, char *extradata);
 };
+
+void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, void* extradata)
+{
+  struct find_8point3_file_transient_data* transient = (struct find_8point3_file_transient_data *)extradata;
+  size_t i=0;
+  char printable[64];
+
+  if(status!=0) {
+    if(dir!=NULL) vfat_dir_close(dir);
+    if(fp!=NULL) vfat_close(fp);
+
+    transient->callback(status, NULL, transient->extradata);
+    free(transient);
+    return;
+  }
+
+  DirectoryEntry *entry = vfat_read_dir_next(dir);
+  size_t filename_len = strlen(transient->filename);
+  size_t xtn_len = strlen(transient->xtn);
+
+  while(entry!=NULL) {
+    //LFN chunks have a different data format
+    if(entry->attributes != VFAT_ATTR_LFNCHUNK && strncmp(entry->short_name, transient->filename, filename_len)==0 && strncmp(entry->short_xtn, transient->xtn, xtn_len)==0) {
+      //we found it! Might as well free the directory contents before we fire the callback, but since `entry` is a reference
+      //into `dir`'s buffer we must copy it first
+      vfat_get_printable_filename(entry, printable, 64);
+      kprintf("Found file at entry %d: %s\r\n", i, printable);
+      DirectoryEntry *copied_entry = (DirectoryEntry *)malloc(sizeof(DirectoryEntry));
+      memcpy(copied_entry, entry, sizeof(DirectoryEntry));
+      vfat_dir_close(dir);
+      vfat_close(fp);
+      transient->callback(E_OK, copied_entry, extradata);
+      free(transient);
+      return;
+    }
+    entry = vfat_read_dir_next(dir);
+    i++;
+  }
+  //we did not find anything :(
+  vfat_dir_close(dir);
+  vfat_close(fp);
+  transient->callback(E_OK, NULL, extradata);
+  free(transient);
+}
+
+void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, char *xtn, void *extradata, void (*callback)(uint8_t status, DirectoryEntry *dir_entry, char *extradata))
+{
+  struct find_8point3_file_transient_data* transient = (struct find_8point3_file_transient_data *)malloc(sizeof(struct find_8point3_file_transient_data));
+  if(!transient) {
+    callback(E_NOMEM, NULL, extradata);
+    return;
+  }
+
+  memset(transient, 0, sizeof(struct find_8point3_file_transient_data));
+  strncpy(transient->filename, filename, 9);
+  strncpy(transient->xtn, xtn, 4);
+
+  transient->extradata = extradata;
+  transient->callback = callback;
+  vfat_opendir_root(fs_ptr, (void *)transient, &_vfat_find_8point3_dir_opened);
+}
 
 void vfat_decode_attributes(uint8_t attrs, char *buf)
 {
@@ -58,20 +123,27 @@ void vfat_decode_attributes(uint8_t attrs, char *buf)
 
 void vfat_get_printable_filename(const DirectoryEntry *entry, char *buf, size_t bufsize)
 {
+  memset(buf, 0, bufsize);
+
   register size_t i;
   for(i=0;i<8;i++) {
     if(entry->short_name[i]==0x20 || entry->short_name[i]==0) break;
     buf[i] = entry->short_name[i];
   }
   if(entry->short_xtn[0]!=0x20 && entry->short_xtn[0]!=0) {
-    i++;
     buf[i] = '.';
     for(register size_t j=0; j<3; j++) {
       if(entry->short_xtn[j]==0x20 || entry->short_xtn[j]==0) break;
       buf[i+j+1] = entry->short_xtn[j];
     }
   }
+  buf[bufsize-1] = 0; //ensure null-termination
 }
+
+struct opendir_transient_data {
+  void* extradata;
+  void(*callback)(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, void* extradata);
+};
 
 DirectoryEntry* vfat_read_dir_next(VFatOpenDir *dir)
 {
@@ -147,7 +219,7 @@ void vfat_opendir_root(FATFS *fs_ptr, void* extradata, void(*callback)(VFatOpenF
     root_dir_size = fs_ptr->bpb->max_root_dir_entries * 32;
   }
 
-  VFatOpenFile *fp = vfat_open_by_location(fs_ptr, start_location_cluster, root_dir_size);
+  VFatOpenFile *fp = vfat_open_by_location(fs_ptr, start_location_cluster, root_dir_size, 0);
   if(!fp) {
     callback(NULL, E_NOMEM, NULL, extradata);
     return;
