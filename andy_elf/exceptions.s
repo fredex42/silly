@@ -62,7 +62,6 @@ CreateIA32IDTEntry:
 ;output the given message and hang.
 ;expects the message pointer in the string table in eax, it applies the string table offset itself. Does not return.
 FatalMsg:
-	sti
 	mov esi, eax
 	call PMPrintString
 	nop

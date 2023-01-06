@@ -40,9 +40,9 @@ LoadElfBase:		;break 0x7d24
 	pop si
 
 
-	;now the code is loaded, load in the data from 0xc000
+	;now the code is loaded, load in the data
 	;we have to assume that the .data section is immediately after the .text section
-	mov di, word [ds:si+0x20]	;start of the section header table. break 0x7d52
+	mov di, word [ds:si+0x20]	;start of the section header table.
 	add di, si			;add it to the base offset
 	add di, 0x50			;we are making an assumption here that the structure of the file has the .data section here
 	mov cx, word [ds:di+0x14]	;size, in bytes of the section
@@ -52,7 +52,7 @@ LoadElfBase:		;break 0x7d24
 	add dx, si
 	mov si, dx
 
-	mov ax, 0x130			;COPY DEST move to conventional memory at 0x11000
+	mov ax, 0x130			;COPY DEST move to conventional memory at 0x13000
 	mov es, ax
 	mov di, 0
 	rep movsw

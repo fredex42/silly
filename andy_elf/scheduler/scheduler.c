@@ -156,6 +156,12 @@ void enter_next_process()
   }
 
   //Right, we have something.
+  if(temp==last_run_pid) {
+    //we are going back to the interrupted process so just return
+    sti();
+    return;
+  }
+  //otherwise we must switch process.
   last_run_pid = temp;
   kprintf("DEBUG Exiting into process 0x%x\r\n", process);
   exit_to_process(process);

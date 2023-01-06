@@ -15,8 +15,10 @@ global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 
 jmp _start
 
-; We want to keep the GDT and TSS where we can easily access them with 16-bit offsets
-; to make life easier with the assembler / linker.
+; We want to keep the GDT where we can easily access them with 16-bit offsets
+; to make life easier with the assembler / linker, but we need more functionality later.
+; SimpleGDT is used to bootstrap protected mode, then later on the GDT is shifted to "FullGDT" which
+; includes ring3 code/data selectors and a Task Segment Selector as well.
 
 ;basic GDT configuration. Each entry is 8 bytes long
 SimpleGDT:
@@ -90,7 +92,7 @@ int 0x10
 mov eax, cr0
 or al, 1
 mov cr0, eax	;hello protected mode
-jmp 0x08:_pm_start	;Here goes nothing! break 0x00007cb4
+jmp 0x08:_pm_start	;Here goes nothing!
 
 ;retrieve the BIOS memory map. This must be compiled and run in 16-bit mode, easiest way
 ;is to call it before the switch to PM.
@@ -146,106 +148,85 @@ mov es, ax
 mov edi, IDivZero
 mov bl, 0x0F	;trap gate (Present flag is set by CreateIA32IDTEntry)
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IDebug
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, INMI
 mov bl, 0x0E	;interrupt gate
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IBreakPoint
 mov bl, 0x0F	;trap gate
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IOverflow
 mov bl, 0x0F	;trap gate
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IBoundRange
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IOpcodeInval
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IDevNotAvail
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IDoubleFault
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IInvalidTSS
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, ISegNotPresent
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IStackSegFault
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IGPF
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IPageFault
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IFloatingPointExcept
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IAlignmentCheck
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IMachineCheck
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, ISIMDFPExcept
 mov bl, 0x0F
-mov cl,3	;allow ring3
 xor cx, cx
 call CreateIA32IDTEntry
 mov edi, IVirtExcept
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 ;next 8 interrupts are all reserved
 mov dx, 9
@@ -253,7 +234,6 @@ _idt_reserv_loop:
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 dec dx
 test dx, dx	;got to 0 yet?
@@ -261,21 +241,19 @@ jnz _idt_reserv_loop
 mov edi, ISecurityExcept
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 mov edi, IReserved
 mov bl, 0x0F
 xor cx, cx
-mov cl,3	;allow ring3
 call CreateIA32IDTEntry
 ;That is the end of the system exceptions part. Hardware interrupts are configured in the 8259pic driver.
-;Ensure that all other interrupts are configured to point to the "ignored" handler
+;Ensure that all other interrupts are initialised to point to the "ignored" handler
 mov dx, 0xE0
 _idt_reserv_loop_two:
 mov edi, IReserved
 mov bl, 0x0E
 xor cx, cx
-mov cl,3	;allow ring3
+mov cl, 3			;allow ring3
 call CreateIA32IDTEntry
 dec dx
 test dx, dx	;got to 0 yet?
@@ -311,7 +289,7 @@ mov esi, SimpleGDT		;movsd source
 mov ecx, 8
 rep movsd
 
-;edi should not be pointing to FullGDT+0x20
+;edi should now be pointing to FullGDT+0x20
 ;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
 mov word [edi], 0x68				;limit (TSS size) bits 0-15. 104 bytes = 0x68 (note last 2 fields are word not dword)
 mov word [edi+2], FullTSS		;base (TSS location) bits 0-15.

@@ -15,7 +15,6 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
   kprintf("INFO Initialising process table\r\n");
   size_t pages_required = (sizeof(struct ProcessTableEntry) * PID_MAX) / PAGE_SIZE;
 
-  //kprintf("DEBUG require %d pages of RAM for process table\r\n", pages_required);
   process_table = (struct ProcessTableEntry*) vm_alloc_pages(NULL, pages_required+1, MP_PRESENT|MP_READWRITE);
 
   kprintf("INFO Process table is at 0x%x\r\n", process_table);
@@ -49,7 +48,6 @@ This should be treated as non-interruptable and therefore called with interrupts
 */
 struct ProcessTableEntry *get_next_available_process()
 {
-  //kprintf("DEBUG get_next_available_process process table at 0x%x, last assigned PID is %d\r\n", process_table, last_assigned_processid);
   for(uint16_t i=last_assigned_processid+1; i<PID_MAX; i++) {
     if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("Process table corruption detected\r\n");
     if(process_table[i].status==PROCESS_NONE) {
@@ -103,11 +101,10 @@ struct ProcessTableEntry* new_process()
 
   //identity-map the kernel space so interrupts etc. will work
   uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &phys_ptrs[1], 1);
-  //memset(page_one, 0, PAGE_SIZE);
-  //mb();
-  //FIXME... need MP_USER on the IDT but MP_READWRITE (NOT MP_USER) on the GDT. So they need to be on different pages
-  //this page contains the GDT and IDT tables
+
+  //this page contains the GDT and TSS tables
   page_one[0] = MP_PRESENT | MP_READWRITE;  //kernel needs r/w in order to modify the access flag in the GDT. User-mode blocked.
+  //this page contains the IDT
   page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
   for(size_t i=2;i<256;i++) {
     page_one[i] = (i << 12) | MP_PRESENT | MP_READWRITE;  //r/w only applies to kernel here of course because no MP_USER
@@ -117,7 +114,6 @@ struct ProcessTableEntry* new_process()
     page_one[i] = 0;
   }
 
-  //k_unmap_page_ptr(NULL, page_one);
   mb();
 
   //now set up stack at the end of the process's VRAM

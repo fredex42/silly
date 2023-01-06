@@ -91,7 +91,6 @@ void _fs_root_device_mounted(struct fat_fs *fs_ptr, uint8_t status, void *extrad
   kprintf("INFO Root FS mount completed with status %d\r\n", status);
   device_fs_map[0] = fs_ptr;
 
-  //vfat_opendir_root(fs_ptr, NULL, &_fs_root_dir_opened);
   vfat_find_8point3_in_root_dir(fs_ptr, "SHELL", "APP", NULL, &_fs_shell_app_found);
 }
 

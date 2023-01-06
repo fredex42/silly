@@ -122,7 +122,7 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
       fp->sector_offset_in_cluster = 0;
       fp->current_cluster_number = vfat_cluster_map_next_cluster(fp->parent_fs->cluster_map, fp->current_cluster_number);
     }
-    //kprintf("DEBUG at sector offset %d in cluster 0x%x\r\n", fp->sector_offset_in_cluster, fp->current_cluster_number);
+
     if(fp->current_cluster_number==CLUSTER_MAP_EOF_MARKER) {
       //we are done!
       free(buffer);
@@ -163,7 +163,7 @@ void vfat_read_async(VFatOpenFile *fp, void* buf, size_t length, void* extradata
   t->fp = fp;
   t->requested_length = length;
   t->buffer_write_offset = 0;
-  t->disk_read_offset = fp->byte_offset_in_sector;  //FIXME we should be able to read from arbitary location
+  t->disk_read_offset = fp->byte_offset_in_sector;
 
   void* sector_buffer = malloc(ATA_SECTOR_SIZE);
 
