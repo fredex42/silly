@@ -345,6 +345,9 @@ sti
 extern initialise_ata_driver
 call initialise_ata_driver
 
+extern init_native_api
+call init_native_api
+
 extern mount_root_device
 call mount_root_device
 

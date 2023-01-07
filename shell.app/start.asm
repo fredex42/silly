@@ -4,8 +4,10 @@ section .text
 global _start
 
 _start:
-  mov eax, 0xFF00FF00
-  mov edi, testmsg
+  mov eax, 0x0000000B ;"API write()"
+  mov bx,  0x01       ;file descriptor
+  mov ecx, 19         ;string length
+  mov esi, testmsg    ;string pointer
   int 0x60
 
   jmp $
@@ -13,7 +15,7 @@ _start:
 section .rodata
 
 testmsg:
-db "Test"
+db "Hello from ring 3\r\n"
 
 section .data
 

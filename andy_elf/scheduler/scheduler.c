@@ -163,6 +163,12 @@ void enter_next_process()
   }
   //otherwise we must switch process.
   last_run_pid = temp;
+  active_process = temp;
   kprintf("DEBUG Exiting into process 0x%x\r\n", process);
   exit_to_process(process);
+}
+
+pid_t get_active_pid()
+{
+  return active_process;
 }

@@ -1,4 +1,4 @@
-.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils
+.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api
 
 all: test.elf
 
@@ -15,6 +15,7 @@ clean:
 	make -C mmgr clean
 	make -C process clean
 	make -C utils clean
+	make -C native_api clean
 
 kickoff.o: kickoff.s
 	nasm -f elf32 kickoff.s
@@ -73,14 +74,17 @@ process:
 utils:
 	make -C utils
 
+native_api:
+	make -C native_api
+
 test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o mmgr 8259pic acpi drivers scheduler fs process utils
+		cpuid.o mmgr 8259pic acpi drivers scheduler fs process utils native_api
 	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o fs/fs.o \
 		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
-		-Ldrivers/early_serial -learly_serial -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
+		-Ldrivers/early_serial -learly_serial -Lnative_api -lnative_api -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
 		-Ttext 0x7E00 -Tdata 0x13000  \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
 
