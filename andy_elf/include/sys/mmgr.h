@@ -115,4 +115,6 @@ Arguments:
 */
 uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off);
 
+uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys);
+
 #endif

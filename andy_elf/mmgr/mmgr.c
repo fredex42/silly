@@ -709,3 +709,38 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   for(i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
   for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
 }
+
+uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys)
+{
+  uint32_t *app_paging_dir_root_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, root_dir_phys, 1);
+
+  app_paging_dir_root_kmem[0] = (uint32_t)page_one_phys | MP_PRESENT | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
+
+  //copy over the content of the first page of the kernel paging directory to the application paging directory
+  uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, page_one_phys, 1);
+
+  memcpy_dw(page_one, FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE/8);
+
+  //this page contains the IDT
+  page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
+
+  // //identity-map the kernel space so interrupts etc. will work.
+  //
+  // uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &phys_ptrs[1], 1);
+  //
+  // //this page contains the GDT and TSS tables
+  // page_one[0] = MP_PRESENT | MP_READWRITE;  //kernel needs r/w in order to modify the access flag in the GDT. User-mode blocked.
+  // //this page contains the IDT
+  // page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
+  // //FIXME: kernel shouldn't be able to self-modify in this range really, setup should be done by mmgr to properly give access.
+  // for(size_t i=2;i<256;i++) {
+  //   page_one[i] = (i << 12) | MP_PRESENT | MP_READWRITE;  //r/w only applies to kernel here of course because no MP_USER
+  // }
+  //
+  // for(size_t i=256;i<512;i++) { //kernel heap
+  //   page_one[i] = (i << 12) | ;
+  // }
+
+  mb();
+  return app_paging_dir_root_kmem;
+}

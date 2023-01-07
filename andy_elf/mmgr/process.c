@@ -96,25 +96,7 @@ struct ProcessTableEntry* new_process()
   e->root_paging_directory_phys = phys_ptrs[0];
   kprintf("DEBUG process paging directory at physical address 0x%x\r\n", e->root_paging_directory_phys);
 
-  e->root_paging_directory_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &e->root_paging_directory_phys, 1);
-  ((uint32_t *)e->root_paging_directory_kmem)[0] = (uint32_t)phys_ptrs[1] | MP_PRESENT | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
-
-  //identity-map the kernel space so interrupts etc. will work
-  uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &phys_ptrs[1], 1);
-
-  //this page contains the GDT and TSS tables
-  page_one[0] = MP_PRESENT | MP_READWRITE;  //kernel needs r/w in order to modify the access flag in the GDT. User-mode blocked.
-  //this page contains the IDT
-  page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
-  for(size_t i=2;i<256;i++) {
-    page_one[i] = (i << 12) | MP_PRESENT | MP_READWRITE;  //r/w only applies to kernel here of course because no MP_USER
-  }
-
-  for(size_t i=256;i<1024;i++) {
-    page_one[i] = 0;
-  }
-
-  mb();
+  e->root_paging_directory_kmem = initialise_app_pagingdir(e->root_paging_directory_phys, phys_ptrs[1]);
 
   //now set up stack at the end of the process's VRAM
   kputs("DEBUG new_process setting up process stack\r\n");
@@ -127,6 +109,12 @@ struct ProcessTableEntry* new_process()
   if(e->stack_kmem_ptr==NULL) {
     kputs("ERROR new_process could not map process stack into kmem for setup\r\n");
   }
+
+  //finally setup stin, stdout, stderr
+  e->files[0].type = FP_TYPE_CONSOLE;
+  e->files[1].type = FP_TYPE_CONSOLE;
+  e->files[2].type = FP_TYPE_CONSOLE;
+
   return e;
 }
 
