@@ -19,6 +19,9 @@ extern api_open
 extern api_read
 extern api_write
 
+;scheduler/lowlevel.asm
+extern enter_kernel_context
+
 ;Purpose - initialise the native API by attaching the landing pad function to
 ; the int 0x60 interrupt
 init_native_api:
@@ -43,6 +46,7 @@ init_native_api:
 ;this interrupt handler is called for every native API call. Its job is to dispatch
 ;the call into the necessary handler (usually a C function)
 native_api_landing_pad:
+  call enter_kernel_context     ;this should switch to kernel context and then land here.
   cmp eax, API_EXIT
   jnz .napi_2
   call api_terminate_current_process ;does not return

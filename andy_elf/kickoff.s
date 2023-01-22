@@ -1,6 +1,7 @@
 [BITS 16]
 section .text
 global _start
+global idle_loop			;NOTE this is NOT a function but a label, a place that gets returned to.
 
 ; remove this definition to disable serial console (also remove in basic_console.s)
 %define SERIAL_CONSOLE 1

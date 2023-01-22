@@ -712,12 +712,12 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
 
 uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys)
 {
-  uint32_t *app_paging_dir_root_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, root_dir_phys, 1);
+  uint32_t *app_paging_dir_root_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &root_dir_phys, 1);
 
   app_paging_dir_root_kmem[0] = (uint32_t)page_one_phys | MP_PRESENT | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
 
   //copy over the content of the first page of the kernel paging directory to the application paging directory
-  uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, page_one_phys, 1);
+  uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &page_one_phys, 1);
 
   memcpy_dw(page_one, FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE/8);
 

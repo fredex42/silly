@@ -42,6 +42,22 @@ struct ProcessTableEntry* get_process(uint16_t pid)
   return e;
 }
 
+uint16_t get_current_processid()
+{
+  return current_running_processid;
+}
+
+struct ProcessTableEntry* get_current_process()
+{
+  return get_process(get_current_processid());
+}
+
+//INTERNAL USE ONLY! Called when entering kernel context.
+uint16_t set_current_process_id(uint16_t pid)
+{
+  current_running_processid = pid;
+}
+
 /**
 Scans the process table to find a free slot.
 This should be treated as non-interruptable and therefore called with interrupts off.
@@ -103,7 +119,7 @@ struct ProcessTableEntry* new_process()
   void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[2], 1023, 1023, MP_USER|MP_READWRITE);
   kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
   e->stack_page_count = 1;
-  e->esp = 0xFFFFFFFF;
+  e->saved_regs.esp = 0xFFFFFFF8;
   e->stack_phys_ptr = phys_ptrs[2];
   e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[2], 1);
   if(e->stack_kmem_ptr==NULL) {
@@ -159,14 +175,14 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   uint32_t *process_stack_temp = (uint32_t *)((void *)new_entry->stack_kmem_ptr + 0x0FFB);  //one dword below top of stack
   *process_stack_temp = GDT_USER_DS | 3;  //user DS
   process_stack_temp -= 1;    //moves back 1 uint32_t i.e. 4 bytes
-  *process_stack_temp = new_entry->esp - 0x04;           //process stack pointer, once return data is popped off
+  *process_stack_temp = new_entry->saved_regs.esp - 0x04;           //process stack pointer, once return data is popped off
   process_stack_temp -= 1;
   *process_stack_temp = (1<<12) | (1<<13) | (1<<9);              //EFLAGS. Set IOPL to 3, IF is 1 and everything else 0.
   process_stack_temp -= 1;
   *process_stack_temp = GDT_USER_CS | 3;  //user CS
   process_stack_temp -= 1;
   *process_stack_temp = elf->file_header->i386_subheader.entrypoint;
-  new_entry->esp -= 20;
+  new_entry->saved_regs.esp -= 0x20;
   //the stack should now be ready for `iret`, we don't need access to it any more.
   k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
   new_entry->stack_kmem_ptr = NULL;

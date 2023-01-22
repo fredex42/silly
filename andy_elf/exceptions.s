@@ -78,85 +78,95 @@ IDivZero:
 	mov ds, ax
 	call c_except_div0	;helpfully, the CPU has already arranged a stack frame for us that is compatible with GCC
 	mov eax, DivZeroMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IDebug:
-	mov ax, 0x10
-	mov ds, ax
-	mov eax, DebugMsg
-	jmp FatalMsg
+	; push ds
+	; push es
+	; push esi
+	; push eax
+	; mov ax, 0x10
+	; mov ds, ax
+	; mov es, ax
+	; mov esi, DebugMsg
+	; call PMPrintString
+	; pop eax
+	; pop esi
+	; pop es
+	; pop ds
+	iret
 
 INMI:	;technically an interrupt, not a trap
 	mov ax, 0x10
 	mov ds, ax
 	mov eax, NMIMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IBreakPoint:
 	mov ax, 0x10
 	mov ds, ax
 	mov eax, BreakPointMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IOverflow:
 	mov ax, 0x10
 	mov ds, ax
 	mov eax, OverflowMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IBoundRange:
 	mov ax, 0x10
 	mov ds, ax
 	mov eax, BoundRangeMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IOpcodeInval:
 	mov ax, 0x10
 	mov ds, ax
   call c_except_invalidop
 	mov eax, InvalidOpcodeMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IDevNotAvail:
 	mov ax, 0x10
 	mov ds, ax
 	mov eax, DevNotAvailMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IDoubleFault:	;leaves error code
 	mov ax, 0x10
 	mov ds, ax
 	pop edx	;move error code into edx
 	mov eax, DoubleFaultMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IInvalidTSS:	;leaves error code
 	mov ax, 0x10
 	mov ds, ax
 	pop edx
 	mov eax, InvalidTSSMsg
-	jmp FatalMsg
+	call FatalMsg
 
 ISegNotPresent:	;leaves error code
 	mov ax, 0x10
 	mov ds, ax
 	pop edx
 	mov eax, SegmentNotPresentMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IStackSegFault: ;leaves error code
 	mov ax, 0x10
 	mov ds, ax
 	pop edx
 	mov eax, StackSegmentFaultMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IGPF:		;leaves error code
 	mov ax, 0x10
 	mov ds, ax
 	call c_except_gpf
 	mov eax, GPFMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IPageFault:	;leaves error code
 	mov ax, 0x10
@@ -165,32 +175,32 @@ IPageFault:	;leaves error code
 	push eax
 	call c_except_pagefault
 	mov eax, PageFaultMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IFloatingPointExcept:
 	mov eax, FPExceptMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IAlignmentCheck:
 	pop dx
 	mov eax, AlignCheckMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IMachineCheck:
 	mov eax, MachineCheckMsg
-	jmp FatalMsg
+	call FatalMsg
 
 ISIMDFPExcept:
 	mov eax, SIMFPExceptMsg
-	jmp FatalMsg
+	call FatalMsg
 
 IVirtExcept:
 	mov eax, VirtExceptMsg
-	jmp FatalMsg
+	call FatalMsg
 
 ISecurityExcept:
 	mov eax, SecExceptMsg
-	jmp FatalMsg
+	call FatalMsg
 
 section .data
 ;all these errors are fatal if the occur in the kernel. see https://wiki.osdev.org/Exceptions
