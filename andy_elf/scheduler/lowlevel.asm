@@ -4,6 +4,7 @@ global exit_to_process
 global enter_kernel_context
 
 extern get_current_process  ;defined in process.c  Returns the process struct for the current PID
+extern idle_loop            ;defined in kickoss.s. NOT a function, this is our "return address"
 
 %include "../memlayout.inc"
 
@@ -15,6 +16,7 @@ extern get_current_process  ;defined in process.c  Returns the process struct fo
 exit_to_process:
   cli
   xor eax, eax
+
   mov ax, 0x33      ;FIXME: direct reference to user data seg OR DPL 3
   mov ds, ax
   mov es, ax
@@ -28,6 +30,13 @@ exit_to_process:
   mov esi, edi
   add esi, 0x28       ;Location of SavedRegisterStates32 within the ProtessTableEntry
   mov ebx, [esi+0x48] ;location of ESP in SavedRegisterStates32
+
+  ;Set up a stack frame so we can return to the kernel easily after an int call. CPU expects to pop EIP, CS, EFLAGS in that order
+  pushf
+  mov ax, cs
+  push eax
+  mov eax, idle_loop ;idle_loop is a label defined in kickoff.s and it's where we want to get back to
+  push eax
 
   mov eax, esp
   mov [saved_stack_pointer], eax    ;save the stack pointer to our data area so that we can get it back easily

@@ -46,36 +46,36 @@ init_native_api:
 ;this interrupt handler is called for every native API call. Its job is to dispatch
 ;the call into the necessary handler (usually a C function)
 native_api_landing_pad:
-  call enter_kernel_context     ;this should switch to kernel context and then land here.
+  call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   cmp eax, API_EXIT
   jnz .napi_2
   call api_terminate_current_process ;does not return
-  jmp native_api_return_to_kernel
+  jmp .napi_rtn
 .napi_2:
   cmp eax, API_SLEEP
   jnz .napi_3
   call api_sleep_current_process
-  jmp native_api_return_to_kernel
+  jmp .napi_rtn
 .napi_3:
   cmp eax, API_CREATE_PROCESS
   jnz .napi_4
   call api_create_process
-  jmp native_api_return_to_kernel
+  jmp .napi_rtn
 .napi_4:
   cmp eax, API_CLOSE
   jnz .napi_5
   call api_close
-  jmp native_api_return_to_process
+  jmp .napi_rtn
 .napi_5:
   cmp eax, API_OPEN
   jnz .napi_6
   call api_open
-  jmp native_api_return_to_kernel
+  jmp .napi_rtn
 .napi_6:
   cmp eax, API_READ
   jnz .napi_7
   call api_read
-  jmp native_api_return_to_process
+  jmp .napi_rtn
 .napi_7:
   cmp eax, API_WRITE
   jnz .napi_8
@@ -86,13 +86,10 @@ native_api_landing_pad:
   call api_write
   add esp, 12
 
-  jmp native_api_return_to_process
+  jmp .napi_rtn
 .napi_8:
   ;we did not recognise the API code. Fallthrough to return to process.
   mov eax, API_ERR_NOTFOUND
 
-native_api_return_to_process:
-  iret
-native_api_return_to_kernel:
-  ;FIXME - need to ensure context switch to the kernel before iret
+.napi_rtn:
   iret
