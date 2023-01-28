@@ -10,7 +10,7 @@ _start:
   mov esi, testmsg    ;string pointer
   int 0x60
 
-  jmp $
+  jmp _start
 
 section .rodata
 

@@ -6,7 +6,7 @@ global enter_kernel_context
 extern get_current_process  ;defined in process.c  Returns the process struct for the current PID
 extern idle_loop            ;defined in kickoss.s. NOT a function, this is our "return address"
 
-%include "../memlayout.inc"
+%include "../memlayout.asm"
 
 ;Purpose: Executes an IRET to exit kernel mode into user-mode on the given process.
 ;Expects the process stack frame to be configured for the return already; this is either
@@ -38,7 +38,7 @@ exit_to_process:
   mov eax, idle_loop ;idle_loop is a label defined in kickoff.s and it's where we want to get back to
   push eax
 
-  mov eax, esp
+  mov eax, 0x7FFF8                      ;We are exiting the kernel, so re-set the stack to the bottom for when we re-enter
   mov [saved_stack_pointer], eax    ;save the stack pointer to our data area so that we can get it back easily
 
   mov esi, FullTSS
@@ -98,7 +98,7 @@ enter_kernel_context:
   ;first we need to save the register states, BUT we don't actually know where the process struct is right now.
   ;And we can't find it without clobbering registers.
   ;So, we first save the regs into a scratch area and then copy that into the process struct
-  ;the scratch area lives at a fixed memory location given in memlayout.inc
+  ;the scratch area lives at a fixed memory location given in memlayout.asm
   push edi
   mov edi, CurrentProcessRegisterScratch
   mov [edi + 0x00], eax
@@ -164,7 +164,7 @@ enter_kernel_context:
   mov edi, eax
   add edi, 0x24               ;offset of SavedRegisterStates32 in the struct (destination pointer)
   mov esi, CurrentProcessRegisterScratch  ;source pointer
-  mov ecx, 0x12               ; 0x90 bytes = 0x12 dwords
+  mov ecx, 0x13               ; 0x4c bytes = 0x13 dwords
   rep movsd                   ; copy the data across
 
   ;FIXME we should build a stack frame to iret back to the kernel idle loop

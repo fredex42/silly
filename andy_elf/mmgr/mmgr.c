@@ -80,6 +80,7 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
       write_protect = !write_protect;
     }
     register uint32_t value = write_protect ? block_ptr | MP_PRESENT : block_ptr | MP_PRESENT| MP_READWRITE ;
+    if(i==0x6F) value = block_ptr | MP_PRESENT ; //page 6 is 1 below the kernel stack. Mark this as "not writable" so we get a page fault if we overflow instead of clobbering memory
     first_pte[i] = value;
     block_ptr+=PAGE_SIZE;
   }
@@ -274,6 +275,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //we need to find `pages` contigous free pages of virtual memory space then map the potentially
   //discontinues phys_addr pointers onto them with the given flags.
   //then, return the vmem ptr to the first one.
+  //Don't map anything into the first Mb to avoid confusion.
   for(i=0;i<1024;i++) {
     if(!((vaddr)root_page_dir[i] & MP_PRESENT)) {
       kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
@@ -282,7 +284,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     pagedir_entry_phys = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
     pagedir_entry_vptr = (uint32_t *)k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
 
-    for(j=0;j<1024;j++) {
+    for(j= i==0 ? 256 : 0;j<1024;j++) {
       if( ! (pagedir_entry_vptr[j] & MP_PRESENT) ) {
         if(starting_page_dir==0xFFFF) starting_page_dir = i;
         if(starting_page_off==0xFFFF) starting_page_off = j;

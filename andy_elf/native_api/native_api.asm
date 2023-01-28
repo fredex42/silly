@@ -4,9 +4,12 @@ section .text
 global init_native_api
 global native_api_landing_pad
 
-%include "apicodes.inc"
-%include "../memlayout.inc"
+%include "apicodes.asm"
+%include "../memlayout.asm"
 extern CreateIA32IDTEntry
+
+;kickoff.asm
+extern idle_loop
 
 ;process_ops.c
 extern api_terminate_current_process
@@ -92,4 +95,11 @@ native_api_landing_pad:
   mov eax, API_ERR_NOTFOUND
 
 .napi_rtn:
+  ;set up a stack frame that gets us back to the kernel idle loop
+  pushf
+  xor eax, eax
+  mov eax, cs
+  push eax
+  mov eax, idle_loop
+  push eax
   iret

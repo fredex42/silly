@@ -8,7 +8,7 @@ clean:
 console.o: console.c console.h
 	gcc -c ${CFLAGS} console.c
 
-native_api.o: native_api.asm apicodes.inc
+native_api.o: native_api.asm apicodes.asm
 	nasm -f elf32 native_api.asm
 
 process_ops.o: process_ops.c process_ops.h

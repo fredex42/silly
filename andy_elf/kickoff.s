@@ -11,7 +11,7 @@ extern early_serial_lowlevel_init
 global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 
 %include "basic_console.inc"
-%include "memlayout.inc"
+%include "memlayout.asm"
 %include "exceptions.inc"
 
 jmp _start

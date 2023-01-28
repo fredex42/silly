@@ -38,7 +38,12 @@ struct ProcessTableEntry* get_process(uint16_t pid)
 
   size_t offset = pid * sizeof(struct ProcessTableEntry);
   struct ProcessTableEntry* e = (struct ProcessTableEntry *)((char *)process_table + offset);
-  if(e->magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("Process table corruption detected\r\n");
+
+  if(e->magic!=PROCESS_TABLE_ENTRY_SIG) {
+    kprintf("DEBUG get_process entry for pid %d is 0x%x\r\n", pid, e);
+    k_panic("get_process Process table corruption detected\r\n");
+  }
+
   return e;
 }
 
@@ -65,7 +70,7 @@ This should be treated as non-interruptable and therefore called with interrupts
 struct ProcessTableEntry *get_next_available_process()
 {
   for(uint16_t i=last_assigned_processid+1; i<PID_MAX; i++) {
-    if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("Process table corruption detected\r\n");
+    if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("get_next_available_process loop 1: Process table corruption detected\r\n");
     if(process_table[i].status==PROCESS_NONE) {
       last_assigned_processid = i;
       return &process_table[i];
@@ -73,7 +78,7 @@ struct ProcessTableEntry *get_next_available_process()
   }
   //if we get here we hit PID_MAX, so start again from the beginning
   for(uint16_t i=1; i<=last_assigned_processid; i++) {
-    if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("Process table corruption detected\r\n");
+    if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("get_next_available_process loop 2: Process table corruption detected\r\n");
     if(process_table[i].status==PROCESS_NONE) {
       last_assigned_processid = i;
       return &process_table[i];
