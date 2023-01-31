@@ -167,7 +167,13 @@ enter_kernel_context:
   mov ecx, 0x13               ; 0x4c bytes = 0x13 dwords
   rep movsd                   ; copy the data across
 
-  ;FIXME we should build a stack frame to iret back to the kernel idle loop
+  ;we've messed around with some of the registers, so restore their values to what they were when we entered
+  mov esi, CurrentProcessRegisterScratch 
+  mov eax, [esi + 0x00]   ;restore the value of eax which was present before
+  mov ecx, [esi + 0x08]
+  mov edi, [esi + 0x18]
+  mov esi, [esi + 0x14]
+
   ret                ;return to the interrupt handler
 
 section .data

@@ -15,7 +15,7 @@ _start:
 section .rodata
 
 testmsg:
-db "Hello from ring 3\r\n"
+db 'Hello from ring 3', 0x0D, 0x0A, 0x00
 
 section .data
 

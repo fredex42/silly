@@ -49,36 +49,38 @@ init_native_api:
 ;this interrupt handler is called for every native API call. Its job is to dispatch
 ;the call into the necessary handler (usually a C function)
 native_api_landing_pad:
-  call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   cmp eax, API_EXIT
   jnz .napi_2
+  call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   call api_terminate_current_process ;does not return
-  jmp .napi_rtn
+  jmp .napi_rtn_to_kern
 .napi_2:
   cmp eax, API_SLEEP
   jnz .napi_3
+  call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   call api_sleep_current_process
-  jmp .napi_rtn
+  jmp .napi_rtn_to_kern
 .napi_3:
   cmp eax, API_CREATE_PROCESS
   jnz .napi_4
+  call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   call api_create_process
-  jmp .napi_rtn
+  jmp .napi_rtn_to_kern
 .napi_4:
   cmp eax, API_CLOSE
   jnz .napi_5
   call api_close
-  jmp .napi_rtn
+  jmp .napi_rtn_direct
 .napi_5:
   cmp eax, API_OPEN
   jnz .napi_6
   call api_open
-  jmp .napi_rtn
+  jmp .napi_rtn_direct
 .napi_6:
   cmp eax, API_READ
   jnz .napi_7
   call api_read
-  jmp .napi_rtn
+  jmp .napi_rtn_direct
 .napi_7:
   cmp eax, API_WRITE
   jnz .napi_8
@@ -89,12 +91,15 @@ native_api_landing_pad:
   call api_write
   add esp, 12
 
-  jmp .napi_rtn
+  jmp .napi_rtn_direct
 .napi_8:
   ;we did not recognise the API code. Fallthrough to return to process.
   mov eax, API_ERR_NOTFOUND
 
-.napi_rtn:
+.napi_rtn_direct:
+  iret
+
+.napi_rtn_to_kern:
   ;set up a stack frame that gets us back to the kernel idle loop
   pushf
   xor eax, eax
