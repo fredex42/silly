@@ -182,7 +182,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   process_stack_temp -= 1;    //moves back 1 uint32_t i.e. 4 bytes
   *process_stack_temp = new_entry->saved_regs.esp - 0x04;           //process stack pointer, once return data is popped off
   process_stack_temp -= 1;
-  *process_stack_temp = (1<<12) | (1<<13) | (1<<9);              //EFLAGS. Set IOPL to 3, IF is 1 and everything else 0.
+  *process_stack_temp = (1<<9);              //EFLAGS. Set IF is 1 and everything else 0.  IOPL is the permission level _required_ for sensitive stuff so keep at 0.
   process_stack_temp -= 1;
   *process_stack_temp = GDT_USER_CS | 3;  //user CS
   process_stack_temp -= 1;
