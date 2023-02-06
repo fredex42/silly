@@ -8,7 +8,6 @@
 #define TASK_DEADLINE   2
 #define TASK_AFTERTIME  3
 
-
 #define BUFFER_COUNT    2
 
 typedef struct scheduler_task {
@@ -43,6 +42,9 @@ SchedulerTask *new_scheduler_task(uint8_t task_type, void (*task_proc)(struct sc
 void schedule_task(SchedulerTask *t); //pushes the task onto the relevant queue and takes ownership of the ptr
 
 uint64_t get_scheduler_ticks();
+
+//return PID of the currently active task
+pid_t get_active_pid();
 
 //finds the next runnable process (in a round-robin fashion) and attempts to enter it
 void enter_next_process();

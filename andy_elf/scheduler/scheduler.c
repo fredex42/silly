@@ -155,14 +155,14 @@ void enter_next_process()
     return; //OK, nothing doing. Go back to the kernel idle loop.
   }
 
-  //Right, we have something.
-  if(temp==last_run_pid) {
-    //we are going back to the interrupted process so just return
-    sti();
-    return;
-  }
-  //otherwise we must switch process.
+  //Right, we have something.  We must switch process.
   last_run_pid = temp;
+  active_process = temp;
   kprintf("DEBUG Exiting into process 0x%x\r\n", process);
   exit_to_process(process);
+}
+
+pid_t get_active_pid()
+{
+  return active_process;
 }

@@ -1,4 +1,4 @@
-%include "memlayout.inc"
+%include "./memlayout.asm"
 [BITS 16]
 ;Source code of andy.sys. This file is called by the bootloader.
 ;Some parts are split into other files which are %include'd into here

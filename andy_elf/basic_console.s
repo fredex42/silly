@@ -12,7 +12,7 @@ extern early_serial_putchar
 ; remove this definition to disable serial console
 %define SERIAL_CONSOLE 1
 
-%include "memlayout.inc"
+%include "memlayout.asm"
 
 ;Print an ASCIIZ string in protected mode.
 ;Expects the string to print in ds:esi

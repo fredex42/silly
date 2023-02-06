@@ -79,7 +79,11 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
       ++range_ctr;
       write_protect = !write_protect;
     }
-    register uint32_t value = write_protect ? block_ptr | MP_PRESENT : block_ptr | MP_PRESENT| MP_READWRITE ;
+    register uint32_t value = write_protect ? block_ptr | MP_PRESENT | MP_GLOBAL : block_ptr | MP_PRESENT| MP_READWRITE | MP_GLOBAL;
+    //page 6 is 1 below the kernel stack. Mark this as "not writable" so we can't clobber kernel memory
+    //unfortunately this does cause a triple-fault if the stack overflows, because it's impossible to invoke an interrupt
+    //with an overflowing stack.
+    if(i==0x6F) value = block_ptr | MP_PRESENT ; 
     first_pte[i] = value;
     block_ptr+=PAGE_SIZE;
   }
@@ -274,6 +278,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //we need to find `pages` contigous free pages of virtual memory space then map the potentially
   //discontinues phys_addr pointers onto them with the given flags.
   //then, return the vmem ptr to the first one.
+  //Don't map anything into the first Mb to avoid confusion.
   for(i=0;i<1024;i++) {
     if(!((vaddr)root_page_dir[i] & MP_PRESENT)) {
       kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
@@ -282,7 +287,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     pagedir_entry_phys = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
     pagedir_entry_vptr = (uint32_t *)k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
 
-    for(j=0;j<1024;j++) {
+    for(j= i==0 ? 256 : 0;j<1024;j++) {
       if( ! (pagedir_entry_vptr[j] & MP_PRESENT) ) {
         if(starting_page_dir==0xFFFF) starting_page_dir = i;
         if(starting_page_off==0xFFFF) starting_page_off = j;
@@ -708,4 +713,22 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   for(i=0x70;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
   for(i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
   for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
+}
+
+uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys)
+{
+  uint32_t *app_paging_dir_root_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &root_dir_phys, 1);
+
+  app_paging_dir_root_kmem[0] = (uint32_t)page_one_phys | MP_PRESENT | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
+
+  //copy over the content of the first page of the kernel paging directory to the application paging directory
+  uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &page_one_phys, 1);
+
+  memcpy_dw(page_one, FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE/8);
+
+  //this page contains the IDT
+  page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
+
+  mb();
+  return app_paging_dir_root_kmem;
 }

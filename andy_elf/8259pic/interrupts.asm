@@ -1,6 +1,6 @@
 [BITS 32]
 
-%include "../memlayout.inc"  ;for IDTPtr
+%include "../memlayout.asm"  ;for IDTPtr
 ;function exports
 global IKeyboard
 global ISpurious

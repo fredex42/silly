@@ -1,6 +1,7 @@
 [BITS 16]
 section .text
 global _start
+global idle_loop			;NOTE this is NOT a function but a label, a place that gets returned to.
 
 ; remove this definition to disable serial console (also remove in basic_console.s)
 %define SERIAL_CONSOLE 1
@@ -10,7 +11,7 @@ extern early_serial_lowlevel_init
 global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 
 %include "basic_console.inc"
-%include "memlayout.inc"
+%include "memlayout.asm"
 %include "exceptions.inc"
 
 jmp _start
@@ -344,6 +345,9 @@ sti
 
 extern initialise_ata_driver
 call initialise_ata_driver
+
+extern init_native_api
+call init_native_api
 
 extern mount_root_device
 call mount_root_device
