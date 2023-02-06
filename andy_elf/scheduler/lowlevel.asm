@@ -88,12 +88,13 @@ exit_to_process:
 
   ;finally, restore esi from the stack
   pop esi
-  ;FIXME: should restore registers from the application stack
   iret
 
 ;Purpose: Switches to kernel context. NOTE: this will return to the function that it
 ;was called from BUT will not preserve the stack below it. Therefore it must be called at
 ;the outer level immediately on entering an interrupt not from an arbitary C function
+;It is also essential that interrupts are disabled when calling this because it could leave
+;the CPU in an undefined state (resulting in a triple-fault) if interrupted
 enter_kernel_context:
   ;first we need to save the register states, BUT we don't actually know where the process struct is right now.
   ;And we can't find it without clobbering registers.

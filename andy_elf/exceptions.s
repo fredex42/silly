@@ -81,19 +81,19 @@ IDivZero:
 	call FatalMsg
 
 IDebug:
-	; push ds
-	; push es
-	; push esi
-	; push eax
-	; mov ax, 0x10
-	; mov ds, ax
-	; mov es, ax
-	; mov esi, DebugMsg
-	; call PMPrintString
-	; pop eax
-	; pop esi
-	; pop es
-	; pop ds
+	push ds
+	push es
+	push esi
+	push eax
+	mov ax, 0x10
+	mov ds, ax
+	mov es, ax
+	mov esi, DebugMsg
+	call PMPrintString
+	pop eax
+	pop esi
+	pop es
+	pop ds
 	iret
 
 INMI:	;technically an interrupt, not a trap

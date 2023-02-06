@@ -79,8 +79,11 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
       ++range_ctr;
       write_protect = !write_protect;
     }
-    register uint32_t value = write_protect ? block_ptr | MP_PRESENT : block_ptr | MP_PRESENT| MP_READWRITE ;
-    if(i==0x6F) value = block_ptr | MP_PRESENT ; //page 6 is 1 below the kernel stack. Mark this as "not writable" so we get a page fault if we overflow instead of clobbering memory
+    register uint32_t value = write_protect ? block_ptr | MP_PRESENT | MP_GLOBAL : block_ptr | MP_PRESENT| MP_READWRITE | MP_GLOBAL;
+    //page 6 is 1 below the kernel stack. Mark this as "not writable" so we can't clobber kernel memory
+    //unfortunately this does cause a triple-fault if the stack overflows, because it's impossible to invoke an interrupt
+    //with an overflowing stack.
+    if(i==0x6F) value = block_ptr | MP_PRESENT ; 
     first_pte[i] = value;
     block_ptr+=PAGE_SIZE;
   }
@@ -725,23 +728,6 @@ uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys)
 
   //this page contains the IDT
   page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
-
-  // //identity-map the kernel space so interrupts etc. will work.
-  //
-  // uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &phys_ptrs[1], 1);
-  //
-  // //this page contains the GDT and TSS tables
-  // page_one[0] = MP_PRESENT | MP_READWRITE;  //kernel needs r/w in order to modify the access flag in the GDT. User-mode blocked.
-  // //this page contains the IDT
-  // page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
-  // //FIXME: kernel shouldn't be able to self-modify in this range really, setup should be done by mmgr to properly give access.
-  // for(size_t i=2;i<256;i++) {
-  //   page_one[i] = (i << 12) | MP_PRESENT | MP_READWRITE;  //r/w only applies to kernel here of course because no MP_USER
-  // }
-  //
-  // for(size_t i=256;i<512;i++) { //kernel heap
-  //   page_one[i] = (i << 12) | ;
-  // }
 
   mb();
   return app_paging_dir_root_kmem;
