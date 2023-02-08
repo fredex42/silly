@@ -18,5 +18,8 @@ sdt_header.o: sdt_header.c
 apic.o: apic.h
 	gcc -c ${CFLAGS} apic.c
 
-libacpi.a: apic.o sdt_header.o rsdp.o search_mem.o
-	ar rcs libacpi.a apic.o sdt_header.o rsdp.o search_mem.o
+shortcut.o: shortcut.c ../include/acpi/rsdt.h
+	gcc -c ${CFLAGS} shortcut.c
+
+libacpi.a: apic.o sdt_header.o rsdp.o search_mem.o shortcut.o
+	ar rcs libacpi.a apic.o sdt_header.o rsdp.o search_mem.o shortcut.o

@@ -224,6 +224,17 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
 }
 
 /**
+ * identity-map a page of physical memory. this is useful for e.g. ACPI tables which are in reserved RAM ranges
+ * and it makes sense to keep them there
+*/
+void * k_map_page_identity(uint32_t *root_page_dir, void *phys_addr, uint32_t flags)
+{
+  uint16_t pagedir_idx = ADDR_TO_PAGEDIR_IDX(phys_addr);
+  uint16_t pageent_idx = ADDR_TO_PAGEDIR_OFFSET(phys_addr);
+  return k_map_page(root_page_dir, phys_addr, pagedir_idx, pageent_idx, flags);
+}
+
+/**
 adds a new blank directory to the virtual memory table
 Arguments:
 - root_page_dir - pointer to the root of the virtual memory directory

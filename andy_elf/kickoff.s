@@ -330,8 +330,8 @@ push eax
 call initialise_mmgr  ;initialise memory management
 add esp, 4
 
-;extern load_acpi_data
-;call load_acpi_data
+extern acpi_load_data
+call acpi_load_data
 
 extern setup_pic
 call setup_pic
