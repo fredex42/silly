@@ -91,6 +91,13 @@ void* k_map_if_required(uint32_t *base_directory, void *phys_addr, uint32_t flag
 directly map a physical page into the memory space of the given page directory
 */
 void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags);
+
+/**
+ * identity-map a page of physical memory. this is useful for e.g. ACPI tables which are in reserved RAM ranges
+ * and it makes sense to keep them there
+*/
+void * k_map_page_identity(uint32_t *root_page_dir, void *phys_addr, uint32_t flags);
+
 /*
 remove the given page mapping
 */
