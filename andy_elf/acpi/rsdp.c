@@ -1,10 +1,11 @@
 #include <acpi/rsdp.h>
 #include <acpi/rsdt.h>
+#include <acpi/fadt.h>
 #include <stdio.h>
 #include <sys/mmgr.h>
 #include "search_mem.h"
 
-static struct AcpiTableShortcut acpi_shortcuts[128];
+static struct AcpiTableShortcut *acpi_shortcuts;
 static uint8_t ShortcutTableLength=0;
 
 /**
@@ -21,6 +22,22 @@ int8_t validate_rsdp_checksum(const struct RSDPDescriptor* rsdp)
   }
   if((char)sum==0) return 1;
   return 0;
+}
+
+/**
+ * Returns the IAPC_BOOT_ARCH value from the Fixed Acpi Description Table. See the BA_* constants in fadt.h to interpret the result
+*/
+uint16_t get_boot_arch_flags()
+{
+  struct AcpiTableShortcut *sc = acpi_shortcut_find(acpi_shortcuts, "FACP");  //yes, the signature for the FADT is "FACP". Go figure.
+  if(!sc) {
+    kprintf("WARNING There is no ACPI FADT present. Either the BIOS is very old or this has been called before ACPI initialisation\r\n");
+    return 0;
+  }
+  struct FADT *fadt = (struct FADT *)sc->ptr;
+  kprintf("DEBUG FADT is at memory address 0x%x\r\n", fadt);
+  if(fadt->iaPCBootArch & BA_8042_PRESENT) kprintf("DEBUG Detected 8042 ps/2 controller\r\n");
+  return fadt->iaPCBootArch;
 }
 
 void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
@@ -43,12 +60,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
   kprintf("RSDT has %d entries with total length of %d bytes.\r\n", entries, rsdt->h.Length);
   ShortcutTableLength = (uint8_t) entries;
 
-  acpi_shortcuts[0].sig[0] = 'R';
-  acpi_shortcuts[0].sig[1] = 'S';
-  acpi_shortcuts[0].sig[2] = 'D';
-  acpi_shortcuts[0].sig[3] = 'T';
-
-  acpi_shortcuts[0].ptr = rsdt;
+  acpi_shortcuts = acpi_shortcut_new(NULL, "RSDT", rsdt);
 
   for(register int i=0; i<entries; i++) {
     kprintf("DEBUG RSDT entry %d at 0x%x\r\n", i, rsdt->PointerToOtherSDT[i]);
@@ -79,6 +91,9 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
     } else {
       kprintf("WARNING unable to access entry %d as it is on another RAM page\r\n", i);
     }
+    // if(h->Signature[0]=='A' && h->Signature[1]=='P' && h->Signature[2]=='I' && h->Signature[3]=='C') {
+    //   read_madt_info((char *)h);
+    // }
     if(i>10) break;
   }
 
@@ -123,19 +138,13 @@ void load_acpi_data() {
     }
     kputs("Done.\r\n");
 
-    //this is probably outside our current mapped area (on bochs it is up around the end of provisioned ram)
-    //so map it into somewhere we can access.  We want read-only for kernel so don't set MP_READWRITE or MP_USER.
-    //choosing page 256 (=1Mbyte) because I know it has not yet been mapped.
-    kprintf("DEBUG RSDT physical address is 0x%x\r\n", rsdp->RsdtAddress);
-    void *phys_ptr = (void *)((vaddr)rsdp->RsdtAddress & (~0xFFF));
-    kprintf("DEBUG RSDT physical page address is 0x%x\r\n", phys_ptr);
-    vaddr offset = ((vaddr)rsdp->RsdtAddress - (vaddr)phys_ptr);
+    //ACPI tables should be at the end of RAM, so identity-map it to keep it seperate from our other stuff
+    const struct RSDT* rsdt = (const struct RSDT *)k_map_page_identity(NULL, rsdp->RsdtAddress, MP_PRESENT);
+    kprintf("DEBUG mapped location of 0x%x is 0x%x\r\n", rsdp->RsdtAddress, rsdt);
 
-    void *rsdt_base = (const struct RSDT *)vm_map_next_unallocated_pages(NULL, MP_PRESENT, &phys_ptr, 1);
-    kprintf("DEBUG mapped location of 0x%x is 0x%x\r\n", phys_ptr, rsdt_base);
-
-    const struct RSDT* rsdt = (const struct RSDT *)((vaddr)rsdt_base + offset);
     acpi_setup_shortcuts(rsdt, rsdp->RsdtAddress);
-    //kprintf("ACPI shortcut table at 0x%x has %d entries\r\n",acpi_shortcuts, ShortcutTableLength);
+    kprintf("ACPI shortcut table at 0x%x has %d entries\r\n",acpi_shortcuts, ShortcutTableLength);
+    uint16_t baf = get_boot_arch_flags();
+    kprintf("DEBUG boot arch flags value is 0x%x\r\n", baf);
   }
 }
