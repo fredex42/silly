@@ -70,7 +70,7 @@ struct FADT
     GenericAddressStructure X_PMTimerBlock;
     GenericAddressStructure X_GPE0Block;
     GenericAddressStructure X_GPE1Block;
-};
+} __attribute__((packed));
 
 //iaPCBootArch flags for x86 (not ARM) - see https://uefi.org/sites/default/files/resources/ACPI_Spec_6_3_A_Oct_6_2020.pdf p. 156
 #define BA_LEGACY_DEVICES       1<<0    // If set, indicates that the motherboard supports user-visible devices on the LPC or ISA bus. If clear, the OS may assume that all devices

@@ -36,7 +36,7 @@ uint16_t get_boot_arch_flags()
   }
   struct FADT *fadt = (struct FADT *)sc->ptr;
   kprintf("DEBUG FADT is at memory address 0x%x\r\n", fadt);
-  if(fadt->iaPCBootArch & BA_8042_PRESENT) kprintf("DEBUG Detected 8042 ps/2 controller\r\n");
+  if((fadt->iaPCBootArch & BA_8042_PRESENT)!=0) kprintf("DEBUG Detected 8042 ps/2 controller\r\n");
   return fadt->iaPCBootArch;
 }
 
@@ -139,7 +139,8 @@ void load_acpi_data() {
     kputs("Done.\r\n");
 
     //ACPI tables should be at the end of RAM, so identity-map it to keep it seperate from our other stuff
-    const struct RSDT* rsdt = (const struct RSDT *)k_map_page_identity(NULL, rsdp->RsdtAddress, MP_PRESENT);
+    k_map_page_identity(NULL, rsdp->RsdtAddress, MP_PRESENT);
+    const struct RSDT* rsdt = (const struct RSDT *)rsdp->RsdtAddress;
     kprintf("DEBUG mapped location of 0x%x is 0x%x\r\n", rsdp->RsdtAddress, rsdt);
 
     acpi_setup_shortcuts(rsdt, rsdp->RsdtAddress);

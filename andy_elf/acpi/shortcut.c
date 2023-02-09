@@ -29,6 +29,8 @@ struct AcpiTableShortcut *acpi_shortcut_new(struct AcpiTableShortcut *list, char
     memcpy(new_sc->sig, sig, 4);
     new_sc->ptr = ptr;
 
+    kprintf("DEBUG initialised new ACPI shortcut at 0x%x\r\n", new_sc);
+
     if(list != NULL) {
         struct AcpiTableShortcut *list_end = acpi_shortcut_list_end(list);
         list_end->next = new_sc;
@@ -44,6 +46,7 @@ struct AcpiTableShortcut *acpi_shortcut_find(struct AcpiTableShortcut *list, cha
 {
     struct AcpiTableShortcut *ptr;
     for(ptr=list; ptr!=NULL; ptr=ptr->next) {
+        kprintf("DEBUG checking 0x%x\r\n", ptr);
         if(memcmp(sig, ptr->sig, 4)==0) return ptr;
     }
     return NULL;
