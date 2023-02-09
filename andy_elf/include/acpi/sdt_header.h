@@ -13,7 +13,7 @@ typedef struct ACPISDTHeader {
   uint32_t OEMRevision;
   uint32_t CreatorID;
   uint32_t CreatorRevision;
-} ACPISDTHeader;
+}  __attribute__((packed)) ACPISDTHeader;
 
 typedef struct GenericAddressStructure
 {
@@ -22,7 +22,7 @@ typedef struct GenericAddressStructure
   uint8_t BitOffset;
   uint8_t AccessSize;
   uint64_t Address;
-} GenericAddressStructure;
+}  __attribute__((packed)) GenericAddressStructure;
 
 /**
 performs checksum validation on the given SDT header.
