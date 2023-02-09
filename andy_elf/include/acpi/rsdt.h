@@ -6,7 +6,7 @@
 struct RSDT {
   struct ACPISDTHeader h;
   uint32_t PointerToOtherSDT[255];  //need to set a static value here, should be <255.
-};
+}  __attribute__ ((packed));
 
 struct AcpiTableShortcut {
   struct AcpiTableShortcut *next;
