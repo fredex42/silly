@@ -36,8 +36,7 @@ struct FADT* acpi_get_fadt()
   }
   struct FADT *fadt = (struct FADT *)sc->ptr;
   kprintf("DEBUG FADT is at memory address 0x%x\r\n", fadt);
-  if((fadt->iaPCBootArch & BA_8042_PRESENT)!=0) kprintf("DEBUG Detected 8042 ps/2 controller\r\n");
-  return fadt->iaPCBootArch;
+  return fadt;
 }
 
 void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
