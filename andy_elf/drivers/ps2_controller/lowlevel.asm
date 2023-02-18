@@ -223,7 +223,7 @@ ps2_send:
 
     mov eax, dword [ebp + 8]
     cmp al, 0x02
-    jnz .ps2_do_reset
+    jnz .ps2_do_send
 
     ;channel 2 requested, tell controller to send to ch. 2
     xor eax, eax
@@ -231,7 +231,7 @@ ps2_send:
     out PS2_CMD, al
     call ps2_wait_for_clear_inputbuffer
 
-    .ps2_do_reset:
+    .ps2_do_send:
     xor eax, eax
     mov al, 0xFF
     out PS2_DATA, al
