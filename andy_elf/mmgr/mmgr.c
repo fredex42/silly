@@ -787,6 +787,27 @@ void parse_memory_map(struct BiosMemoryMap *ptr)
 }
 
 /**
+ * Scans the BIOS memory map to find the highest address of free memory
+*/
+size_t highest_free_memory(struct BiosMemoryMap *ptr)
+{
+  uint8_t entry_count = ptr->entries;
+  size_t highest_range_end = 0;
+
+  for(register int i=0;i<entry_count;i++) {
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+    switch(e->type) {
+      case MMAP_TYPE_USABLE:
+        highest_range_end = (size_t)e->base_addr + (size_t)e->length;
+        break;
+      default:
+        break;
+    }
+  }
+  return highest_range_end;
+}
+
+/**
 internal function called from apply_memory_map_protections to protect a given
 memory block
 */
