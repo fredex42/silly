@@ -64,7 +64,7 @@ void ps2_initialise()
     cli();
     //Step one - check if we even have a PS2 controller. First stop is ACPI
     struct FADT *fadt = acpi_get_fadt();
-    kprintf("INFO PS2 Fixed ACPI Description Table revision is %d\r\n");
+    kprintf("INFO PS2 Fixed ACPI Description Table revision is 0x%x\r\n", fadt->h.Revision);
     if(fadt->h.Revision>=2) {
         kprintf("INFO ACPI FADT should have the boot descriptor flags\r\n");
         if(!(fadt->iaPCBootArch & BA_8042_PRESENT)) {
