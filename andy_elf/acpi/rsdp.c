@@ -36,8 +36,7 @@ struct FADT* acpi_get_fadt()
   }
   struct FADT *fadt = (struct FADT *)sc->ptr;
   kprintf("DEBUG FADT is at memory address 0x%x\r\n", fadt);
-  if((fadt->iaPCBootArch & BA_8042_PRESENT)!=0) kprintf("DEBUG Detected 8042 ps/2 controller\r\n");
-  return fadt->iaPCBootArch;
+  return fadt;
 }
 
 void acpi_setup_shortcuts(const struct RSDT *rsdt)
@@ -62,7 +61,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt)
     memcpy(printable_sig, h->Signature, 4);
     memcpy(printable_oem, h->OEMID, 6);
 
-    kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, h->Signature, h->OEMID, h->Length, (uint32_t)valid);
+    kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Revision 0x%x, Checksum 0x%x, Valid %d.\r\n", i, h->Signature, h->OEMID, h->Length, h->Revision, h->Checksum, (uint32_t)valid);
 
     //if(valid) {
       acpi_shortcut_new(acpi_shortcuts, h->Signature, h);
