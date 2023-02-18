@@ -25,9 +25,9 @@ int8_t validate_rsdp_checksum(const struct RSDPDescriptor* rsdp)
 }
 
 /**
- * Returns the IAPC_BOOT_ARCH value from the Fixed Acpi Description Table. See the BA_* constants in fadt.h to interpret the result
+ * Returns a READ-ONLY pointer to the Fixed Acpi Description Table. See the BA_* constants in fadt.h to interpret the result
 */
-uint16_t get_boot_arch_flags()
+struct FADT* acpi_get_fadt()
 {
   struct AcpiTableShortcut *sc = acpi_shortcut_find(acpi_shortcuts, "FACP");  //yes, the signature for the FADT is "FACP". Go figure.
   if(!sc) {
@@ -145,7 +145,5 @@ void load_acpi_data() {
 
     acpi_setup_shortcuts(rsdt, rsdp->RsdtAddress);
     kprintf("ACPI shortcut table at 0x%x has %d entries\r\n",acpi_shortcuts, ShortcutTableLength);
-    uint16_t baf = get_boot_arch_flags();
-    kprintf("DEBUG boot arch flags value is 0x%x\r\n", baf);
   }
 }

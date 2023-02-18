@@ -23,6 +23,11 @@ uint8_t ps2_wait_for_data_or_timeout(uint32_t max_loop);  //wait for either data
 #define PS2_RESET_FAILURE       0xFC 
 #define PS2_RESET_NOT_PRESENT   0x00 
 
+//destructuring macros for ps2_lowlevel_init return value
+#define PS2_INIT_CHANNEL_COUNT(rc) (uint8_t)(rc & 0xFF)
+#define PS2_INIT_ERROR_CODE(rc)     (uint16_t)(rc >> 0x08)
+#define PS2_INIT_CH1_TEST(rc)       (uint16_t)(rc >> 0x10)
+#define PS2_INIT_CH2_TEST(rc)       (uint16_t)(rc >> 0x18)
 
 //command macros that pretend to be functions
 #define ps2_reset(channel) ps2_send(channel, PS2_RESET);
