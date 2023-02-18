@@ -60,6 +60,7 @@ void ps2_initialise()
     driver_state = NULL;
     uint8_t ch1_avail = 0;
     uint8_t ch2_avail = 0;
+    uint8_t channel_count = 0;
 
     cli();
     //Step one - check if we even have a PS2 controller. First stop is ACPI
@@ -80,22 +81,25 @@ void ps2_initialise()
     //Step two - initialise the controller
     uint32_t init_code = ps2_lowlevel_init();
     if(PS2_INIT_ERROR_CODE(init_code) != 0) {
-        kprintf("ERROR PS2 Unable to initialise controller hardware, code %d\r\n", PS2_INIT_ERROR_CODE(init_code));
+        kprintf("ERROR PS2 Unable to initialise controller hardware, code %d\r\n", (uint32_t)PS2_INIT_ERROR_CODE(init_code));
         return;
     }
-    if(PS2_INIT_CHANNEL_COUNT(init_code)==0) {
+    channel_count = PS2_INIT_CHANNEL_COUNT(init_code);
+    if(channel_count==0) {
         kputs("ERROR PS2 controller did not have any channels\r\n");
         return;
     }
     if(PS2_INIT_CH1_TEST(init_code)!=0) {
-        kprintf("WARNING PS2 channel 1 failed self-test: %d\r\n", PS2_INIT_CH1_TEST(init_code));
+        kprintf("WARNING PS2 channel 1 failed self-test: 0x%x\r\n", (uint32_t)PS2_INIT_CH1_TEST(init_code));
     } else {
         ch1_avail = 1;
     }
-    if(PS2_INIT_CH2_TEST(init_code)!=0) {
-        kprintf("WARNING PS2 channel 2 failed self-test: %d\r\n", PS2_INIT_CH2_TEST(init_code));
-    } else {
-        ch2_avail = 1;
+    if(channel_count>1) {
+        if(PS2_INIT_CH2_TEST(init_code)!=0) {
+            kprintf("WARNING PS2 channel 2 failed self-test: 0x%x\r\n", (uint32_t)PS2_INIT_CH2_TEST(init_code));
+        } else {
+            ch2_avail = 1;
+        }
     }
     if(!ch1_avail && !ch2_avail) {
         kputs("ERROR PS2 all channels failed, not initialising.\r\n");
