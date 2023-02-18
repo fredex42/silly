@@ -276,6 +276,11 @@ sti
 extern cmos_init_rtc_interrupt
 call cmos_init_rtc_interrupt
 
+extern ps2_initialise
+call ps2_initialise
+; TEMPORARY to make debugging easier - skip the rest
+jmp idle_loop
+
 extern initialise_ata_driver
 call initialise_ata_driver
 
