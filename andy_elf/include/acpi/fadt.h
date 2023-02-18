@@ -81,4 +81,6 @@ struct FADT
 #define BA_PCIE_ASPM            1<<4    //do not enable OSPM / ASPM control
 #define CMOS_RTC_NOT_PRESENT    1<<5    //if set, there is no CMOS RTC on legacy addresses, must use ACPI instead
 //other bits are reserved and must be 0.
+
+struct FADT* acpi_get_fadt();
 #endif
