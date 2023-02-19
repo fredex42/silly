@@ -9,12 +9,31 @@
 struct PS2DriverState *driver_state;
 
 /**
+ * reads from the ps2 input port into the given buffer until either there are no bytes left or the buffer runs out of space.
+ * note that the buffer is not null-terminated.
+ * returns the number of bytes read.
+*/
+size_t read_multiple_bytes(char *buf, size_t len)
+{
+    size_t i = 0;
+
+    while(ps2_wait_for_data_or_timeout(500)==0) {
+        buf[i] = ps2_read();
+        i++;
+        if(i>=len) break;
+    }
+    return i;
+}
+
+/**
  * initialise and identify the device on the given PS2 channel. This assumes that the PS2 controller AND the driver state
  * have both been initialised.
 */
 void init_device(uint8_t ch)
 {
-    uint8_t rv = 0, id_one = 0, id_two = 0;
+    uint8_t rv = 0, id_buffer[8];
+    size_t count = 0;
+
     ps2_disable_scanning(ch);
     rv = ps2_reset(ch);
     if(rv != PS2_RESPONSE_ACK) kprintf("WARNING PS2 channel %d failed to reset\r\n", ch);
@@ -22,34 +41,42 @@ void init_device(uint8_t ch)
         kprintf("INFO PS2 channel %d is not connected\r\n", ch);
         return;
     }
+
+    //if the reset command was ACK'd then there is usually another byte coming, a teest result which should be 0xAA
+    count = read_multiple_bytes(id_buffer, 8);
+    kprintf("DEBUG PS2 %d extra bytes after reset on channel %d: 0x%x\r\n", count, (uint32_t)ch, id_buffer[0]);
+
     rv = ps2_identify(ch);
     if(rv != PS2_RESPONSE_ACK) {
         kprintf("ERROR PS2 channel %d device failed to identify\r\n", ch);
     }
-    //response codes are usually two-byte. So read in a second byte from the controller
-    if(ps2_wait_for_data_or_timeout(500)==0){   //0 => we got data
-        id_two = ps2_read();
-    } else {                                    //1 => timed out
-        id_two = 0;
-    }
 
-    switch(rv) {
+    //response codes are usually two-byte. So read in all bytes from the controller
+    count = read_multiple_bytes(id_buffer, 8);
+    kprintf("DEBUG PS2 identify returned %d bytes on channel %d\r\n", count, (uint32_t)ch);
+
+    switch(id_buffer[0]) {
         case 0x00:
-            kprintf("INFO PS2 channel %d has a standard 2-button mouse\r\n", ch);
+            kprintf("INFO PS2 channel %d has a standard 2-button mouse\r\n", (uint32_t)ch);
             driver_state->mouse_channel = ch;
             break;
         case 0x03:
-            kprintf("INFO PS2 channel %d has a scroll-wheel mouse\r\n", ch);
+            kprintf("INFO PS2 channel %d has a scroll-wheel mouse\r\n", (uint32_t)ch);
             driver_state->mouse_channel = ch;
             break;
         case 0x04:
-            kprintf("INFO PS2 channel %d has a 5-button mouse\r\n", ch);
+            kprintf("INFO PS2 channel %d has a 5-button mouse\r\n", (uint32_t)ch);
             driver_state->mouse_channel = ch;
             break;
         case 0xAB:
-            kprintf("INFO PS2 channel %d has a keyboard\r\n", ch);
-
+            kprintf("INFO PS2 channel %d has a keyboard, subtype 0x%x\r\n", (uint32_t)ch, (uint32_t)id_buffer[1]);
+            break;
+        default:
+            kprintf("WARNING PS2 channel %d unidentified. Controller returned 0x%x, 0x%x\r\n", (uint32_t)ch, (uint32_t)id_buffer[0], (uint32_t)id_buffer[1]);
+            break;
     }
+    rv = ps2_enable_scanning(ch);
+    if(rv != PS2_RESPONSE_ACK) kprintf("WARNING PS2 channel %d failed to re-enable\r\n", ch);
 }
 
 /**
@@ -121,6 +148,8 @@ void ps2_initialise()
     driver_state->buffer.content = (char *)(driver_state + sizeof(struct PS2DriverState));
     kprintf("DEBUG PS2 keyboard buffer content at 0x%x\r\n", driver_state->buffer.content);
     
+    ps2_disable_interrupts();
+
     //Step four - configure devices
     if(ch1_avail) {
         init_device(1);
@@ -129,5 +158,6 @@ void ps2_initialise()
         init_device(2);
     }
 
+    ps2_enable_interrupts();
     sti();
 }

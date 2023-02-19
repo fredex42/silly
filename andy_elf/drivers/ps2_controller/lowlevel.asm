@@ -1,5 +1,10 @@
 [BITS 32]
 
+;function imports
+extern pic_send_eoi
+extern PMPrintChar  ;temporary
+
+;function exports
 global ps2_lowlevel_init
 global ps2_wait_for_clear_inputbuffer
 global ps2_wait_for_data
@@ -7,6 +12,9 @@ global ps2_wait_for_data_or_timeout
 global ps2_read
 global ps2_read_status
 global ps2_send
+global IKeyboard
+global ps2_disable_interrupts
+global ps2_enable_interrupts
 
 %define PS2_CMD     0x64    ;port 0x64 is CMD for output to h/w and STATUS for input to cpu
 %define PS2_STATUS  0x64
@@ -85,6 +93,48 @@ ps2_read_status:
     pop ebp
     ret
     
+ps2_disable_interrupts:
+    push ebp
+    mov ebp, esp
+
+    xor eax, eax
+    mov al, 0x20
+    out PS2_CMD, al       ;read config byte
+    call ps2_wait_for_data
+    in al, PS2_DATA
+    and al, 0xBC          ;disable bits 0, 1 & 6
+
+    push ax
+    mov al, 0x60
+    out PS2_CMD, al       ;write config byte
+    call ps2_wait_for_clear_inputbuffer
+    pop ax
+    out PS2_DATA, al
+
+    pop ebp
+    ret
+
+ps2_enable_interrupts:
+    push ebp
+    mov ebp, esp
+
+    xor eax, eax
+    mov al, 0x20
+    out PS2_CMD, al       ;read config byte
+    call ps2_wait_for_data
+    in al, PS2_DATA
+    or al, 0x43          ;enable bits 0, 1 & 6
+
+    push ax
+    mov al, 0x60
+    out PS2_CMD, al       ;write config byte
+    call ps2_wait_for_clear_inputbuffer
+    pop ax
+    out PS2_DATA, al
+
+    pop ebp
+    ret
+
 ;Purpose - initialise the PS2 controller. See https://wiki.osdev.org/%228042%22_PS/2_Controller#Initialising_the_PS.2F2_Controller
 ;NOTE you should check if it actually exists before calling this! Otherwise there might be a lockup
 ;Return codes:
@@ -117,7 +167,7 @@ ps2_lowlevel_init:
     out PS2_CMD, al
     call ps2_wait_for_clear_inputbuffer
     mov ax, dx
-    out PS2_CMD, al
+    out PS2_DATA, al
 
     ;Step five - perform self-test
     mov al, 0xAA        ;run self-test
@@ -131,7 +181,7 @@ ps2_lowlevel_init:
     out PS2_CMD, al
     call ps2_wait_for_clear_inputbuffer
     mov ax, dx          ;config byte is still in dx, from above
-    out PS2_CMD, al     ;write the config byte
+    out PS2_DATA, al     ;write the config byte
 
     ;Step six - determine if there are 2 channels
     mov al, 0xA8        ;enable second channel
@@ -143,7 +193,7 @@ ps2_lowlevel_init:
     in al, PS2_DATA
     mov bx, 0x01
     test al, 0x10       ;check if bit 5 is set. if it's clear we have two channels
-    jnz .ps2_lowlevel_init_step7 ;bit was set => channel didn't enable => channel is not present
+    jz .ps2_lowlevel_init_step7 ;bit was clear => channel didn't enable => channel is not present
     mov bx, 0x02        ;we do have two channels if we didn't jump, so update bx
 
     .ps2_lowlevel_init_step7:
@@ -199,7 +249,7 @@ ps2_lowlevel_init:
     out PS2_CMD, al
     call ps2_wait_for_clear_inputbuffer
     mov al, cl
-    out PS2_CMD, al                 ;write the new config byte
+    out PS2_DATA, al                 ;write the new config byte
     
     ;Step 12: build return code.
     mov eax, edx
@@ -233,10 +283,30 @@ ps2_send:
 
     .ps2_do_send:
     xor eax, eax
-    mov al, 0xFF
+    mov eax, dword [ebp + 12]
     out PS2_DATA, al
     call ps2_wait_for_data
     in al, PS2_DATA
 
     pop ebp
     ret
+
+IKeyboard:	;keyboard interrupt handler
+	pushf
+	push ax
+    push bx
+    in al, PS2_DATA ;get the current character from the buffer. If the buffer is not flushed then no more interrupts occur.
+
+	xor bx, bx
+	mov bl, '.'
+	call PMPrintChar
+
+    mov ebx, 1
+    push ebx
+    call pic_send_eoi
+    add esp, 4
+
+	pop bx
+    pop ax
+	popf
+	iret
