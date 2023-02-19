@@ -12,12 +12,12 @@ static uint8_t ShortcutTableLength=0;
 Validate that the bits of an RSDPDescriptor struct
 checksum correctly. See https://wiki.osdev.org/RSDP.
 */
-int8_t validate_rsdp_checksum(const struct RSDPDescriptor* rsdp)
+int8_t validate_rsdp_checksum(void *table, size_t len)
 {
-  char *buf = (char *)rsdp; //cast the descriptor into an array of bytes
+  char *buf = (char *)table; //cast the descriptor into an array of bytes
   int32_t sum = 0;
 
-  for(int16_t i=0; i<sizeof(struct RSDPDescriptor);i++) {
+  for(register size_t i=0; i<len;i++) {
     sum += buf[i];
   }
   if((char)sum==0) return 1;
