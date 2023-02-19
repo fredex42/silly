@@ -12,12 +12,12 @@ static uint8_t ShortcutTableLength=0;
 Validate that the bits of an RSDPDescriptor struct
 checksum correctly. See https://wiki.osdev.org/RSDP.
 */
-int8_t validate_rsdp_checksum(const struct RSDPDescriptor* rsdp)
+int8_t validate_rsdp_checksum(void *table, size_t len)
 {
-  char *buf = (char *)rsdp; //cast the descriptor into an array of bytes
+  char *buf = (char *)table; //cast the descriptor into an array of bytes
   int32_t sum = 0;
 
-  for(int16_t i=0; i<sizeof(struct RSDPDescriptor);i++) {
+  for(register size_t i=0; i<len;i++) {
     sum += buf[i];
   }
   if((char)sum==0) return 1;
@@ -37,6 +37,20 @@ struct FADT* acpi_get_fadt()
   struct FADT *fadt = (struct FADT *)sc->ptr;
   kprintf("DEBUG FADT is at memory address 0x%x\r\n", fadt);
   return fadt;
+}
+
+/**
+ * Returns a READ-ONLY pointer to the Multi APIC Description Table
+*/
+void* acpi_get_madt()
+{
+  struct AcpiTableShortcut *sc = acpi_shortcut_find(acpi_shortcuts, "APIC");
+  if(!sc) {
+    kprintf("WARNING There is no ACPI Apic table present. Either the BIOS is very old or this has been called before ACPI initialisation\r\n");
+    return 0;
+  }
+  kprintf("DEBUG MADT is at memory address 0x%x\r\n", sc->ptr);
+  return sc->ptr;
 }
 
 void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
@@ -80,16 +94,12 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
       memset(id_str, 0, 8);
       strncpy(id_str, h->OEMID, 7);
 
-      kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, sig_str, id_str, h->Length, (uint32_t)valid);
-      if(h->Signature[0]=='A' && h->Signature[1]=='P' && h->Signature[2]=='I' && h->Signature[3]=='C') {
-        read_madt_info((char *)h);
-      } else if (h->Signature[0]=='M' && h->Signature[1]=='C' && h->Signature[2]=='F' && h->Signature[3]=='G') {
-        pci_init((void *)h);
-        pci_init_done = 1;
-      }
-    } else {
-      kprintf("WARNING unable to access entry %d as it is on another RAM page\r\n", i);
-    }
+    kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Revision 0x%x, Checksum 0x%x, Valid %d.\r\n", i, h->Signature, h->OEMID, h->Length, h->Revision, h->Checksum, (uint32_t)valid);
+
+    //if(valid) {
+      acpi_shortcut_new(acpi_shortcuts, h->Signature, h);
+    //  ++ShortcutTableLength;
+    //}
     // if(h->Signature[0]=='A' && h->Signature[1]=='P' && h->Signature[2]=='I' && h->Signature[3]=='C') {
     //   read_madt_info((char *)h);
     // }
@@ -128,9 +138,8 @@ void load_acpi_data() {
     unmap_bios_area(bios_area);
 
     kprintf("ACPI data version %d found at 0x%x\r\n", rsdp->Revision, (uint32_t) rsdp);
-    kprintf("ACPI OEM is %s\r\n", rsdp->OEMID);
-    
-    kputs("INFO Validating ACPI descriptor table...");
+    kputs("ACPI OEM is ");
+    kputs(rsdp->OEMID);
     if(!validate_rsdp_checksum(rsdp)) {
       kputs("ERROR ACPI checksum did not validate\r\n");
       return;

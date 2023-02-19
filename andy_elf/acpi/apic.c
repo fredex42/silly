@@ -1,5 +1,6 @@
 #include <types.h>
 #include <sys/mmgr.h>
+#include <acpi/rsdp.h>
 #include <acpi/sdt_header.h>
 #include <cfuncs.h>
 #include <stdio.h>
@@ -77,6 +78,22 @@ int16_t enable_plapic(vaddr apic_base, uint8_t apic_id, uint16_t interrupt_base)
 
   return 1;
 }
+
+/**
+ * Enables the PLApic and IOApic, and disables the legacy 8259 APIC.
+ * Returns 0 if successfully initialised or 1 if not supported.
+*/
+uint8_t apic_enable_modern_style()
+{
+  struct AcpiMADT* madt = (struct AcpiMADT*) acpi_get_madt();
+  if(!madt) {
+    kputs("ERROR No ACPI description for multi-processor APICs, will have to use legacy mode\r\n");
+    return 1;
+  }
+  read_madt_info((char *)madt);
+  return 0;
+}
+
 /*
 Reads information in from the MADT to a form we can work with
 */
