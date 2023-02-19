@@ -112,12 +112,15 @@ void ps2_initialise()
     driver_state = (struct PS2DriverState *)vm_alloc_lowmem(NULL, 1, MP_READWRITE);
     if(!driver_state) {
         k_panic("ERROR Unable to initialise memory for keyboard buffer!\r\n");
+    } else {
+        kprintf("DEBUG PS2 state buffer is at 0x%x\r\n", driver_state);
     }
     memset((void *)driver_state, 0, PAGE_SIZE);
     driver_state->buffer.buffer_size = 256;
     //keyboard buffer content follows the driver state struct itself
     driver_state->buffer.content = (char *)(driver_state + sizeof(struct PS2DriverState));
-
+    kprintf("DEBUG PS2 keyboard buffer content at 0x%x\r\n", driver_state->buffer.content);
+    
     //Step four - configure devices
     if(ch1_avail) {
         init_device(1);
