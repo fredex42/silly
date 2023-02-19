@@ -352,6 +352,10 @@ call init_native_api
 extern mount_root_device
 call mount_root_device
 
+;just for testing
+extern cmos_get_epoch_time
+call cmos_get_epoch_time
+
 extern scheduler_tick
 extern enter_next_process
 
