@@ -2,7 +2,6 @@
 
 %include "../memlayout.asm"  ;for IDTPtr
 ;function exports
-global IKeyboard
 global ISpurious
 global ITimer
 global IDummy
@@ -13,6 +12,7 @@ extern pic_send_eoi
 extern pic_get_irr
 extern pic_get_isr
 extern PMPrintChar
+extern IKeyboard
 extern CreateIA32IDTEntry
 extern ICmosRTC
 
@@ -116,22 +116,6 @@ ITimer:     ;timer interrupt handler
   pop bx
   popf
   iret
-
-IKeyboard:	;keyboard interrupt handler
-	pushf
-	push bx
-	xor bx, bx
-	mov bl, '.'
-	call PMPrintChar
-
-  mov ebx, 1
-  push ebx
-	call pic_send_eoi
-  add esp, 4
-
-	pop bx
-	popf
-	iret
 
 ISerial2:             ;IRQ3 serial port 2 interrupt handler. Just sends EOI at present
   pushf

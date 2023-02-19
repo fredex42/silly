@@ -10,6 +10,9 @@ uint8_t ps2_read();                             //read a data byte. No check is 
 uint8_t ps2_read_status();                      //read the status byte
 uint8_t ps2_wait_for_data_or_timeout(uint32_t max_loop);  //wait for either data to be present or for a certain number of iterations to pass
 
+uint8_t ps2_disable_interrupts();
+uint8_t ps2_enable_interrupts();
+
 //PS2 device commands
 #define PS2_RESET               0xFF
 #define PS2_DISABLE_SCANNING    0xF5
@@ -24,7 +27,7 @@ uint8_t ps2_wait_for_data_or_timeout(uint32_t max_loop);  //wait for either data
 #define PS2_RESET_NOT_PRESENT   0x00 
 
 //destructuring macros for ps2_lowlevel_init return value
-#define PS2_INIT_CHANNEL_COUNT(rc) (uint8_t)(rc & 0xFF)
+#define PS2_INIT_CHANNEL_COUNT(rc)  (uint8_t)(rc & 0xFF)
 #define PS2_INIT_ERROR_CODE(rc)     (uint8_t)((rc >> 0x08) & 0xFF)
 #define PS2_INIT_CH1_TEST(rc)       (uint8_t)((rc >> 0x10) & 0xFF)
 #define PS2_INIT_CH2_TEST(rc)       (uint8_t)((rc >> 0x18) & 0xFF)
