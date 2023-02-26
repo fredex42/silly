@@ -1,4 +1,5 @@
 #include <types.h>
+#include "wordsize.h"
 
 #ifndef __CMOS_RTC_H
 #define __CMOS_RTC_H
@@ -16,5 +17,11 @@ struct RealTimeClockRawData {
     uint8_t status_a;
     uint8_t status_b;
 } __attribute__((packed));
+
+#if __WORDSIZE==32
+uint32_t rtc_get_ticks();
+#else
+uint64_t rtc_get_ticks();
+#endif
 
 #endif

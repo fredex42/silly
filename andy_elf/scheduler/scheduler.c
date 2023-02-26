@@ -25,6 +25,7 @@ void initialise_scheduler()
   active_process = 0;
 }
 
+#include <drivers/cmos/rtc.h>
 /*
 This is expected to be run from IRQ0, i.e. every 55ms or so.
 */
@@ -32,6 +33,10 @@ void scheduler_tick()
 {
   SchedulerTask *to_run;
 
+  //FIXME: this is just for debugging!!
+  uint32_t current_ticks = rtc_get_ticks();
+  kprintf("DEBUG: There have been %l elapsed 512Hz ticks\r\n", current_ticks);
+  
   ++global_scheduler_state->ticks_elapsed;
   //FIXME: run deadline tasks first
   //FIXME: run after-time tasks second
