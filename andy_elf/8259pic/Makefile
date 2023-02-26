@@ -1,5 +1,5 @@
-CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables
-
+CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables  -target i386-pc-none-elf
+ 
 all: lib8259pic.a
 
 clean:

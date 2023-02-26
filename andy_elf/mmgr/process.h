@@ -8,5 +8,6 @@
 
 void initialise_process_table(uint32_t* kernel_paging_directory);
 pid_t internal_create_process(struct elf_parsed_data *elf);
+void remove_process(struct ProcessTableEntry* e);
 
 #endif

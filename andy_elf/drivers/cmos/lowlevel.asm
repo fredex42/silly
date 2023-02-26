@@ -9,6 +9,9 @@ global cmos_get_update_in_progress
 
 global cmos_read
 global cmos_write
+
+global rtc_get_ticks            ;returns the number of 512Hz ticks since startup
+global cmos_init_rtc_interrupt  ;initialises the tick counter etc.
 global ICmosRTC
 
 ;Interrupt handler functions
@@ -179,7 +182,18 @@ cmos_init_rtc_interrupt:
 
     cli
     ;first we need to set  interrupt rate on register A https://web.archive.org/web/20150514082645/http://www.nondot.org/sabre/os/files/MiscHW/RealtimeClockFAQ.txt
-    mov al,     
+    mov al, 0x8A    ;select status register A and disable NMI
+    out CMOS_REG_SELECT, al
+    call _cmos_read_delay
+    in al, CMOS_DATA
+    or al, 0b0111   ;set the bottom 3 bits of status register A. This should set a periodic interrupt frequency of 512Hz, or 1.93125 ms interval
+    push ax
+    mov al, 0x8A
+    out CMOS_REG_SELECT, al
+    call _cmos_read_delay
+    pop ax
+    out CMOS_DATA, al
+
     ;now enable the interrupt by setting bits on status register B
     mov al, 0x8B
     out CMOS_REG_SELECT, al ;select status register B and disable NMI
@@ -189,24 +203,40 @@ cmos_init_rtc_interrupt:
     push ax
     mov al, 0x8B
     out CMOS_REG_SELECT, al ;select status register B again
+    call _cmos_read_delay
     pop ax
     out CMOS_DATA, al       ;write the new value
     mov byte [cmos_initialised], 1
+    
+    mov al, 0x00            ;select register 0, we don't care which, we just want to re-enable NMI
+    out CMOS_REG_SELECT, al
+    call _cmos_read_delay
+    in al, CMOS_DATA
     sti
 
     pop ebp
+    ret
+
+;Purpose: Return the number of 1.92ms ticks (512Hz) since the clock was initialised
+rtc_get_ticks:
+    mov eax, dword [cmos_tick_counter]
     ret
 
 ;Purpose: Handler for the RTC interrupt
 ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler. 
   pushf
   push eax
+  push ebx
 
   ;We must read status register C both to know what happened, and to clear the processing flag
   mov ax, 0x0C      ;select status register C
   out CMOS_REG_SELECT, al
   call _cmos_read_delay
   in al, CMOS_DATA  ;read status C value into al. Bit 6 => periodic interrupt, bit 5=> alarm interrupt, bit 4=> update-ended interrupt
+
+  mov ebl, byte [cmos_initialised]  ;if we have not been initialised, then bypass
+  test bl,bl
+  jz .cmos_rtc_done
 
   test al, 0x40
   jnz .periodic
@@ -230,7 +260,6 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   nop           ;not implemented yet
 
   .cmos_rtc_done:
-  push ebx
   mov ebx, 8
   push ebx
   call pic_send_eoi
