@@ -14,6 +14,7 @@ extern pic_get_irr
 extern pic_get_isr
 extern PMPrintChar
 extern CreateIA32IDTEntry
+extern ICmosRTC
 
 ;Registers our interrupt handlers in the IDT
 configure_pic_interrupts:
@@ -192,17 +193,6 @@ ISpurious:  ;IRQ7 spurious interrupt handler (also parallel port 1)
 
   no_eoi_reqd:
   pop ax
-  popf
-  iret
-
-ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler. Just sends EOI at present
-  pushf
-  push bx
-  mov ebx, 8
-  push ebx
-  call pic_send_eoi
-  add esp, 4
-  pop bx
   popf
   iret
 

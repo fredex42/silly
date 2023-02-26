@@ -72,3 +72,7 @@ uint32_t cmos_get_epoch_time()
     k_panic("Could not reliably determine RTC time after maximum attempts\r\n");
 }
 
+void initialise_time_counter()
+{
+    
+}

@@ -9,6 +9,10 @@ global cmos_get_update_in_progress
 
 global cmos_read
 global cmos_write
+global ICmosRTC
+
+;Interrupt handler functions
+extern pic_send_eoi
 
 _cmos_read_delay:
     push ebp
@@ -167,3 +171,76 @@ cmos_read_rtc_raw:
     sti
     pop ebp
     ret
+
+;Purpose: Safely enable IRQ 8, ensuring that NMI and interrupts are disabled while doing so
+cmos_init_rtc_interrupt:
+    push ebp
+    mov ebp, esp
+
+    cli
+    ;first we need to set  interrupt rate on register A https://web.archive.org/web/20150514082645/http://www.nondot.org/sabre/os/files/MiscHW/RealtimeClockFAQ.txt
+    mov al,     
+    ;now enable the interrupt by setting bits on status register B
+    mov al, 0x8B
+    out CMOS_REG_SELECT, al ;select status register B and disable NMI
+    call _cmos_read_delay
+    in al, CMOS_DATA        ;get current value of register B
+    or al, 0x40             ;set bit 6 to enable the interrupt
+    push ax
+    mov al, 0x8B
+    out CMOS_REG_SELECT, al ;select status register B again
+    pop ax
+    out CMOS_DATA, al       ;write the new value
+    mov byte [cmos_initialised], 1
+    sti
+
+    pop ebp
+    ret
+
+;Purpose: Handler for the RTC interrupt
+ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler. 
+  pushf
+  push eax
+
+  ;We must read status register C both to know what happened, and to clear the processing flag
+  mov ax, 0x0C      ;select status register C
+  out CMOS_REG_SELECT, al
+  call _cmos_read_delay
+  in al, CMOS_DATA  ;read status C value into al. Bit 6 => periodic interrupt, bit 5=> alarm interrupt, bit 4=> update-ended interrupt
+
+  test al, 0x40
+  jnz .periodic
+  .periodic_done:
+  test al, 0x20
+  jnz .alarm
+  .alarm_done:
+  test al, 0x10
+  jnz .rtc_updated
+  jmp .cmos_rtc_done
+
+  .periodic:    ;actions for the "periodic interrupt" (we use this as a tick counter)
+  inc dword [cmos_tick_counter]
+  jmp .periodic_done
+
+  .alarm:
+  nop           ;not implemented yet
+  jmp .alarm_done
+
+  .rtc_updated:
+  nop           ;not implemented yet
+
+  .cmos_rtc_done:
+  push ebx
+  mov ebx, 8
+  push ebx
+  call pic_send_eoi
+  add esp, 4
+
+  pop ebx
+  pop eax
+  popf
+  iret
+
+section .data
+    cmos_initialised:    db 0
+    cmos_tick_counter:   dq 0
