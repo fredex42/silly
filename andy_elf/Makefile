@@ -4,7 +4,7 @@ all: test.elf
 
 tests: test_mmgr
 
-CFLAGS=-fno-pie -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables -target i386-pc-none-elf
+CFLAGS=-fno-pie -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables 
 
 clean:
 	rm -f *.o test.elf test_mmgr

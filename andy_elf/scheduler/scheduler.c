@@ -5,6 +5,7 @@
 #include <sys/ioports.h>
 #include "scheduler_task_internals.h"
 #include <cfuncs.h>
+#include "../drivers/cmos/rtc.h"
 #include "../8259pic/picroutines.h"
 #include "../mmgr/process.h"
 #include "lowlevel.h"
@@ -25,7 +26,7 @@ void initialise_scheduler()
   active_process = 0;
 }
 
-#include <drivers/cmos/rtc.h>
+
 /*
 This is expected to be run from IRQ0, i.e. every 55ms or so.
 */

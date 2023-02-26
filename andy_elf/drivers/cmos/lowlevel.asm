@@ -234,7 +234,7 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   call _cmos_read_delay
   in al, CMOS_DATA  ;read status C value into al. Bit 6 => periodic interrupt, bit 5=> alarm interrupt, bit 4=> update-ended interrupt
 
-  mov ebl, byte [cmos_initialised]  ;if we have not been initialised, then bypass
+  mov bl, byte [cmos_initialised]  ;if we have not been initialised, then bypass
   test bl,bl
   jz .cmos_rtc_done
 

@@ -1,4 +1,4 @@
-CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables  -target i386-pc-none-elf
+CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables  
 
 .PHONY: vfat
 
