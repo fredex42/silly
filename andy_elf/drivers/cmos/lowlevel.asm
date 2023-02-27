@@ -16,6 +16,11 @@ global ICmosRTC
 
 ;Interrupt handler functions
 extern pic_send_eoi
+extern unmask_irq
+
+;Other imports
+extern enter_kernel_context
+extern idle_loop
 
 _cmos_read_delay:
     push ebp
@@ -172,6 +177,7 @@ cmos_read_rtc_raw:
     out CMOS_REG_SELECT, al ;clear bit 7 to re-enable NMI
 
     sti
+    pop edi
     pop ebp
     ret
 
@@ -212,6 +218,13 @@ cmos_init_rtc_interrupt:
     out CMOS_REG_SELECT, al
     call _cmos_read_delay
     in al, CMOS_DATA
+
+    ;tell the PIC to enable the interrupt
+    mov eax, 0x08
+    push eax
+    call unmask_irq
+    add esp, 4
+
     sti
 
     pop ebp
@@ -249,7 +262,7 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   jmp .cmos_rtc_done
 
   .periodic:    ;actions for the "periodic interrupt" (we use this as a tick counter)
-  inc dword [cmos_tick_counter]
+  inc dword [cmos_tick_counter] ;Note - on ia32 we can't do `inc qword`. 32-bit counter gives us 97 days of runtime before reset at 512Hz
   jmp .periodic_done
 
   .alarm:
@@ -268,6 +281,7 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   pop ebx
   pop eax
   popf
+
   iret
 
 section .data
