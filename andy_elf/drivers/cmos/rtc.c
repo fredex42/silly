@@ -54,7 +54,8 @@ void rtc_print_data(struct RealTimeClockRawData *raw)
 }
 
 /*
-Decodes the CMOS RTC values into an epoch time (i.e. seconds since midnight, jan 1st 1970)
+Decodes the CMOS RTC values into an epoch time (i.e. seconds since midnight, jan 1st 2000)
+Note that this modifies the struct pointed to in its argument - the values are normalised (converted from BCD and 12H if necessary)
 */
 uint32_t rtc_raw_data_to_epoch(struct RealTimeClockRawData *raw)
 {
