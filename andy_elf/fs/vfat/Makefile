@@ -1,4 +1,4 @@
-CFLAGS=-fno-pie -m32 -I../../include -march=i486 -fno-asynchronous-unwind-tables -Wno-builtin-declaration-mismatch
+CFLAGS=-fno-pie -m32 -I../../include -march=i486 -fno-asynchronous-unwind-tables -Wno-builtin-declaration-mismatch  
 
 all: libfs_vfat.a
 

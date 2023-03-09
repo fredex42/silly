@@ -343,6 +343,10 @@ call initialise_scheduler
 ;specifically, the timer needs somewhere to go
 sti
 
+;set up the real-time clock tick counter
+extern cmos_init_rtc_interrupt
+call cmos_init_rtc_interrupt
+
 extern initialise_ata_driver
 call initialise_ata_driver
 

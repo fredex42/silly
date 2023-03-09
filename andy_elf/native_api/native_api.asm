@@ -25,6 +25,9 @@ extern api_write
 ;scheduler/lowlevel.asm
 extern enter_kernel_context
 
+;drivers/cmos/rtc.c
+extern rtc_get_epoch_time
+
 ;Purpose - initialise the native API by attaching the landing pad function to
 ; the int 0x60 interrupt
 init_native_api:
@@ -93,6 +96,22 @@ native_api_landing_pad:
 
   jmp .napi_rtn_direct
 .napi_8:
+  cmp eax, API_GET_TIME
+  jnz .napi_nf
+  push ebx
+  push ecx
+  push edx
+  push edi
+  push esi
+  call rtc_get_epoch_time
+  pop esi
+  pop edi
+  pop edx
+  pop ecx
+  pop ebx
+  jmp .napi_rtn_direct
+
+.napi_nf:
   ;we did not recognise the API code. Fallthrough to return to process.
   mov eax, API_ERR_NOTFOUND
 

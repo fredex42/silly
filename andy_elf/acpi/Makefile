@@ -1,5 +1,5 @@
 
-CFLAGS=-fno-pie -m32 -I../include -march=i486
+CFLAGS=-fno-pie -m32 -I../include -march=i486  
 
 all: libacpi.a
 

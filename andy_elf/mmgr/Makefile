@@ -1,4 +1,4 @@
-CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables # -DMMGR_PARANOID -DMMGR_VERBOSE
+CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables   # -DMMGR_PARANOID -DMMGR_VERBOSE
 
 all: libmmgr.a
 

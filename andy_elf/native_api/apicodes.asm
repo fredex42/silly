@@ -12,6 +12,7 @@
 %define API_DUP             0x0000000C
 %define API_IOCTL           0x0000000D
 
+%define API_GET_TIME        0x00000010    ;Return time as number of seconds since Jan 1, 2000
 %define API_ERR_NOTFOUND    0x80000001    ;No such api code found
 
 extern api_terminate_current_process
