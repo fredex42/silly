@@ -54,18 +54,53 @@ void rtc_print_data(struct RealTimeClockRawData *raw)
 }
 
 /*
-Decodes the CMOS RTC values into an epoch time (i.e. milliseconds since midnight, jan 1st 2000)
+Decodes the CMOS RTC values into an epoch time (i.e. seconds since midnight, jan 1st 1970)
 */
-uint64_t rtc_raw_data_to_epoch(struct RealTimeClockRawData *raw)
+uint32_t rtc_raw_data_to_epoch(struct RealTimeClockRawData *raw)
 {
     rtc_normalise_time(raw);
     rtc_print_data(raw);
-    return  (uint64_t)raw->year     * 31536000000 +
-            (uint64_t)raw->month    * 2628000000 +
-            (uint64_t)raw->monthday * 86400000 +
-            (uint64_t)raw->hours    * 3600000 +
-            (uint64_t)raw->minutes  * 60000 +
-            (uint64_t)raw->seconds  * 1000;
+
+    //Algorithm courtesy of https://stackoverflow.com/questions/7960318/math-to-convert-seconds-since-1970-into-date-and-vice-versa?noredirect=1&lq=1 !
+    // Cumulative days for each previous month of the year
+    int mdays[] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
+    int year = (int)raw->year;
+
+    // Compensation of the non-leap years
+    int minusYear = 0;
+    // Detect potential lead day (February 29th) in this year?
+    if ( raw->month >= 3 )
+    {
+      // Then add this year into "sum of leap days" computation
+      year++;
+      // Compute one year less in the non-leap years sum
+      minusYear = 1;
+    }
+
+    int mindex = (raw->month - 1);
+    return
+      // + Seconds from computed minutes
+      60 * (
+        // + Minutes from computed hours
+        60 * (
+          // + Hours from computed days
+          24L * (
+            // + Day (zero index)
+            raw->monthday - 1
+            // + days in previous months (leap day not included)
+            + mdays[mindex]
+            // + days for each year divisible by 4 (starting from 1973)
+            + ( ( year + 1 ) / 4 )
+            // - days after year 2000
+            - ( ( year > 130 ) ? 1 : 0 )
+            // + days for each year (as all are non-leap years) from 1970 (minus this year if potential leap day taken into account)
+            + ( 5 * 73 ) * ( year - minusYear )
+          // + Hours
+          ) + raw->hours
+        // + Minutes
+        ) + raw->minutes
+      // + Seconds
+      ) + raw->seconds;
 }
 
 uint32_t cmos_get_epoch_time()
@@ -97,4 +132,15 @@ uint32_t cmos_get_epoch_time()
         }
     }
     k_panic("Could not reliably determine RTC time after maximum attempts\r\n");
+}
+
+uint32_t rtc_get_epoch_time()
+{
+    uint32_t ticks = rtc_get_ticks();
+    return (uint32_t)((float)ticks / 512.0) + rtc_get_boot_time();
+}
+
+uint32_t rtc_get_unix_time()
+{
+    return (uint32_t)rtc_get_epoch_time() + 946684800;
 }

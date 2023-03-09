@@ -11,6 +11,7 @@ global cmos_read
 global cmos_write
 
 global rtc_get_ticks            ;returns the number of 512Hz ticks since startup
+global rtc_get_boot_time        ;returns the timestamp at which the system was initialised
 global cmos_init_rtc_interrupt  ;initialises the tick counter etc.
 global ICmosRTC
 
@@ -21,6 +22,7 @@ extern unmask_irq
 ;Other imports
 extern enter_kernel_context
 extern idle_loop
+extern cmos_get_epoch_time
 
 _cmos_read_delay:
     push ebp
@@ -227,12 +229,19 @@ cmos_init_rtc_interrupt:
 
     sti
 
+    call cmos_get_epoch_time    ;puts current epoch time into eax
+    mov dword [cmos_initialised_timestamp], eax
     pop ebp
     ret
 
 ;Purpose: Return the number of 1.92ms ticks (512Hz) since the clock was initialised
 rtc_get_ticks:
     mov eax, dword [cmos_tick_counter]
+    ret
+
+;Purpose: Return the epoch time of boot
+rtc_get_boot_time:
+    mov eax, dword [cmos_initialised_timestamp]
     ret
 
 ;Purpose: Handler for the RTC interrupt
@@ -285,5 +294,6 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   iret
 
 section .data
-    cmos_initialised:    db 0
-    cmos_tick_counter:   dq 0
+    cmos_initialised:          db 0
+    cmos_tick_counter:         dq 0
+    cmos_initialised_timestamp:dq 0

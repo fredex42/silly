@@ -18,10 +18,22 @@ struct RealTimeClockRawData {
     uint8_t status_b;
 } __attribute__((packed));
 
-#if __WORDSIZE==32
-uint32_t rtc_get_ticks();
-#else
-uint64_t rtc_get_ticks();
-#endif
 
+/*
+Gets the current time from the CMOS clock and converts it into an Epoch time since Jan 1st, 2000
+NOTE - this is slow and should not be used by external callers. Use rtc_get_epoch_time instead.
+*/
+uint32_t cmos_get_epoch_time();
+
+/*
+Gets the current epoch time, since Jan 1st, 2000. This uses the recorded boot time and the
+number of ticks that occurred since startup to calculate the time in a more performant manner
+than directly reading it from CMOS
+*/
+uint32_t rtc_get_epoch_time();
+
+/*
+Same as rtc_get_epoch_time but returns it since the Unix epoch
+*/
+uint32_t rtc_get_unix_time();
 #endif

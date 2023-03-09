@@ -28,15 +28,19 @@ void initialise_scheduler()
 
 
 /*
-This is expected to be run from IRQ0, i.e. every 55ms or so.
+scheduler_tick is expected to be run from IRQ0, i.e. every 55ms or so.
 */
 void scheduler_tick()
 {
   SchedulerTask *to_run;
 
+  cli();
   //FIXME: this is just for debugging!!
   uint32_t current_ticks = rtc_get_ticks();
-  kprintf("DEBUG: There have been %l elapsed 512Hz ticks\r\n", current_ticks);
+  uint32_t epoch_time = rtc_get_unix_time();
+  uint32_t boot_time = rtc_get_boot_time();
+
+  kprintf("DEBUG: There have been %l elapsed 512Hz ticks. System startup was at %l, Current unix time is %l\r\n", current_ticks, boot_time, epoch_time);
   
   ++global_scheduler_state->ticks_elapsed;
   //FIXME: run deadline tasks first
@@ -56,6 +60,7 @@ void scheduler_tick()
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
     --global_scheduler_state->tasks_in_progress;
   }
+  sti();
 }
 
 uint64_t get_scheduler_ticks()

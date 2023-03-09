@@ -9,7 +9,7 @@ rtc.o: rtc.c rtc.h lowlevel.h
 	gcc -c ${CFLAGS} rtc.c
 
 libcmos.a: lowlevel.o rtc.o
-	ar rcs libcmos.a lowlevel.o rtc.o
+	ar rcs libcmos.a rtc.o lowlevel.o
 
 clean:
 	rm -f *.a *.o
