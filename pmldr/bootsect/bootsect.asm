@@ -40,6 +40,7 @@ call LoadDiskSectors
 ;Right, now we are loaded.  Jump into PMLDR.
 mov si, LoadingDone
 call PrintString
+mov dl, byte [BootDevice]
 jmp 0x7E0:0x0000
 
 ;We can't continue if int13 extensions are not available.
