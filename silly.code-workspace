@@ -1,0 +1,20 @@
+{
+    "folders": [
+        {
+            "name": "Kernel",
+            "path": "andy_elf"
+        },
+        {
+            "name": "Old loader",
+            "path": "elf_loader",
+        },
+        {
+            "name": "New loader",
+            "path": "pmldr"
+        },
+        {
+            "name": "SHELL.APP",
+            "path": "shell.app",
+        }
+    ]
+}
