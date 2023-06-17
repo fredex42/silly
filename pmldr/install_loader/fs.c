@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdlib.h>
 #include "fs.h"
 
 #define BOOT_SECTOR_SIZE 512
@@ -18,7 +19,7 @@ void *load_bootsector(int fd)
 
     ssize_t bytes_read = read(fd, buf, BOOT_SECTOR_SIZE);
     if(bytes_read!=BOOT_SECTOR_SIZE) {
-        fprintf(stderr, "ERROR Could only read %d bytes for bootsector, expected 512\n");
+        fprintf(stderr, "ERROR Could only read %ld bytes for bootsector, expected 512\n", bytes_read);
         free(buf);
         return NULL;
     }

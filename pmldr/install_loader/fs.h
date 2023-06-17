@@ -4,7 +4,7 @@
 void *load_bootsector(int fd);
 void get_oem_name(void *bootsect, char *buf);
 
-#define get_bpb(bs_ptr) (BIOSParameterBlock *)((char *)bs_ptr)[0x0B]
+#define get_bpb(bs_ptr) (BIOSParameterBlock *)(bs_ptr + 0x0B)
 #define get_jump_bytes(bs_ptr) (char *)bs_ptr;  //first 3 bytes
 #define OEM_NAME_LENGTH 8
 

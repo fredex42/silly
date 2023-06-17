@@ -1,4 +1,4 @@
 all: pmldr
 
-pmldr: pmldr.asm
+pmldr: pmldr.asm prologue.asm mainloader.asm
 	nasm -f bin pmldr.asm

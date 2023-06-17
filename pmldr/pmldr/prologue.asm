@@ -6,6 +6,9 @@
 
 %include "../../andy_elf/memlayout.asm" ;ensure that e.g. TemporaryMemInfoBufferSeg is the same as for the kernel
 
+mov si, [HelloString]
+call PrintString
+
 ;before we go to PM, retrieve the bios memory map
 call detect_memory
 
@@ -74,6 +77,26 @@ detect_memory:
 
 	mem_det_done:
 	mov word [es:000], si
+	ret
+
+; uses BIOS int10 to output the character in AL to the screen
+PrintCharacter:
+	mov ah, 0x0E
+	mov bh, 0x00
+	mov bl, 0x07
+	int 0x10
+	ret
+
+; repeatedly calls PrintCharacter to output the ASCIIZ string pointed to by the SI register
+PrintString:
+	next_char:
+	mov al, [cs:si]
+	inc si
+	or al, al	;sets zero flag if al is 0 => end of string
+	jz exit_function
+	call PrintCharacter
+	jmp next_char
+	exit_function:
 	ret
 
 get_boot_drive_params:

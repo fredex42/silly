@@ -16,11 +16,15 @@ This is a Linux C program which is designed to install our loader and kernel ont
 
 #define BLOCKSIZE   32
 
-int copy_pmldr(int source_fd, int dest_fd, size_t offset, size_t len) {
+int copy_bootsect(int source_fd, int dest_fd, size_t offset, size_t len) {
     char buf[BLOCKSIZE];
     long remaining;
     size_t count;
     int n=0;
+
+    printf("INFO Writing bootloader at an offset of 0x%lx\n", offset);
+
+    lseek(dest_fd, offset, SEEK_SET);
 
     for(remaining=len;remaining>0;remaining-=BLOCKSIZE) {
         if(remaining>BLOCKSIZE) {
@@ -39,6 +43,7 @@ int copy_pmldr(int source_fd, int dest_fd, size_t offset, size_t len) {
             return -1;
         }
     }
+
     return len;
 }
 
@@ -99,16 +104,36 @@ int main(int argc, char **argv)
         exit(2);
     }
     
-    int source_fd = open("pmldr/pmldr", O_RDONLY);
+    int source_fd = open("bootsect/bootsect.bin", O_RDONLY);
     if(source_fd==-1) {
-        fputs("ERROR Could not find pmldr executable. Ensure that it is in a subdirectory called pmldr below the current working directory.\n", stderr);
+        fputs("ERROR Could not find bootsect executable. Ensure that it is in a subdirectory called bootsect below the current working directory.\n", stderr);
         exit(3);
     }
 
-    size_t size = get_file_size("pmldr/pmldr");
+    size_t size = get_file_size("bootsect/bootsect.bin");
     if(size==0) {
-        fputs("ERROR Either pmldr not found or it is zero-length\n", stderr);
+        fputs("ERROR Either bootsect not found or it is zero-length\n", stderr);
         exit(3);
     }
-    copy_pmldr(source_fd, raw_device_fd, find_destination_offset(bpb), size);
+
+    
+    printf("INFO Copying bootsect.bin with a size of %ld bytes\n", size);
+    size_t offset = find_destination_offset(bpb);
+    copy_bootsect(source_fd, raw_device_fd, offset, size);
+    //Now write the jump bytes
+    lseek(dest_fd, 0, SEEK_SET);
+
+    buf[0] = 0xEB;  //"JMP rel8"
+    buf[1] = (uint8_t) offset;
+    write(dest_fd, buf, 2);
+
+    //Now write boot signature bytes
+    lseek(dest_fd, 0x1FE, SEEK_SET);
+    buf[0] = 0x55;
+    buf[1] = 0xAA;
+    write(dest_fd, buf, 2);
+
+    close(source_fd);
+
+    close(raw_device_fd);
 }
