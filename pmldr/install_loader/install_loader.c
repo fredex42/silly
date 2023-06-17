@@ -116,22 +116,23 @@ int main(int argc, char **argv)
         exit(3);
     }
 
+    char buf[16];
     
     printf("INFO Copying bootsect.bin with a size of %ld bytes\n", size);
     size_t offset = find_destination_offset(bpb);
     copy_bootsect(source_fd, raw_device_fd, offset, size);
     //Now write the jump bytes
-    lseek(dest_fd, 0, SEEK_SET);
+    lseek(raw_device_fd, 0, SEEK_SET);
 
     buf[0] = 0xEB;  //"JMP rel8"
     buf[1] = (uint8_t) offset;
-    write(dest_fd, buf, 2);
+    write(raw_device_fd, buf, 2);
 
     //Now write boot signature bytes
-    lseek(dest_fd, 0x1FE, SEEK_SET);
+    lseek(raw_device_fd, 0x1FE, SEEK_SET);
     buf[0] = 0x55;
     buf[1] = 0xAA;
-    write(dest_fd, buf, 2);
+    write(raw_device_fd, buf, 2);
 
     close(source_fd);
 

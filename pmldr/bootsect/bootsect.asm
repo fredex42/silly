@@ -1,5 +1,5 @@
 [BITS 16]
-[ORG 0x7C00]	;boot loader lives here, this is above the disk formatting information
+[ORG 0x7C32]	;boot loader lives here, this is above the disk formatting information
 
 jmp _bootsect
 
@@ -33,8 +33,8 @@ mov dx, 0x0080
 int 0x13
 jc no_extns
 
-mov cx, pmldr_sector
-mov bx, pmldr_length
+mov cx, [pmldr_sector]
+mov bx, [pmldr_length]
 mov ax, 0x7E0       ;we want to load PMLDR at 0x7E0:0000
 mov ds, ax          ;so set ds to 0x7E0
 call LoadDiskSectors
@@ -59,7 +59,7 @@ PrintCharacter:
 	int 0x10
 	ret
 
-; repeatedly calls PrintCharacter to output the ASCIIZ string pointed to by the SI register
+; repeatedly calls PrintCharacter to output the ASCIIZ string pointed to by the SI register relative to the code segment
 PrintString:
 	.next_char:
 	mov al, [cs:si]
