@@ -39,7 +39,7 @@ void get_oem_name(void *bootsect, char *buf)
 */
 uint16_t file_size_to_clusters(size_t file_size, BIOSParameterBlock *bpb) 
 {
-    double sector_count = file_size / bpb->bytes_per_logical_sector;
+    double sector_count = (double)file_size / bpb->bytes_per_logical_sector;
     double cluster_count = sector_count / bpb->logical_sectors_per_cluster;
     uint16_t clusters = (uint16_t) ceil(cluster_count);
 
@@ -103,10 +103,66 @@ size_t f16_get_root_dir_location(BIOSParameterBlock *bpb)
     return sector_location * bpb->bytes_per_logical_sector;
 }
 
-
+/**
+ * Returns the first 4k of the root directory on FAT32
+*/
 DirectoryEntry *f32_get_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb)
 {
     if(!bpb->max_root_dir_entries==0) return NULL;  //if max_root_dir_entries not 0 then we are fat12/16 and the wrong function was called.
 
+    size_t root_dir_offset = f32bpb->root_directory_entry_cluster * bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
 
+    size_t buffer_size = bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
+    DirectoryEntry *buffer = (DirectoryEntry *)malloc(buffer_size);
+    if(!buffer) {
+        fprintf(stderr, "ERROR Not enough memory\n");
+        return NULL;
+    }
+
+    memset(buffer, 0, buffer_size);
+    lseek(raw_device_fd, root_dir_offset, SEEK_SET);
+    size_t bytes_read = read(raw_device_fd, buffer, buffer_size);
+    if(bytes_read < buffer_size) {
+        fprintf(stderr, "ERROR Could not read in FAT32 root directory, expected %ld bytes got %ld", buffer_size, bytes_read);
+        free(buffer);
+        return NULL;
+    }
+    return buffer;
+}
+
+int f32_write_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, DirectoryEntry *buffer)
+{
+    if(!bpb->max_root_dir_entries==0) return -1;  //if max_root_dir_entries not 0 then we are fat12/16 and the wrong function was called.
+
+    size_t root_dir_offset = f32bpb->root_directory_entry_cluster * bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
+    size_t buffer_size = bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
+
+    lseek(raw_device_fd, root_dir_offset, SEEK_SET);
+    fprintf(stdout, "INFO Writing %ld bytes for root directory\n", buffer_size);
+    size_t bytes_written = write(raw_device_fd, buffer, buffer_size);
+    if(bytes_written < buffer_size) {
+        fprintf(stderr, "ERROR Could not write out FAT32 root directory, expected %ld bytes got %ld\n", buffer_size, bytes_written);
+        return -1;
+    }
+    return 0;
+}
+
+void *get_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb)
+{
+    size_t offset = bpb->reserved_logical_sectors * bpb->bytes_per_logical_sector;
+    size_t buffer_size = bpb->logical_sectors_per_fat * bpb->bytes_per_logical_sector;
+
+    void *buf = malloc(buffer_size);
+    if(!buf) {
+        fprintf(stderr, "ERROR Not enough memory for file allocation table\n");
+        return NULL;
+    }
+    lseek(raw_device_fd, offset, SEEK_SET);
+    size_t bytes_read = read(raw_device_fd, buf, buffer_size);
+    if(bytes_read < buffer_size) {
+        fprintf(stderr, "ERROR Could not read in entire file allocation table, expected %ld bytes got %ld\n", buffer_size, bytes_read);
+        free(buf);
+        return NULL;
+    }
+    return buf;
 }

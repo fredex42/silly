@@ -13,6 +13,7 @@ This is a Linux C program which is designed to install our loader and kernel ont
 
 #include "vfat.h"
 #include "fs.h"
+#include "copier.h"
 
 #define BLOCKSIZE   32
 
@@ -56,17 +57,6 @@ size_t find_destination_offset(BIOSParameterBlock *bpb) {
     }
 }
 
-size_t get_file_size(char *filepath) {
-    struct stat fileinfo;
-
-    int r = stat(filepath, &fileinfo);
-    if(r!=0) {
-        fprintf(stderr, "ERROR Could not read local file '%s'\n", filepath);
-        return 0;
-    }
-    return fileinfo.st_size;
-}
-
 int main(int argc, char **argv)
 {
     char *device = argv[1];
@@ -103,7 +93,19 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERROR The volume at %s already has boot code present, not over-writing\n", device);
         exit(2);
     }
-    
+    // ---- copy over pmldr (the second-stage bootloader) as a regular file
+
+    if(bpb->total_logical_sectors==0 && bpb->bytes_per_logical_sector!=0) {
+        FAT32ExtendedBiosParameterBlock *f32bpb = get_f32bpb(bootsector);
+        f32_copy_file("pmldr/pmldr", raw_device_fd, bpb, f32bpb);
+    } else if( bpb->total_logical_sectors!=0) {
+        f16_copy_file("pmldr/pmldr", raw_device_fd, bpb);
+    } else {
+        fprintf(stderr, "ERROR Could not determine if we are FAT16 or FAT32. Total sectors: %d, bytes per logical sector: %d", bpb->total_logical_sectors, bpb->bytes_per_logical_sector);
+        exit(4);
+    }
+     
+    // ---- install the bootsector
     int source_fd = open("bootsect/bootsect.bin", O_RDONLY);
     if(source_fd==-1) {
         fputs("ERROR Could not find bootsect executable. Ensure that it is in a subdirectory called bootsect below the current working directory.\n", stderr);
