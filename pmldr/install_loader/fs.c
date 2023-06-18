@@ -166,3 +166,17 @@ void *get_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb)
     }
     return buf;
 }
+
+int write_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb, void *buffer)
+{
+    size_t offset = bpb->reserved_logical_sectors * bpb->bytes_per_logical_sector;
+    size_t buffer_size = bpb->logical_sectors_per_fat * bpb->bytes_per_logical_sector;
+
+    lseek(raw_device_fd, offset, SEEK_SET);
+    size_t bytes_written = write(raw_device_fd, buffer, buffer_size);
+    if(bytes_written < buffer_size) {
+        fprintf(stderr, "ERROR Could not write out entire file allocation table, expected %ld bytes got %ld\n", buffer_size, bytes_written);
+        return -1;
+    }
+    return 0;
+}

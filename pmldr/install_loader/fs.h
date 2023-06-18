@@ -26,5 +26,5 @@ DirectoryEntry *f32_get_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT
 int f32_write_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, DirectoryEntry *entries);
 
 void *get_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb);
-
+int write_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb, void *buffer);
 #endif
