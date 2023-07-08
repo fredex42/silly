@@ -90,7 +90,7 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
         fprintf(stderr, "ERROR Could not get fat32 allocation table\n");
         return -1;
     }
-    size_t fat_size = (size_t) ceil((double)(bpb->logical_sectors_per_fat * bpb->bytes_per_logical_sector) / (double) 4.0); //divide by 4 because 4 bytes per entry
+    size_t fat_size = (size_t) ceil((double)(f32bpb->logical_sectors_per_fat * bpb->bytes_per_logical_sector) / (double) 4.0); //divide by 4 because 4 bytes per entry
 
     size_t source_file_size = get_file_size(source_file_name);
     if(source_file_size==0) {
@@ -118,6 +118,11 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
 
     //create a new directory entry in memory
     DirectoryEntry *root_dir_start = f32_get_root_dir(raw_device_fd, bpb, f32bpb);
+    if(root_dir_start==NULL) {
+        fprintf(stderr, "ERROR Could not find FAT32 root directory");
+        free(fat);
+        return -1;
+    }
     add_pmldr_entry(root_dir_start, start_cluster_index, source_file_size, 16384 / sizeof(DirectoryEntry));
 
     //copy the file over, in blocks corresponding to each cluster
@@ -128,7 +133,12 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
         return -1;
     }
 
-    int rv = recursive_copy_file(source_fd, raw_device_fd, start_cluster_index, cluster_count, (size_t)bpb->logical_sectors_per_cluster * (size_t)bpb->bytes_per_logical_sector);
+    size_t reserved_sectors_total = (size_t)bpb->reserved_logical_sectors + ((bpb->fat_count * (size_t)f32bpb->logical_sectors_per_fat));
+    
+    int rv = recursive_copy_file(source_fd, raw_device_fd,
+     start_cluster_index, cluster_count, reserved_sectors_total * (size_t)bpb->bytes_per_logical_sector,
+     (size_t)bpb->logical_sectors_per_cluster * (size_t)bpb->bytes_per_logical_sector);
+
     if(rv!=0) {
         fprintf(stderr, "ERROR Could not copy PMLDR\n");
         free(fat);
@@ -158,6 +168,7 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
 */
 uint32_t f32_find_free_clusters(uint32_t required_length, uint32_t *allocation_table, size_t table_size)
 {
+    fprintf(stdout, "DEBUG looking for %d clusters in table of size %ld\n", required_length, table_size);
     char counting;
     uint32_t found_blocks = 0;
     uint32_t starting_block = 0;
@@ -187,7 +198,7 @@ uint32_t f32_find_free_clusters(uint32_t required_length, uint32_t *allocation_t
     return 0;
 }
 
-int recursive_copy_file(int source_fd, int raw_device_fd, size_t dest_block_offset, size_t total_blocks, size_t block_size)
+int recursive_copy_file(int source_fd, int raw_device_fd, size_t dest_block_offset, size_t total_blocks, size_t reserved_bytes, size_t block_size)
 {
     void *buffer = malloc(block_size);
     if(buffer==NULL) {
@@ -195,20 +206,24 @@ int recursive_copy_file(int source_fd, int raw_device_fd, size_t dest_block_offs
         return -1;
     }
 
-    int rv = copy_next_block(source_fd, 0, total_blocks, raw_device_fd, dest_block_offset, block_size, buffer);
+    int rv = copy_next_block(source_fd, 0, total_blocks, raw_device_fd, dest_block_offset, reserved_bytes, block_size, buffer);
     free(buffer);
     return rv;
 }
 
-int copy_next_block(int source_fd, size_t blocks_copied, size_t total_blocks, int raw_device_fd, size_t dest_block, size_t block_size, void *buffer)
+int copy_next_block(int source_fd, size_t blocks_copied, size_t total_blocks, int raw_device_fd, size_t dest_block, size_t reserved_bytes, size_t block_size, void *buffer)
 {
+
+    fprintf(stderr, "DEBUG copy_next_block copied %ld out of %ld blocks from %d to %d\n", blocks_copied, total_blocks, source_fd, raw_device_fd);
+
     if(blocks_copied==total_blocks) return 0;   //we are done
 
-    size_t target_offset = dest_block * block_size;
+    size_t target_offset = dest_block * block_size + reserved_bytes;
     fprintf(stdout, "INFO Copying block %ld to block %ld\n", blocks_copied, target_offset);
 
     memset(buffer, 0, block_size);
     size_t bytes_read = read(source_fd, buffer, block_size);    //this read may be short if we get to the end of the file
+    fprintf(stdout, "INFO Read in %ld bytes\n", bytes_read);
 
     if(bytes_read==0) {
         fprintf(stderr, "ERROR Not enough blocks in the source file\n");
@@ -216,8 +231,10 @@ int copy_next_block(int source_fd, size_t blocks_copied, size_t total_blocks, in
     }
 
     //write the whole block down
+    fprintf(stdout, "INFO Byte offset is %ld\n", target_offset);
     lseek(raw_device_fd, target_offset, SEEK_SET);
-    write(raw_device_fd, buffer, block_size);
+    size_t bytes_written = write(raw_device_fd, buffer, block_size);
+    fprintf(stdout, "INFO Wrote out %ld bytes\n", bytes_written);
 
-    return copy_next_block(source_fd, blocks_copied+1, total_blocks, raw_device_fd, dest_block+1, block_size, buffer);
+    return copy_next_block(source_fd, blocks_copied+1, total_blocks, raw_device_fd, dest_block+1, reserved_bytes, block_size, buffer);
 }
