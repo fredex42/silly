@@ -127,7 +127,7 @@ int main(int argc, char **argv)
     lseek(raw_device_fd, 0, SEEK_SET);
 
     buf[0] = 0xEB;  //"JMP rel8"
-    buf[1] = (uint8_t) offset;
+    buf[1] = (uint8_t) offset+2;    //add 4 bytes to the offset to skip over the 2 uint16's of data at the start. 
     write(raw_device_fd, buf, 2);
 
     //Now write boot signature bytes

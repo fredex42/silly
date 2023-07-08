@@ -1,7 +1,5 @@
 [BITS 16]
-[ORG 0x7C32]	;boot loader lives here, this is above the disk formatting information
-
-jmp _bootsect
+[ORG 0x7C68]	;boot loader lives here, this is above the disk formatting information
 
 ; These values are written by install_loader during the installation process and point us to the location of the PMLDR binary on-disk.
 ; That way we don't have to waste valuable space interpreting the disk format
