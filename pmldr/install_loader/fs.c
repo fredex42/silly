@@ -108,8 +108,6 @@ size_t f16_get_root_dir_location(BIOSParameterBlock *bpb)
 */
 DirectoryEntry *f32_get_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb)
 {
-    if(!bpb->max_root_dir_entries==0) return NULL;  //if max_root_dir_entries not 0 then we are fat12/16 and the wrong function was called.
-
     size_t root_dir_offset = f32bpb->root_directory_entry_cluster * bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
 
     size_t buffer_size = bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
@@ -121,9 +119,10 @@ DirectoryEntry *f32_get_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT
 
     memset(buffer, 0, buffer_size);
     lseek(raw_device_fd, root_dir_offset, SEEK_SET);
+    printf("DEBUG root dir is at cluster %d, root dir byte offset is %ld\n", f32bpb->root_directory_entry_cluster, root_dir_offset);
     size_t bytes_read = read(raw_device_fd, buffer, buffer_size);
     if(bytes_read < buffer_size) {
-        fprintf(stderr, "ERROR Could not read in FAT32 root directory, expected %ld bytes got %ld", buffer_size, bytes_read);
+        fprintf(stderr, "ERROR Could not read in FAT32 root directory, expected %ld bytes got %ld\n", buffer_size, bytes_read);
         free(buffer);
         return NULL;
     }
@@ -147,11 +146,13 @@ int f32_write_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT32Extended
     return 0;
 }
 
-void *get_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb)
+void *get_allocation_table(int raw_device_fd, size_t logical_sectors_per_fat, BIOSParameterBlock *bpb)
 {
     size_t offset = bpb->reserved_logical_sectors * bpb->bytes_per_logical_sector;
-    size_t buffer_size = bpb->logical_sectors_per_fat * bpb->bytes_per_logical_sector;
+    size_t buffer_size = logical_sectors_per_fat * bpb->bytes_per_logical_sector;
 
+    fprintf(stdout, "DEBUG allocation table offset is %ld and size is %ld\n", offset, buffer_size);
+    
     void *buf = malloc(buffer_size);
     if(!buf) {
         fprintf(stderr, "ERROR Not enough memory for file allocation table\n");
@@ -167,10 +168,12 @@ void *get_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb)
     return buf;
 }
 
-int write_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb, void *buffer)
+int write_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb, size_t logical_sectors_per_fat, void *buffer)
 {
     size_t offset = bpb->reserved_logical_sectors * bpb->bytes_per_logical_sector;
-    size_t buffer_size = bpb->logical_sectors_per_fat * bpb->bytes_per_logical_sector;
+    size_t buffer_size = logical_sectors_per_fat * bpb->bytes_per_logical_sector;
+
+    fprintf(stderr, "DEBUG allocation table size is %ld bytes and offset is %ld\n", buffer_size, offset);
 
     lseek(raw_device_fd, offset, SEEK_SET);
     size_t bytes_written = write(raw_device_fd, buffer, buffer_size);

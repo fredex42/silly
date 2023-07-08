@@ -23,7 +23,7 @@ size_t get_file_size(char *source_file_name)
 
 int f16_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock *bpb)
 {
-    uint16_t *fat = (uint16_t *)get_allocation_table(raw_device_fd, bpb);
+    uint16_t *fat = (uint16_t *)get_allocation_table(raw_device_fd, bpb->logical_sectors_per_fat, bpb);
     if(!fat) {
         fprintf(stderr, "ERROR Could not get fat16 allocation table\n");
         return -1;
@@ -85,7 +85,7 @@ int add_pmldr_entry(DirectoryEntry *root_dir_start, uint32_t cluster_address, si
 
 int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb)
 {
-    uint32_t *fat = (uint32_t *)get_allocation_table(raw_device_fd, bpb);
+    uint32_t *fat = (uint32_t *)get_allocation_table(raw_device_fd, f32bpb->logical_sectors_per_fat, bpb);
     if(!fat) {
         fprintf(stderr, "ERROR Could not get fat32 allocation table\n");
         return -1;
@@ -145,7 +145,7 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
         return -1;
     }
     close(source_fd);
-    rv = write_allocation_table(raw_device_fd, bpb, (void *)fat);
+    rv = write_allocation_table(raw_device_fd, bpb, f32bpb->logical_sectors_per_fat, (void *)fat);
     if(rv!=0) {
         fprintf(stderr, "ERROR Could not write updated allocation table\n");
         free(fat);
