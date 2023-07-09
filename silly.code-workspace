@@ -16,5 +16,11 @@
             "name": "SHELL.APP",
             "path": "shell.app",
         }
-    ]
+    ],
+    "settings": {
+        "files.associations": {
+            "stat.h": "c",
+            "*.tcc": "c"
+        }
+    }
 }
