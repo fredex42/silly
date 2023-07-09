@@ -57,7 +57,10 @@ void apply_pmldr_entry(DirectoryEntry *entry, uint32_t cluster_address, uint32_t
     entry->creation_date = (nowtime.tm_year - 80) << 9 | (uint8_t)nowtime.tm_mon << 5 | (uint8_t)nowtime.tm_mday;
     entry->last_access_date = entry->creation_date;
     entry->f32_high_cluster_num = cluster_address >> 16;
-    
+    entry->last_mod_time = (uint8_t)nowtime.tm_hour << 11 | (uint8_t)nowtime.tm_min << 5 | (uint8_t)(nowtime.tm_sec / 2);
+    entry->last_mod_date = (nowtime.tm_year - 80) << 9 | (uint8_t)nowtime.tm_mon << 5 | (uint8_t)nowtime.tm_mday;
+    entry->low_cluster_num = (uint16_t) cluster_address;
+    entry->file_size = file_size_bytes;
 }
 
 /**
@@ -75,7 +78,7 @@ int add_pmldr_entry(DirectoryEntry *root_dir_start, uint32_t cluster_address, si
         DirectoryEntry entry = root_dir_start[i];
         if(entry.short_name[0]==0x00 || entry.short_name[0]==0xE5) {  //0x00 => free, 0xE5 => deleted
             fprintf(stderr, "INFO Found free directory entry slot at %ld\n", i);
-            apply_pmldr_entry(&entry, cluster_address, file_size_bytes);
+            apply_pmldr_entry(&root_dir_start[i], cluster_address, file_size_bytes);
             return 0;
         }
     }
@@ -110,7 +113,7 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
     //now, set the cluster map for what we are about to copy
     for(uint32_t i=0; i<cluster_count; i++) {
         if(i==cluster_count-1) {
-            fat[start_cluster_index+i] = 0x0FFFFFF; //end-of-file marker
+            fat[start_cluster_index+i] = 0x0FFFFFFF; //end-of-file marker
         } else {
             fat[start_cluster_index+i] = start_cluster_index+i+1;   //next cluster to load. We have ensured that they are contigous.
         }
@@ -133,7 +136,8 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
         return -1;
     }
 
-    size_t reserved_sectors_total = (size_t)bpb->reserved_logical_sectors + ((bpb->fat_count * (size_t)f32bpb->logical_sectors_per_fat));
+    //FIXME - why is this calculation out by 2 sectors?
+    size_t reserved_sectors_total = (size_t)bpb->reserved_logical_sectors-2 + ((bpb->fat_count * (size_t)f32bpb->logical_sectors_per_fat));
     
     int rv = recursive_copy_file(source_fd, raw_device_fd,
      start_cluster_index, cluster_count, reserved_sectors_total * (size_t)bpb->bytes_per_logical_sector,

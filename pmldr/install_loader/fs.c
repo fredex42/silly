@@ -117,6 +117,9 @@ DirectoryEntry *f32_get_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT
         return NULL;
     }
 
+    size_t reserved_sectors = (size_t)bpb->reserved_logical_sectors; // + (bpb->fat_count * f32bpb->logical_sectors_per_fat);
+    root_dir_offset += reserved_sectors * bpb->bytes_per_logical_sector;    //FIXME - why are we off by 2 sectors?
+
     memset(buffer, 0, buffer_size);
     lseek(raw_device_fd, root_dir_offset, SEEK_SET);
     printf("DEBUG root dir is at cluster %d, root dir byte offset is %ld\n", f32bpb->root_directory_entry_cluster, root_dir_offset);
@@ -136,8 +139,11 @@ int f32_write_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT32Extended
     size_t root_dir_offset = f32bpb->root_directory_entry_cluster * bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
     size_t buffer_size = bpb->logical_sectors_per_cluster * bpb->bytes_per_logical_sector;
 
+    size_t reserved_sectors = (size_t)bpb->reserved_logical_sectors + (bpb->fat_count * f32bpb->logical_sectors_per_fat);
+    root_dir_offset += (reserved_sectors-2) * bpb->bytes_per_logical_sector;
+    
     lseek(raw_device_fd, root_dir_offset, SEEK_SET);
-    fprintf(stdout, "INFO Writing %ld bytes for root directory\n", buffer_size);
+    fprintf(stdout, "INFO Writing %ld bytes for root directory at %ld\n", buffer_size, root_dir_offset);
     size_t bytes_written = write(raw_device_fd, buffer, buffer_size);
     if(bytes_written < buffer_size) {
         fprintf(stderr, "ERROR Could not write out FAT32 root directory, expected %ld bytes got %ld\n", buffer_size, bytes_written);
