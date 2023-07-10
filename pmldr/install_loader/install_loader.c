@@ -17,7 +17,7 @@ This is a Linux C program which is designed to install our loader and kernel ont
 
 #define BLOCKSIZE   32
 
-int copy_bootsect(int source_fd, int dest_fd, size_t offset, size_t len) {
+int copy_bootsect(int source_fd, int dest_fd, size_t offset, size_t len, struct copied_file_info *pmldr_info) {
     char buf[BLOCKSIZE];
     long remaining;
     size_t count;
@@ -44,6 +44,12 @@ int copy_bootsect(int source_fd, int dest_fd, size_t offset, size_t len) {
             return -1;
         }
     }
+
+    printf("INFO second-stage loader is at sector 0x%x with a length in sectors of 0x%x\n", pmldr_info->start_sector_location, pmldr_info->length_in_sectors);
+    printf("INFO writing bootloader pointers\n");
+    lseek(dest_fd, offset, SEEK_SET);
+    write(dest_fd, &pmldr_info->start_sector_location, 2);
+    write(dest_fd, &pmldr_info->length_in_sectors, 2);
 
     return len;
 }
@@ -93,13 +99,15 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERROR The volume at %s already has boot code present, not over-writing\n", device);
         exit(2);
     }
+
     // ---- copy over pmldr (the second-stage bootloader) as a regular file
+    struct copied_file_info pmldr_info;
 
     if(bpb->total_logical_sectors==0 && bpb->bytes_per_logical_sector!=0) {
         FAT32ExtendedBiosParameterBlock *f32bpb = get_f32bpb(bootsector);
-        f32_copy_file("pmldr/pmldr", raw_device_fd, bpb, f32bpb);
+        f32_copy_file("pmldr/pmldr", raw_device_fd, bpb, f32bpb, &pmldr_info);
     } else if( bpb->total_logical_sectors!=0) {
-        f16_copy_file("pmldr/pmldr", raw_device_fd, bpb);
+        f16_copy_file("pmldr/pmldr", raw_device_fd, bpb, &pmldr_info);
     } else {
         fprintf(stderr, "ERROR Could not determine if we are FAT16 or FAT32. Total sectors: %d, bytes per logical sector: %d", bpb->total_logical_sectors, bpb->bytes_per_logical_sector);
         exit(4);
@@ -122,7 +130,7 @@ int main(int argc, char **argv)
     
     printf("INFO Copying bootsect.bin with a size of %ld bytes\n", size);
     size_t offset = find_destination_offset(bpb);
-    copy_bootsect(source_fd, raw_device_fd, offset, size);
+    copy_bootsect(source_fd, raw_device_fd, offset, size, &pmldr_info);
     //Now write the jump bytes
     lseek(raw_device_fd, 0, SEEK_SET);
 

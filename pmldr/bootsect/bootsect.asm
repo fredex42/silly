@@ -31,14 +31,16 @@ mov dx, 0x0080
 int 0x13
 jc no_extns
 
-mov cx, [pmldr_sector]
-mov bx, [pmldr_length]
+xor ax, ax
+mov ds, ax
+mov cx, word [pmldr_sector]
+mov bx, word [pmldr_length]
 mov ax, 0x7E0       ;we want to load PMLDR at 0x7E0:0000
 mov ds, ax          ;so set ds to 0x7E0
-call LoadDiskSectors
+call LoadDiskSectors	;break 7CA3
 
 ;Right, now we are loaded.  Jump into PMLDR.
-mov si, LoadingDone
+mov si, LoadingDone		;break 7CA9
 call PrintString
 mov dl, byte [BootDevice]
 jmp 0x7E0:0x0000
@@ -104,7 +106,7 @@ LoadDiskSectors:
 	xor ax, ax
 
 	_load_next_sector:
-	mov si, 0x800
+	xor si, si
 	mov ah, 0x42
 	mov dl, 0x80
 	int 0x13

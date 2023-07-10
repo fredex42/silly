@@ -21,7 +21,7 @@ size_t get_file_size(char *source_file_name)
     return statbuf.st_size;
 }
 
-int f16_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock *bpb)
+int f16_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock *bpb, struct copied_file_info *dest_info)
 {
     uint16_t *fat = (uint16_t *)get_allocation_table(raw_device_fd, bpb->logical_sectors_per_fat, bpb);
     if(!fat) {
@@ -86,7 +86,7 @@ int add_pmldr_entry(DirectoryEntry *root_dir_start, uint32_t cluster_address, si
     return -1;
 }
 
-int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb)
+int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, struct copied_file_info *dest_info)
 {
     uint32_t *fat = (uint32_t *)get_allocation_table(raw_device_fd, f32bpb->logical_sectors_per_fat, bpb);
     if(!fat) {
@@ -142,6 +142,12 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
     int rv = recursive_copy_file(source_fd, raw_device_fd,
      start_cluster_index, cluster_count, reserved_sectors_total * (size_t)bpb->bytes_per_logical_sector,
      (size_t)bpb->logical_sectors_per_cluster * (size_t)bpb->bytes_per_logical_sector);
+
+    if(dest_info) {
+        dest_info->start_sector_location = (start_cluster_index * bpb->logical_sectors_per_cluster) + reserved_sectors_total;
+        dest_info->length_in_bytes = source_file_size;
+        dest_info->length_in_sectors = (uint16_t) ( ceil((double)source_file_size / (double)bpb->bytes_per_logical_sector ));
+    }
 
     if(rv!=0) {
         fprintf(stderr, "ERROR Could not copy PMLDR\n");
