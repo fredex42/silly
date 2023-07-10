@@ -6,15 +6,31 @@
 
 %include "../../andy_elf/memlayout.asm" ;ensure that e.g. TemporaryMemInfoBufferSeg is the same as for the kernel
 
-mov si, [HelloString]
+push dx
+
+;hello world
+mov si, HelloString
+sub si, 0x7e00
 call PrintString
 
+
 ;before we go to PM, retrieve the bios memory map
+mov si, MemDetString
+sub si, 0x7e00
+call PrintString
+
 call detect_memory
 
 ;also, get the boot drive's parameters. DL is already set to the BIOS disk number.
-call get_boot_drive_params
+; mov si, BootParamsString
+; sub si, 0x7e00
+; pop dx
+; call PrintString
+; call get_boot_drive_params
 
+mov si, PrepString
+sub si, 0x7e00
+call PrintString
 ;Try to enter protected mode - https://wiki.osdev.org/Protected_Mode
 ;Disable interrupts
 cli
@@ -39,6 +55,10 @@ mov si, SimpleGDTPtr
 sub si, 0x7E00
 mov [si+2], eax	;set the GDT location into the pointer structure
 lgdt [si]
+
+mov si, DoneString
+sub si, 0x7e00
+call DoneString
 
 ;Get the current cursor position
 mov ax, 0x0300
@@ -117,12 +137,19 @@ drive_param_err:
 	push cs
 	pop ds
 	mov si, DriveParamErrString
+	sub si, 0x7e00
 	call PrintString
 	jmp $
 	
 ;Data
-HelloString db 'PMLDR v1.0', 0
-DriveParamErrString db 'Unable to determine boot drive params\n', 0
+HelloString db 0x0d, 0x0a, 'PMLDR v1.0', 0x0d, 0x0a, 0
+MemDetString db 'Detecting RAM...', 0x0d, 0x0a, 0
+BootParamsString db 'Detecting boot drive...', 0x0d, 0x0a, 0
+PrepString db 'Entering protected mode...', 0x0d, 0x0a, 0
+DoneString db 'Moving on', 0x0d, 0x0a, 0
+
+DriveParamErrString db 'Unable to determine boot drive params', 0x0d, 0x0a, 0
+
 ;basic GDT configuration. Each entry is 8 bytes long
 SimpleGDT:
 ;entry 0: null entry

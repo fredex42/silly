@@ -18,11 +18,11 @@ mov ax, 0x4000	;area below our stack and well above our code, which is at 0x7C00
 mov es, ax
 mov ds, ax
 
-mov si, LoadingStart
-call PrintString
-
 ;Store the boot device
 mov byte [BootDevice], dl
+
+mov si, LoadingStart
+call PrintString
 
 ;check if int13 extensions are available
 mov ax, 0x4100
@@ -42,6 +42,8 @@ call LoadDiskSectors	;break 7CA3
 ;Right, now we are loaded.  Jump into PMLDR.
 mov si, LoadingDone		;break 7CA9
 call PrintString
+push es
+pop ds
 mov dl, byte [BootDevice]
 jmp 0x7E0:0x0000
 
