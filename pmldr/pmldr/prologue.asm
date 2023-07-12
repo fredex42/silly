@@ -14,6 +14,16 @@ sub si, 0x7e00
 call PrintString
 
 
+mov si, LocKernString
+sub si, 0x7e00
+call PrintString
+
+;Load the kernel
+call LoadBootSector
+mov ax, BootSectorMemSectr
+mov ds, ax
+call LoadFAT
+
 ;before we go to PM, retrieve the bios memory map
 mov si, MemDetString
 sub si, 0x7e00
@@ -24,9 +34,10 @@ call detect_memory
 ;also, get the boot drive's parameters. DL is already set to the BIOS disk number.
 ; mov si, BootParamsString
 ; sub si, 0x7e00
-; pop dx
+pop dx
 ; call PrintString
 ; call get_boot_drive_params
+
 
 mov si, PrepString
 sub si, 0x7e00
@@ -76,6 +87,8 @@ jmp 0x08:_pm_start	;Here goes nothing!
 ;retrieve the BIOS memory map. This must be compiled and run in 16-bit mode, easiest way
 ;is to call it before the switch to PM.
 detect_memory:
+	push ebp
+	mov ebp, esp
 	mov ax, TemporaryMemInfoBufferSeg  ;target location is 0x250:000
 	mov es, ax
 	mov di, 2
@@ -97,6 +110,7 @@ detect_memory:
 
 	mem_det_done:
 	mov word [es:000], si
+	pop ebp
 	ret
 
 ; uses BIOS int10 to output the character in AL to the screen
@@ -109,6 +123,8 @@ PrintCharacter:
 
 ; repeatedly calls PrintCharacter to output the ASCIIZ string pointed to by the SI register
 PrintString:
+	push ebp
+	mov ebp, esp
 	next_char:
 	mov al, [cs:si]
 	inc si
@@ -117,6 +133,7 @@ PrintString:
 	call PrintCharacter
 	jmp next_char
 	exit_function:
+	pop ebp
 	ret
 
 get_boot_drive_params:
@@ -144,10 +161,10 @@ drive_param_err:
 ;Data
 HelloString db 0x0d, 0x0a, 'PMLDR v1.0', 0x0d, 0x0a, 0
 MemDetString db 'Detecting RAM...', 0x0d, 0x0a, 0
+LocKernString db 'Locating kernel...', 0x0d, 0x0a, 0
 BootParamsString db 'Detecting boot drive...', 0x0d, 0x0a, 0
 PrepString db 'Entering protected mode...', 0x0d, 0x0a, 0
 DoneString db 'Moving on', 0x0d, 0x0a, 0
-
 DriveParamErrString db 'Unable to determine boot drive params', 0x0d, 0x0a, 0
 
 ;basic GDT configuration. Each entry is 8 bytes long

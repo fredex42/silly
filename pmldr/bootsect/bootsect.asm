@@ -116,9 +116,9 @@ LoadDiskSectors:
 	dec bx					;track how many sectors we want to load in bx
 	test bx,bx
 	jz _load_disk_sectors_done
-	add word [es:0x806], 0x020	;each block is 512 bytes = 0x200. Increment the destination ptr by this much.
-	inc dword [es:0x808]				;increment the block number we want to read
-	mov word [es:0x802], 1			;blocks-to-transfer is overwritten by blocks transferred after the call, so reset it
+	add word [es:0x06], 0x020	;each block is 512 bytes = 0x200. Increment the destination ptr by this much.
+	inc dword [es:0x08]				;increment the block number we want to read
+	mov word [es:0x02], 1			;blocks-to-transfer is overwritten by blocks transferred after the call, so reset it
 	jmp _load_next_sector
 
 	_load_disk_sectors_done:
