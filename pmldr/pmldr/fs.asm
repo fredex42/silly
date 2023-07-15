@@ -190,7 +190,7 @@ FindKernelBinary:
 
 	mov si, ax				;the file name is 11 chars (bytes) at the start of the entry, i.e. (entry_count * 0x20)
 	mov di, KernelName		;compare this to the stored expected name
-	mov cx, KernelNameLen	;compare this many chars
+	mov cx, [KernelNameLen]	;compare this many chars
 	call strncmp			;should preserve bx. AX=0 on success
 	test ax, ax
 	jnz _next_entry			;we didn't find one
