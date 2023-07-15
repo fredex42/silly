@@ -13,6 +13,11 @@ mov si, HelloString
 sub si, 0x7e00
 call PrintString
 
+;for debugging - set the div/0 interrupt handler so we can recognise it
+xor ax,ax
+mov ds, ax
+mov si, 0
+mov dword [si], 0xdeadbeef
 
 mov si, LocKernString
 sub si, 0x7e00
@@ -23,6 +28,7 @@ call LoadBootSector
 mov ax, BootSectorMemSectr
 mov ds, ax
 call LoadFAT
+call LoadRootDirectory
 
 ;before we go to PM, retrieve the bios memory map
 mov si, MemDetString

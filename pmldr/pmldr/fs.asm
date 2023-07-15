@@ -72,6 +72,20 @@ LoadBootSector:
 	mov di, 0x500
 	mov cx, 0x100
 	rep movsw
+
+	;Now, we have a little problem. A "sector" in the disk format is not necessarily a "sector" in the hardware.
+	;So, we calculate a "fudge factor" here.
+	mov ax, BootSectorMemSectr
+	mov ds, ax
+	xor dx, dx
+	mov ax, word [BytesPerSector]
+	mov bx, 0x200
+	div bx
+	mov bh, 0
+	mov bl, byte [SectorsPerCluster]
+	mul bx
+	mov word [CustomDiskBlocksPerCluster], ax
+
 	pop ebp
 	ret
 
@@ -94,23 +108,17 @@ LoadFAT:
 	push ebp
 	mov ebp, esp
 	
-	mov cx, [ReservedSectors]	;FAT area starts immediately after the reserved sectors
+	mov ax, [ReservedSectors]	;FAT area starts immediately after the reserved sectors
+	mov bx, [CustomDiskBlocksPerCluster]
+	mul bx
+	mov cx, ax
 	mov bx, 4
 
 	push ds
 	mov ax, 0x70
 	mov ds, ax
 	call LoadDiskSectors
-	; mov ax, FATSector
-	; mov es, ax
-	; xor si, si
-	; call GetSectorsPerFAT
-	; mov cx, bx
-	; shl cx, 1	;divide by 2
-	; mov ax, 0x250
-	; mov ds, ax
-	; xor di, di
-	; rep movsw
+
 	pop ds
 	pop ebp
 	ret
@@ -118,16 +126,42 @@ LoadFAT:
 ;Expects ds to point to the start of the boot sector image, i.e. 0x50
 ;Returns the cluster offset of the root directory for FAT32 in dx:ax
 F32GetRootDirLocation:
-	mov ax, word [SectorsPerCluster]
+	push ebp
+	mov ebp, esp
+	xor ax, ax
+	mov ax, word [CustomDiskBlocksPerCluster]
 	mov dx, word [FAT32RootDirStart]
+	add dx, word [ReservedSectors]
 	mul dx
-	add ax, word [ReservedSectors]
-	sub ax, 2	;not sure why!
+	
+	pop ebp
 	ret
 
 ;Loads in the root directory to memory buffers.
 ;Expects to find the boot sector at 0x500
 LoadRootDirectory:
+	push ebp
+	mov ebp, esp
+
+	mov ax, BootSectorMemSectr
+	mov ds, ax
+
+	;set cx to on-disk location of the root directory
+	call F32GetRootDirLocation
+	mov cx, ax
+	;load in 1 cluster
+	xor ax, ax
+	mov al, byte [SectorsPerCluster]
+	mov dx, word [CustomDiskBlocksPerCluster]
+	mul dx
+	mov bx, ax
+
+	;load the data at 0xF00
+	mov ax, 0xF0
+	mov ds, ax
+
+	call LoadDiskSectors
+	pop ebp
 	ret
 
 FindFirstFileEntry:
@@ -174,4 +208,5 @@ fat_load_err:
 
 ;data
 FSErrString db 'Could not load filesystem', 0x0d, 0x0a, 0
+
 

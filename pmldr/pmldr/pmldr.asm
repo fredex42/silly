@@ -17,6 +17,7 @@
 %define FAT32SectorsPerFAT	0x24	;dword
 %define FAT32RootDirStart	0x2C	;dword. This is a cluster address so needs to be converted to sectors for loading
 %define FAT32FSInfoSector	0x30	;word
+%define CustomDiskBlocksPerCluster  0x32    ;word
 
 %define BootSectorBase	0x500
 %define BootSectorMemSectr 0x50
@@ -27,9 +28,8 @@
 ;At present, partitioned media is not supported.
 ; 0x500		0x700	Boot sector image
 ; 0x700		0xF00	Cluster 1 of FAT
-; 0xF00		0x1100	Sector 1 of root directory
-; 0x1100	0x1300	Sector 2 of root directory
-; 0xD00	 	0x2500	Free
+; 0xF00		0x1700	Cluster 1 of root directory
+; 0x1700	0x2500	Free
 ; 0x2500	0x2700	Read buffer
 ; 0x70000	0x70100	disk address packet buffer
 
