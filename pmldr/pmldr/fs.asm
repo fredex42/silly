@@ -129,10 +129,14 @@ F32GetRootDirLocation:
 	push ebp
 	mov ebp, esp
 	xor ax, ax
-	mov ax, word [CustomDiskBlocksPerCluster]
-	mov dx, word [FAT32RootDirStart]
-	add dx, word [ReservedSectors]
-	mul dx
+	mov ax, word [FAT32SectorsPerFAT]
+	mov dx, word [FAT32SectorsPerFAT+2]
+	mov bh, 0
+	mov bl, byte [FATCount]
+	mul bx
+	add ax, word [ReservedSectors]
+	mov bx, word [CustomDiskBlocksPerCluster]
+	mul bx
 	
 	pop ebp
 	ret
