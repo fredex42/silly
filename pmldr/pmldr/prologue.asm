@@ -70,13 +70,13 @@ mov ds, ax
 xor eax, eax
 mov eax, SimpleGDT		;get the location of the GDT, add the absolute location of our data segment
 mov si, SimpleGDTPtr
-sub si, 0x7E00
+;sub si, 0x7E00
 mov [si+2], eax	;set the GDT location into the pointer structure
 lgdt [si]
 
 mov si, DoneString
 sub si, 0x7e00
-call DoneString
+call PrintString
 
 ;Get the current cursor position
 mov ax, 0x0300

@@ -3,6 +3,7 @@
 ;and bopping around 16-bit conventional RAM and hitting arbitary limits as we do so.  Loading this way should be simpler, and also cleaner,
 ;as the kernel code won't need a 16-bit prologue part.
 
+[map symbols pmldr.map]
 ;Offsets of BPB parameters in the boot sector
 %define BytesPerSector 		0x0B	;word
 %define SectorsPerCluster 	0x0D	;byte
@@ -30,8 +31,9 @@
 ; 0x700		0xF00	Cluster 1 of FAT
 ; 0xF00		0x1700	Cluster 1 of root directory
 ; 0x1700	0x2500	Free
-; 0x2500	0x2700	Read buffer
-; 0x70000	0x70100	disk address packet buffer
+; 0x2500	0x2700	Read buffer (overwritten by memory info after loading)
+; 0x3000	0x3100	disk address packet buffer
+; 0x10000   0x80000 kernel image loading buffer (458k)
 
 %include "prologue.asm"
 %include "fs.asm"

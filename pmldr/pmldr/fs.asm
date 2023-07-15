@@ -10,7 +10,7 @@ LoadDiskSectors:
 	cld		;make sure we are writing forwards
 	push es
 	push ds
-	mov ax, 0x7000
+	mov ax, 0x300
 	mov es, ax
 
 	mov di, 0x00
@@ -227,6 +227,15 @@ FindKernelBinary:
 	call PrintString
 	hlt
 	jmp $
+
+;Actually loads the kernel binary, based on the information we derived in FindKernelBinary.
+LoadInKernel:
+	push ebp
+	mov ebp, esp
+
+	
+	pop ebp
+	ret
 
 fat_load_err:
 	mov si, FSErrString

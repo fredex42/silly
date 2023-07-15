@@ -5,3 +5,5 @@
 
 ;The prologue jumps us to here when we are in protected mode.
 _pm_start:
+    hlt
+    jmp $
