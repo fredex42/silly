@@ -29,6 +29,7 @@ mov ax, BootSectorMemSectr
 mov ds, ax
 call LoadFAT
 call LoadRootDirectory
+call FindKernelBinary
 
 ;before we go to PM, retrieve the bios memory map
 mov si, MemDetString
@@ -164,6 +165,38 @@ drive_param_err:
 	call PrintString
 	jmp $
 	
+;compares the strings in ds:si and es:di up to a maximum number of characters stored in cx.
+;returns ax=0 on match, otherwise nonzero
+strncmp:
+	push ebp
+	mov ebp, esp
+
+	push bx
+
+	_next_char:
+	test cx, cx
+	jz _strncmp_success	;cx=0 => we got to end of the string
+
+	dec cx
+	mov bh, byte [ds:si]
+	mov bl, byte [es:di]
+	inc si
+	inc di
+	cmp bh, bl
+	jz _next_char
+
+	;if we got here then one character did not match
+	mov ax, 1
+	pop bx
+	pop ebp
+	ret
+
+	_strncmp_success:	;if we got here then we hit the end without any mismatch
+	mov ax,0
+	pop bx
+	pop ebp
+	ret
+
 ;Data
 HelloString db 0x0d, 0x0a, 'PMLDR v1.0', 0x0d, 0x0a, 0
 MemDetString db 'Detecting RAM...', 0x0d, 0x0a, 0

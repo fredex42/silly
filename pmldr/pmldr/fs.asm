@@ -168,49 +168,79 @@ LoadRootDirectory:
 	pop ebp
 	ret
 
-FindFirstFileEntry:
-	;Expect directory entries to be from offset 0x8800 on the disk, which is sector 0x44
-	mov bx, 2
-	mov cx, 0x0044
-	call LoadDiskSectors
-	mov si, 0x0b
-	;now the first sector of the directory table is in memory at ds:0000. BUT the first entry could be an LFN.
-next_entry:
-	xor ax,ax
-	mov al, byte [si]
-	cmp al, 0x0f
-	add si, 0x20
-	jz next_entry
+;Tries to locate the kernel binary (ANDY.SYS) in the root directory
+FindKernelBinary:
+	push ebp
+	mov ebp, esp
 
-	;si now points to the attribute byte of the first entry that is not LFN. Subtract to get to the start of the record and check it's not null.
-	sub si, 0x0b
-	mov al, byte [si]
-	test al, al	;sets Z flag if ax is zero
-	jz fat_load_err
+	mov ax, 0xF0	;start of root dir
+	mov ds, ax
+	xor ax, ax
+	mov es, ax
 
-	add si, 0x1a	;file size is 4 bytes at offset 1c of the record. Assume it's <64k for the time being. break 00007d48
-	mov ax, word [si+2]	;file size location
-	mov bx, 0x200
-	xor dx,dx	;make sure dx is 0 as divide source is dx:ax
-	div bx			;0x200 = 512, size of a sector in bytes
-	push ax		;DIV result always in AX, with high word in DX. Save it for later
-	mov ax, word [si]	;file start cluster. Assume that cluster size is 1800
-	mov bx, 0x0c
-	mul bx		;0x12=16 sectors per cluster
-	add ax, 0x44		;data area starts at 0x8800
-	mov cx, ax
-	pop bx		;set bx to the number of sectors to load. We saved this earlier from ax.
-	add bx,1	;bx is the lower bound of integer division, so there is probably a partial sector afterwards. Load this in too.
-	call LoadDiskSectors
+	;Each directory entry is 32 (0x20) bytes long.  Use bx to track which one we are on
+	mov bx, 0
+
+	_next_entry:
+	cmp bx, 0xFF
+	jz _kern_not_found		;break after we've looped 255 times. FIXME - should be a bit more scientific about this!
+	mov ax, 0x20
+	mul bx
+	inc bx
+
+	mov si, ax				;the file name is 11 chars (bytes) at the start of the entry, i.e. (entry_count * 0x20)
+	mov di, KernelName		;compare this to the stored expected name
+	mov cx, KernelNameLen	;compare this many chars
+	call strncmp			;should preserve bx. AX=0 on success
+	test ax, ax
+	jnz _next_entry			;we didn't find one
+
+	;if we got here, we have a match! We can extract the length and starting location.
+	;Unfortunately we broke our pointer, so must reconstruct it.
+	dec bx
+	mov ax, 0x20
+	mul bx
+	mov si, ax		;ok, so si should now point to the start of the directory entry we found.
+	mov ax, word [ds:si+0x1A]	;start of the file in clusters (low word, for FAT32) is at offset 1A
+	mov di, KernelClusterLocationLow
+	stosw			;rely on es still being set to 0
+	mov ax, word [ds:si+0x14]	;high word of file start location for FAT32. Only valid if we are on FAT32
+	mov di, KernelClusterLocationHigh
+	stosw
+	mov ax, word [ds:si+0x1C]	;low word of the file length in bytes
+	mov dx, word [ds:si+0x1e]	;high word of the file length in bytes
+	mov cx, BootSectorMemSectr
+	mov ds, cx
+	mov si, BytesPerSector
+	mov bx, word [ds:si]
+	div bx						;divide total number of bytes by bytes per sector, to get the length in sectors (stored in ax)
+	inc ax 						;assume that there is some remainder so grab another sector to be safe
+	mov di, KernelSectorLength
+	stosw
+
+	pop ebp
 	ret
+
+	_kern_not_found:
+	mov si, NotFoundErrString
+	sub si, 0x7E00
+	call PrintString
+	hlt
+	jmp $
 
 fat_load_err:
 	mov si, FSErrString
 	sub si, 0x7E00
 	call PrintString
+	hlt
 	jmp $
 
+
 ;data
-FSErrString db 'Could not load filesystem', 0x0d, 0x0a, 0
-
-
+FSErrString					db 'Could not load filesystem', 0x0d, 0x0a, 0
+NotFoundErrString			db 'Could not locate ANDY.SYS', 0x0d, 0x0a, 0
+KernelName 					db 'ANDY    SYS'
+KernelNameLen 				db 11
+KernelClusterLocationLow 	dw 0	;these values are filled in by FindKernelBinary
+KernelClusterLocationHigh	dw 0
+KernelSectorLength			dw 0
