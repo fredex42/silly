@@ -190,7 +190,7 @@ FindKernelBinary:
 
 	mov si, ax				;the file name is 11 chars (bytes) at the start of the entry, i.e. (entry_count * 0x20)
 	mov di, KernelName		;compare this to the stored expected name
-	mov cx, [KernelNameLen]	;compare this many chars
+	mov cx, 11				;compare this many chars
 	call strncmp			;should preserve bx. AX=0 on success
 	test ax, ax
 	jnz _next_entry			;we didn't find one
@@ -249,7 +249,7 @@ fat_load_err:
 FSErrString					db 'Could not load filesystem', 0x0d, 0x0a, 0
 NotFoundErrString			db 'Could not locate ANDY.SYS', 0x0d, 0x0a, 0
 KernelName 					db 'ANDY    SYS'
-KernelNameLen 				db 11
+KernelNameLen 				dw 11
 KernelClusterLocationLow 	dw 0	;these values are filled in by FindKernelBinary
 KernelClusterLocationHigh	dw 0
 KernelSectorLength			dw 0
