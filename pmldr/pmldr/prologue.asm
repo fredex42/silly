@@ -30,6 +30,7 @@ mov ds, ax
 call LoadFAT
 call LoadRootDirectory
 call FindKernelBinary
+call LoadInKernel
 
 ;before we go to PM, retrieve the bios memory map
 mov si, MemDetString
@@ -70,7 +71,7 @@ mov ds, ax
 xor eax, eax
 mov eax, SimpleGDT		;get the location of the GDT, add the absolute location of our data segment
 mov si, SimpleGDTPtr
-;sub si, 0x7E00
+sub si, 0x7E00
 mov [si+2], eax	;set the GDT location into the pointer structure
 lgdt [si]
 

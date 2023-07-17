@@ -5,7 +5,7 @@ LoadDiskSectors:
 	mov ebp, esp
 ;Loads disk sectors into memory, at (ds):0000. Overwrites this memory and clobbers registers.
 ;Arguments: bx = number of sectors to read in, cx = (16-bit) sector offset. Assume 1 sector = 512 bytes.
-;set up a disk address packet structure at 0x7000:000. stos* stores at es:di and increments. int13 needs struct in ds:si
+;set up a disk address packet structure at 0x300:000. stos* stores at es:di and increments. int13 needs struct in ds:si
 	;this is a new version that loads one sector at a time, to accomodate bios quirks (see https://stackoverflow.com/questions/58564895/problem-with-bios-int-13h-read-sectors-from-drive)
 	cld		;make sure we are writing forwards
 	push es
@@ -37,13 +37,13 @@ LoadDiskSectors:
 	_load_next_sector:
 	mov si, 0x00
 	mov ah, 0x42
-	mov dl, 0x80	;FIXME: hardcoded disk number!
+	mov dl, 0x80					;FIXME: hardcoded disk number!
 	int 0x13
-	jc fat_load_err	;this hangs the bootloader so it does not really matter that we leave two values on the stack
-	dec bx					;track how many sectors we want to load in bx
+	jc fat_load_err					;this hangs the bootloader so it does not really matter that we leave two values on the stack
+	dec bx							;track how many sectors we want to load in bx
 	test bx,bx
 	jz _load_disk_sectors_done
-	add word [es:0x06], 0x020	;each block is 512 bytes = 0x200. Increment the destination ptr by this much.
+	add word [es:0x06], 0x020		;each block is 512 bytes = 0x200. Increment the destination ptr by this much. FIXME this block size should be derived from the GET DRIVE PARAMETERS (int0x15/0x48 command)
 	inc dword [es:0x08]				;increment the block number we want to read
 	mov word [es:0x02], 1			;blocks-to-transfer is overwritten by blocks transferred after the call, so reset it
 	jmp _load_next_sector
@@ -233,7 +233,80 @@ LoadInKernel:
 	push ebp
 	mov ebp, esp
 
-	
+	mov ax, 0x50
+	mov ds, ax
+	mov gs, ax
+	mov ax, 0x0
+	mov fs, ax										;fs points to the origin, which our local offsets are measured to.
+	call F32GetRootDirLocation	
+	;root dir is at cluster 2, this location is now in ax. Subtract two clusters worth from it.
+	mov bx, word [gs:CustomDiskBlocksPerCluster]
+	sub ax, bx
+	sub ax, bx 
+	mov word [fs:DiskDataBlocksOffset], ax
+
+	mov dx, 0										;Use dx to track the number of sectors loaded
+	mov ax, 0x1000									;start of write buffer
+	mov ds, ax
+	mov ax, word [fs:KernelClusterLocationLow]			;FIXME - upper word ignored in FAT32!
+
+	xor ecx, ecx
+
+	_k_load_next_cluster:
+	mov bx, word [gs:CustomDiskBlocksPerCluster]
+	add dx, bx
+
+	;ax is currently the location of the cluster we are loading.
+	;we need to convert this number to hardware blocks (easy as DiskBlocksPerCluster is already in bx),
+	;and add the filesystem's offset to the result.
+	mul bx
+	mov bx, word [fs:DiskDataBlocksOffset]
+	add ax, bx
+	mov cx, ax	;LoadDiskSectors expects this value in cx.
+
+	push cx
+	push dx
+	mov bx, word [gs:CustomDiskBlocksPerCluster]	;load 1 cluster's worth of blocks
+	call LoadDiskSectors
+	pop dx
+	pop cx
+	mov ax, word [fs:KernelSectorLength]
+	cmp dx, ax
+	jz _k_load_done
+
+	;get the next cluster address from the FAT. cx is the cluster address we just loaded, gs points to the boot sector and fs points to our data.
+	push gs
+	mov ax, FATSector
+	mov gs, ax				;point gs to the FAT
+	mov ax, cx 				;set ax to the (physical) cluster we just loaded
+	mov bx, word [fs:DiskDataBlocksOffset]
+	sub ax, bx				;subtract the offset to get back to the FAT index
+	mov bx, 4
+	mul bx					;multiply the FAT entry index by 4 to get the byte offset
+	mov si, ax
+	add si, 4				;FAT32 so there are 4 bytes per entry
+	mov eax, dword [gs:si]	;get the next cluster
+
+	and eax, 0x0FFFFFFF		;shave off upper nybble
+	cmp eax, 0x0FFFFFF8		;anything of this value or above is an EOF
+	jge _k_load_done
+
+	;increment our data pointer
+	pop gs					;restore gs value
+	push eax				;save the cluster number for later, we expect it to be in ax when we loop
+	mov bx, word [gs:BytesPerSector]
+	xor ax, ax
+	mov al, byte [gs:SectorsPerCluster]
+	mul bx
+	mov bx, ds
+	shr ax, 4				;convert sector to bytes
+	add ax, bx
+	mov ds, ax
+
+	pop eax					;restore the cluster number into ax
+	jmp _k_load_next_cluster
+
+	_k_load_done:
 	pop ebp
 	ret
 
@@ -253,3 +326,4 @@ KernelNameLen 				dw 11
 KernelClusterLocationLow 	dw 0	;these values are filled in by FindKernelBinary
 KernelClusterLocationHigh	dw 0
 KernelSectorLength			dw 0
+DiskDataBlocksOffset		dw 0	;offset to "cluster 0" in hardware blocks
