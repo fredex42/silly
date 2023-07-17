@@ -284,8 +284,7 @@ LoadInKernel:
 	mov bx, 4
 	mul bx					;multiply the FAT entry index by 4 to get the byte offset
 	mov si, ax
-	add si, 4				;FAT32 so there are 4 bytes per entry
-	mov eax, dword [gs:si]	;get the next cluster
+	mov eax, dword [gs:si]	;get the offset of the next cluster
 
 	and eax, 0x0FFFFFFF		;shave off upper nybble
 	cmp eax, 0x0FFFFFF8		;anything of this value or above is an EOF
