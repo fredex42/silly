@@ -25,12 +25,17 @@
 %define FATBase			0x700
 %define FATSector       0x70
 
+%define KernelSizeInBytesPtr    0x1700  ;dword
+%define CursorColPtr            0x1704  ;byte
+%define CursorRowPtr            0x1705  ;byte
+
 ;We implement the following layout:	(512byte sectors = 0x200)
 ;At present, partitioned media is not supported.
 ; 0x500		0x700	Boot sector image
 ; 0x700		0xF00	Cluster 1 of FAT
 ; 0xF00		0x1700	Cluster 1 of root directory
-; 0x1700	0x2500	Free
+; 0x1700    0x1800  Our values storage (see above)
+; 0x1800	0x2500	Free
 ; 0x2500	0x2700	Read buffer (overwritten by memory info after loading)
 ; 0x3000	0x3100	disk address packet buffer
 ; 0x10000   0x80000 kernel image loading buffer (458k)

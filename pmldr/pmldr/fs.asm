@@ -177,6 +177,8 @@ FindKernelBinary:
 	mov ds, ax
 	xor ax, ax
 	mov es, ax
+	mov ax, 0x0
+	mov fs, ax										;fs points to the origin, which our local offsets are measured to.
 
 	;Each directory entry is 32 (0x20) bytes long.  Use bx to track which one we are on
 	mov bx, 0
@@ -209,6 +211,8 @@ FindKernelBinary:
 	stosw
 	mov ax, word [ds:si+0x1C]	;low word of the file length in bytes
 	mov dx, word [ds:si+0x1e]	;high word of the file length in bytes
+	mov word [fs:KernelSizeInBytesPtr], ax	;store the low word for when we need it later
+	mov word [fs:KernelSizeInBytesPtr+2], dx ;same for the high word
 	mov cx, BootSectorMemSectr
 	mov ds, cx
 	mov si, BytesPerSector
