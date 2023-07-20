@@ -14,22 +14,10 @@ global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 %include "memlayout.asm"
 %include "exceptions.inc"
 
-jmp _start
-
-; We want to keep the GDT where we can easily access them with 16-bit offsets
-; to make life easier with the assembler / linker, but we need more functionality later.
-; SimpleGDT is used to bootstrap protected mode, then later on the GDT is shifted to "FullGDT" which
+; We start off using the GDT which was configured by PMLDR, then later on the GDT is shifted to "FullGDT" which
 ; includes ring3 code/data selectors and a Task Segment Selector as well.
 
-
-
 ;assuming that DH is still the cursor row and DL is still the cursor position
-_start:
-
-
-
-
-
 
 [BITS 32]
 _pm_start:

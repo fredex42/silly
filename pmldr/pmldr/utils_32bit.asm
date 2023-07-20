@@ -3,8 +3,8 @@
 %define DisplayMemorySeg        0x18
 %define TextConsoleOffset       0x18000	;text mode console memory is at 0xB8000 and the segment starts at 0xA0000
 %define DefaultTextAttribute    0x07	;light-grey-on-black https://wiki.osdev.org/Printing_To_Screen
-%define CursorRowPtr 0xd08	;where we store screen cursor row in kernel data segment
-%define CursorColPtr 0xd09	;where we store cursor col in kernel data segment
+%define CursorRowPtr 0x100d08	;where we store screen cursor row in kernel data segment
+%define CursorColPtr 0x100d09	;where we store cursor col in kernel data segment
 
 ;This file contains useful functions, re-implemented in 32 bits
 
