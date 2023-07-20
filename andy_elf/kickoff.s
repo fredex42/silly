@@ -20,7 +20,7 @@ global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 ;assuming that DH is still the cursor row and DL is still the cursor position
 
 [BITS 32]
-_pm_start:
+_start:
 ;Now we need to re-set up the selectors as what we got from the bootloader was fairly minimal.
 mov ax, 0x10
 mov ds, ax
@@ -183,9 +183,36 @@ rep stosd
 ;This is done so we can protect the kernel code from tampering.
 cld										;clear direction flag, we want to write forwards
 mov edi, FullGDT			;movsd destination
-mov esi, SimpleGDT		;movsd source
-mov ecx, 8
-rep movsd
+; mov esi, SimpleGDT		;movsd source
+; mov ecx, 8
+; rep movsd
+
+mov dword [edi], 0
+mov dword [edi+4], 0
+add edi, 8
+;entry 1 (segment 0x08): kernel CS
+mov word [edi], 0xffff	;limit bits 0-15
+mov word [edi+2], 0x0000	;base bits 0-15
+mov byte [edi+4], 0x00	;base bits 16-23
+mov byte [edi+5], 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
+mov byte [edi+6], 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov byte [edi+7], 0x00		;base bits 24-31
+add edi, 8
+;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
+mov word [edi], 0xffff	;limit bits 0-15
+mov word [edi+2], 0x0000	;base bits 0-15
+mov word [edi+4], 0x00		;base bits 16-23. Start from 0meg.
+mov word [edi+5], 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+mov word [edi+6], 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov word [edi+7], 0x00		;base bits 24-31
+add edi, 8
+;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
+mov word [edi], 0xFFFF	; limit bits 0-15.
+mov word [edi+2], 0x0000	; base bits 0-15
+mov word [edi+4], 0x0A		; base bits 16-23. Start from 0x0A0000
+mov word [edi+5], 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+mov word [edi+6], 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+mov word [edi+7], 0x00		;base bits 24-31
 
 ;edi should now be pointing to FullGDT+0x20
 ;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.
