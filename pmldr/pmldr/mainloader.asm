@@ -54,16 +54,19 @@ _pm_start:
     ;So, what we are first going to do is to copy the entire conventional memory area into the 1Mb range. We are then going to jump ourselves into that copy
     ;of our code, parse the ELF headers, figure out which sections go where, re-write the conventional memory area and then jump back into the kernel.
 
-    ;When we enter PM, the prologue set dh to the current cursor row and dl to the current cursor column
-    ;Put them somewhere our simple display driver can find them.
-    mov byte [CursorRowPtr], DH
-    mov byte [CursorColPtr], dl
+    push dx
 
     ;Now, let's copy everything from 0x0 -> 0x7FFFF to 0x100000 -> 107FFFF (above that is reserved)
     mov ecx, 0x20000    ;0x80000 bytes = 0x20000 dwords
     mov esi, 0x0
     mov edi, 0x100000
     rep movsd
+
+    ;When we enter PM, the prologue set dh to the current cursor row and dl to the current cursor column
+    ;Put them somewhere our simple display driver can find them.
+    pop dx
+    mov byte [CursorRowPtr], DH
+    mov byte [CursorColPtr], dl
 
     mov esi, _bl_relocation
     add esi, 0x100000
@@ -105,11 +108,29 @@ _bl_relocation:
     jmp _k_load_next_section
 
     _k_all_sections_loaded:
-    mov esi, Temporary
-    add esi, 0x100000
-    call PMPrintString
-    hlt
-    jmp $
+    
+    ;we now want to put back the memory information block, at 0x2500
+    mov edi, TemporaryMemInfoLocation
+    mov esi, TemporaryMemInfoLocation+0x100000
+    xor eax, eax
+    mov ax, word [esi]    ;the first 16 bytes are the count of entries
+    mov ebx, 0x18
+    mul ebx                                    ;we have reserved 24 bytes per entry, in detect_memory
+    mov ecx, eax
+    rep movsb
+
+    ;tell the kernel where the cursor should be
+    mov DH, byte [CursorRowPtr]
+    mov dl, byte [CursorColPtr]
+
+    ;now enter the kernel
+    jmp 0x08:0x7e00
+
+    ; mov esi, Temporary
+    ; add esi, 0x100000
+    ; call PMPrintString
+    ; hlt
+    ; jmp $
 
 ;Check that the file we loaded has an ELF header, and is 32-bit LE.
 CheckKernelFormat:

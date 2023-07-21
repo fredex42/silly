@@ -213,6 +213,7 @@ mov word [edi+4], 0x0A		; base bits 16-23. Start from 0x0A0000
 mov word [edi+5], 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
 mov word [edi+6], 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
 mov word [edi+7], 0x00		;base bits 24-31
+add edi, 8
 
 ;edi should now be pointing to FullGDT+0x20
 ;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.

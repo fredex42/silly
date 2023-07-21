@@ -290,12 +290,13 @@ LoadInKernel:
 	mov si, ax
 	mov eax, dword [gs:si]	;get the offset of the next cluster
 
+	pop gs					;restore gs value
 	and eax, 0x0FFFFFFF		;shave off upper nybble
 	cmp eax, 0x0FFFFFF8		;anything of this value or above is an EOF
 	jge _k_load_done
 
 	;increment our data pointer
-	pop gs					;restore gs value
+
 	push eax				;save the cluster number for later, we expect it to be in ax when we loop
 	mov bx, word [gs:BytesPerSector]
 	xor ax, ax

@@ -1,6 +1,6 @@
 .PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api
 
-all: test.elf
+all: test.elf kernel.map
 
 tests: test_mmgr
 
@@ -88,6 +88,9 @@ test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		-Ldrivers/cmos -lcmos \
 		-Ttext 0x7E00 -Tdata 0x13000  \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
+
+kernel.map: test.elf
+	./gen_bochs_map.sh
 
 test_mmgr: test_mmgr.c test_stubs.c mmgr.c include/sys/mmgr.h
 	gcc -o test_mmgr -g test_mmgr.c test_stubs.c mmgr.c -D__BUILDING_TESTS -m32
