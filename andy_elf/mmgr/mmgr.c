@@ -237,12 +237,17 @@ void vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags)
   void *phys_ptr=NULL; //only one entry
   kprintf("DEBUG Adding a new directory into the virtual memory table\r\n");
   size_t allocd = allocate_free_physical_pages(1, &phys_ptr);
+  kprintf("DEBUG allocd %d pages at 0x%x\r\n", allocd, phys_ptr);
 
   if(allocd!=1) k_panic("Could not allocate physical ram for directory");
+  
   void *allocd_page_content = k_map_if_required(NULL, phys_ptr, MP_READWRITE);  //even if we are allocating for another process, it's the kernel that needs visibility of this.
+  kprintf("DEBUG mapped RAM allocated from 0x%x to 0x%x\r\n", phys_ptr, allocd_page_content);
+
   memset(allocd_page_content, 0, PAGE_SIZE);  //ensure that the page content is blanked
 
   root_page_dir[idx] = ((size_t) phys_ptr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
+  kprintf("DEBUG setting page dir index %d to 0x%x\r\n", idx, root_page_dir[idx]);
 }
 
 void *k_map_next_unallocated_pages(uint32_t flags, void **phys_addr, size_t pages)
@@ -475,7 +480,7 @@ void* vm_find_existing_mapping(uint32_t *base_directory_vptr, void *phys_addr, s
       continue;
     }
     uint32_t *pagedir_entry_vptr;
-    if((vaddr)pagedir_entry_phys < 0x1000000) {
+    if((vaddr)pagedir_entry_phys < 0x100000) {
       pagedir_entry_vptr = pagedir_entry_phys;  //this is identity-mapped
     } else {
       //we can't guarantee an identity map, so we must translate the physical entry to a vptr in order to modify it
@@ -483,6 +488,8 @@ void* vm_find_existing_mapping(uint32_t *base_directory_vptr, void *phys_addr, s
     }
 
     for(register int j=0;j<1023;j++) {
+      if(i!=0) kprintf("DEBUG vm_find_existing_mapping checking dir %d (value 0x%x) page %d\r\n", i, pagedir_entry_vptr[i], j);
+
       if( (pagedir_entry_vptr[j] & MP_ADDRESS_MASK) == page_value) {
         vaddr v_addr = (vaddr)((i << 22)+ (j << 12)) + (vaddr)page_offset;
         return (void *)v_addr;
