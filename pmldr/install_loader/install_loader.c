@@ -54,12 +54,11 @@ int copy_bootsect(int source_fd, int dest_fd, size_t offset, size_t len, struct 
     return len;
 }
 
-
-size_t find_destination_offset(BIOSParameterBlock *bpb) {
+size_t find_destination_offset(BIOSParameterBlock *bpb, size_t maybe_backup_sector_offset) {
     if(bpb->logical_sectors_per_fat==0) {   //we have FAT32
-        return sizeof(BootSectorStart) + sizeof(BIOSParameterBlock) + sizeof(ExtendedBiosParameterBlock) + sizeof(FAT32ExtendedBiosParameterBlock);
+        return sizeof(BootSectorStart) + sizeof(BIOSParameterBlock) + sizeof(ExtendedBiosParameterBlock) + sizeof(FAT32ExtendedBiosParameterBlock) + maybe_backup_sector_offset;
     } else {
-        return sizeof(BootSectorStart) + sizeof(BIOSParameterBlock) + sizeof(ExtendedBiosParameterBlock) ;
+        return sizeof(BootSectorStart) + sizeof(BIOSParameterBlock) + sizeof(ExtendedBiosParameterBlock) + maybe_backup_sector_offset;
     }
 }
 
@@ -68,6 +67,7 @@ int main(int argc, char **argv)
     char *device = argv[1];
     char oemname[9];
     BIOSParameterBlock *bpb;
+    FAT32ExtendedBiosParameterBlock *f32bpb = NULL;
     char *jump_bytes;
 
     if(device==NULL || strlen(device)==0) {
@@ -89,6 +89,7 @@ int main(int argc, char **argv)
 
     get_oem_name(bootsector, oemname);
     bpb = get_bpb(bootsector);
+    if(bpb->total_logical_sectors==0 && bpb->bytes_per_logical_sector!=0) f32bpb = get_f32bpb(bootsector);  //otherwise it stays as NULL
     jump_bytes = get_jump_bytes(bootsector);
 
     printf("OEM name on device '%s' is '%s'\n", device, oemname);
@@ -103,8 +104,7 @@ int main(int argc, char **argv)
     // ---- copy over pmldr (the second-stage bootloader) as a regular file
     struct copied_file_info pmldr_info;
 
-    if(bpb->total_logical_sectors==0 && bpb->bytes_per_logical_sector!=0) {
-        FAT32ExtendedBiosParameterBlock *f32bpb = get_f32bpb(bootsector);
+    if(f32bpb) {
         f32_copy_file("pmldr/pmldr", raw_device_fd, bpb, f32bpb, &pmldr_info);
     } else if( bpb->total_logical_sectors!=0) {
         f16_copy_file("pmldr/pmldr", raw_device_fd, bpb, &pmldr_info);
@@ -129,8 +129,16 @@ int main(int argc, char **argv)
     char buf[16];
     
     printf("INFO Copying bootsect.bin with a size of %ld bytes\n", size);
-    size_t offset = find_destination_offset(bpb);
+    size_t offset = find_destination_offset(bpb, 0);
     copy_bootsect(source_fd, raw_device_fd, offset, size, &pmldr_info);
+    if(f32bpb) {
+        printf("INFO Updating FAT32 backup boot sector\n");
+        lseek(source_fd, 0, SEEK_SET);
+        offset = find_destination_offset(bpb, f32bpb->boot_sectors_copy_start*bpb->bytes_per_logical_sector);
+        copy_bootsect(source_fd, raw_device_fd, offset, size, &pmldr_info);
+    }
+    close(source_fd);
+
     //Now write the jump bytes
     lseek(raw_device_fd, 0, SEEK_SET);
 
@@ -138,13 +146,21 @@ int main(int argc, char **argv)
     buf[1] = (uint8_t) offset+2;    //add 4 bytes to the offset to skip over the 2 uint16's of data at the start. 
     write(raw_device_fd, buf, 2);
 
+    if(f32bpb) {
+        //Also update jump bytes in backup BS
+        offset = f32bpb->boot_sectors_copy_start*bpb->bytes_per_logical_sector;
+        if(offset>0) {
+            lseek(raw_device_fd, offset, SEEK_SET);
+            write(raw_device_fd, buf, 2);
+        }
+    }
+
     //Now write boot signature bytes
     lseek(raw_device_fd, 0x1FE, SEEK_SET);
     buf[0] = 0x55;
     buf[1] = 0xAA;
     write(raw_device_fd, buf, 2);
 
-    close(source_fd);
 
     close(raw_device_fd);
 }
