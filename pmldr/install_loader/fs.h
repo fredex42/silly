@@ -26,7 +26,8 @@ DirectoryEntry *f32_get_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT
 int f32_write_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *f32bpb, DirectoryEntry *entries);
 
 void *get_allocation_table(int raw_device_fd, size_t logical_sectors_per_fat, BIOSParameterBlock *bpb);
-int write_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb, size_t logical_sectors_per_fat, void *buffer);
+int write_allocation_tables(int raw_device_fd, BIOSParameterBlock *bpb, size_t logical_sectors_per_fat, void *buffer);
+int write_allocation_table(int raw_device_fd, uint8_t index, BIOSParameterBlock *bpb, size_t logical_sectors_per_fat, void *buffer);
 
 int f32_update_cluster_count(int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *ebpb, size_t clusters_used, size_t last_allocated);
 #endif

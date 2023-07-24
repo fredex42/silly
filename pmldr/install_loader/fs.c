@@ -174,10 +174,19 @@ void *get_allocation_table(int raw_device_fd, size_t logical_sectors_per_fat, BI
     return buf;
 }
 
-int write_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb, size_t logical_sectors_per_fat, void *buffer)
+int write_allocation_tables(int raw_device_fd, BIOSParameterBlock *bpb, size_t logical_sectors_per_fat, void *buffer)
 {
-    size_t offset = bpb->reserved_logical_sectors * bpb->bytes_per_logical_sector;
+    int rv=0;
+    for(uint8_t i=0; i<bpb->fat_count; i++) {
+        rv = write_allocation_table(raw_device_fd, i, bpb, logical_sectors_per_fat, buffer);
+    }
+    return rv;
+}
+
+int write_allocation_table(int raw_device_fd,  uint8_t index, BIOSParameterBlock *bpb, size_t logical_sectors_per_fat,void *buffer)
+{
     size_t buffer_size = logical_sectors_per_fat * bpb->bytes_per_logical_sector;
+    size_t offset = bpb->reserved_logical_sectors * bpb->bytes_per_logical_sector + ((size_t) index * buffer_size);
 
     fprintf(stderr, "DEBUG allocation table size is %ld bytes and offset is %ld\n", buffer_size, offset);
 

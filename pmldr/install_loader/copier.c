@@ -155,7 +155,7 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
         return -1;
     }
     close(source_fd);
-    rv = write_allocation_table(raw_device_fd, bpb, f32bpb->logical_sectors_per_fat, (void *)fat);
+    rv = write_allocation_tables(raw_device_fd, bpb, f32bpb->logical_sectors_per_fat, (void *)fat);
     if(rv!=0) {
         fprintf(stderr, "ERROR Could not write updated allocation table\n");
         free(fat);

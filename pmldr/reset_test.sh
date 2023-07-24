@@ -12,6 +12,7 @@ echo Installing boot loader
 echo -----------------------------
 ./install_loader/install_loader test.fat
 
+# Note - if the FATs are not correctly mirrored then mcopy fixes it for us.
 echo -----------------------------
 echo Copying kernel
 echo -----------------------------
