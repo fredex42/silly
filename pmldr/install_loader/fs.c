@@ -189,3 +189,34 @@ int write_allocation_table(int raw_device_fd, BIOSParameterBlock *bpb, size_t lo
     }
     return 0;
 }
+
+int f32_update_cluster_count(int raw_device_fd, BIOSParameterBlock *bpb, FAT32ExtendedBiosParameterBlock *ebpb, size_t clusters_used, size_t last_allocated)
+{
+    char sector_buffer[0x200];
+
+    size_t offset = ebpb->fs_information_sector * bpb->bytes_per_logical_sector;
+    lseek(raw_device_fd, offset, SEEK_SET);
+    int n = read(raw_device_fd, sector_buffer, 0x200);
+    if(n==-1) {
+        fprintf(stderr, "ERROR Could not read FAT32 FS info sector\n");
+        return -1;
+    }
+
+    if(sector_buffer[0]!=0x52 && sector_buffer[1]!=0x52 && sector_buffer[2]!=0x61 && sector_buffer[3]!=0x41) {
+        fprintf(stderr, "ERROR FAT32 FS info sector is not valid\n");
+        return -2;
+    }
+
+    size_t updated_cluster_count = 0;
+    memcpy(&updated_cluster_count, &sector_buffer[0x1E8], 4);
+    fprintf(stderr, "DEBUG Previous cluster count was 0x%lx (%ld)\n", updated_cluster_count, updated_cluster_count);
+    updated_cluster_count -= clusters_used;
+    fprintf(stderr, "DEBUG Updated cluster count is 0x%lx (%ld)\n", updated_cluster_count, updated_cluster_count);
+
+    memcpy(&sector_buffer[0x1E8], &updated_cluster_count, 4);
+    if(last_allocated>0) memcpy(&sector_buffer[0x1EC], &last_allocated, 4);
+
+    lseek(raw_device_fd, offset, SEEK_SET);
+    write(raw_device_fd, sector_buffer, 0x200);
+    return 0;
+}

@@ -169,6 +169,14 @@ int f32_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
         return -1;
     }
     fprintf(stdout, "INFO Copied over PMLDR\n");
+
+    free(fat);
+
+    rv = f32_update_cluster_count(raw_device_fd, bpb, f32bpb, (size_t)cluster_count, (size_t)start_cluster_index+(size_t)cluster_count);
+    if(rv !=0) {
+        fprintf(stderr, "WARNING Could not update FS Information Sector");
+    }
+    
     return 0;
 }
 
