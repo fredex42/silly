@@ -10,3 +10,9 @@ pmldr:
 
 install_loader:
 	make -C install_loader
+
+clean:
+	make -C bootsect clean
+	make -C pmldr clean
+	make -C install_loader clean
+	
