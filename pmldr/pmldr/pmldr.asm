@@ -19,6 +19,7 @@
 %define FAT32RootDirStart	0x2C	;dword. This is a cluster address so needs to be converted to sectors for loading
 %define FAT32FSInfoSector	0x30	;word
 %define CustomDiskBlocksPerCluster  0x32    ;word
+%define CurrentlyLoadingCluster     0x34    ;dword
 
 %define BootSectorBase	0x500
 %define BootSectorMemSectr 0x50

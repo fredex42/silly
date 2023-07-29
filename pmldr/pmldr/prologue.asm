@@ -2,10 +2,9 @@
 [BITS 16]
 [ORG 0x7E00]
 
-;We are going to put the disk parameters buffer at 0x50:0x00 (0x500 in PM)
-
 %include "../../andy_elf/memlayout.asm" ;ensure that e.g. TemporaryMemInfoBufferSeg is the same as for the kernel
 
+xor ebp, ebp
 push dx
 
 ;hello world

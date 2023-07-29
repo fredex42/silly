@@ -79,11 +79,12 @@ LoadBootSector:
 	mov ds, ax
 	xor dx, dx
 	mov ax, word [BytesPerSector]
-	mov bx, 0x200
-	div bx
 	mov bh, 0
 	mov bl, byte [SectorsPerCluster]
 	mul bx
+	mov bx, 0x200					;FIXME - assume that disk always has 512 (=0x200) byte sectors
+	div bx
+
 	mov word [CustomDiskBlocksPerCluster], ax
 
 	pop ebp
@@ -108,10 +109,7 @@ LoadFAT:
 	push ebp
 	mov ebp, esp
 	
-	mov ax, [ReservedSectors]	;FAT area starts immediately after the reserved sectors
-	mov bx, [CustomDiskBlocksPerCluster]
-	mul bx
-	mov cx, ax
+	mov cx, [ReservedSectors]	;FAT area starts immediately after the reserved sectors. FIXME: assuming that disk sector = hw sector
 	mov bx, 4
 
 	push ds
@@ -124,7 +122,7 @@ LoadFAT:
 	ret
 
 ;Expects ds to point to the start of the boot sector image, i.e. 0x50
-;Returns the cluster offset of the root directory for FAT32 in dx:ax
+;Returns the sector offset of the root directory for FAT32 in dx:ax
 F32GetRootDirLocation:
 	push ebp
 	mov ebp, esp
@@ -135,8 +133,6 @@ F32GetRootDirLocation:
 	mov bl, byte [FATCount]
 	mul bx
 	add ax, word [ReservedSectors]
-	mov bx, word [CustomDiskBlocksPerCluster]
-	mul bx
 	
 	pop ebp
 	ret
@@ -237,6 +233,7 @@ LoadInKernel:
 	push ebp
 	mov ebp, esp
 
+	xor eax, eax
 	mov ax, 0x50
 	mov ds, ax
 	mov gs, ax
@@ -257,10 +254,11 @@ LoadInKernel:
 	xor ecx, ecx
 
 	_k_load_next_cluster:
+	mov dword [gs:CurrentlyLoadingCluster], eax
 	mov bx, word [gs:CustomDiskBlocksPerCluster]
 	add dx, bx
 
-	;ax is currently the location of the cluster we are loading.
+	;ax is currently the location of the next cluster to load.
 	;we need to convert this number to hardware blocks (easy as DiskBlocksPerCluster is already in bx),
 	;and add the filesystem's offset to the result.
 	mul bx
@@ -279,15 +277,17 @@ LoadInKernel:
 	jz _k_load_done
 
 	;get the next cluster address from the FAT. cx is the cluster address we just loaded, gs points to the boot sector and fs points to our data.
+	;FIXME - this calculation does not work if the sectors per cluster is not 1. Missing a factor somewhere.
+	; mov ax, cx 				;set ax to the (physical) cluster we just loaded
+	; mov bx, word [fs:DiskDataBlocksOffset]
+	; sub ax, bx				;subtract the offset to get back to the FAT index
+	mov eax, dword [gs:CurrentlyLoadingCluster]
+	mov bx, 4
+	mul bx					;multiply the FAT entry index by 4 to get the byte offset
+	mov esi, eax
 	push gs
 	mov ax, FATSector
 	mov gs, ax				;point gs to the FAT
-	mov ax, cx 				;set ax to the (physical) cluster we just loaded
-	mov bx, word [fs:DiskDataBlocksOffset]
-	sub ax, bx				;subtract the offset to get back to the FAT index
-	mov bx, 4
-	mul bx					;multiply the FAT entry index by 4 to get the byte offset
-	mov si, ax
 	mov eax, dword [gs:si]	;get the offset of the next cluster
 
 	pop gs					;restore gs value
@@ -303,8 +303,8 @@ LoadInKernel:
 	mov al, byte [gs:SectorsPerCluster]
 	mul bx
 	mov bx, ds
-	shr ax, 4				;convert sector to bytes
-	add ax, bx
+	shr ax, 4				;shift-right the number of bytes to get a 16-bit (memory!) sector offset from a byte offset
+	add ax, bx				;add one cluster's worth of bytes to the memory pointer
 	mov ds, ax
 
 	pop eax					;restore the cluster number into ax
