@@ -156,6 +156,11 @@ LoadRootDirectory:
 	mul dx
 	mov bx, ax
 
+	cmp bx, 0x0B				;if we load more than 0x0B hardware sectors then we clobber other memory (see memory map in pmldr.asm)
+	jng _root_dir_load_cont
+	mov bx, 0x0B
+
+	_root_dir_load_cont:
 	;load the data at 0xF00
 	mov ax, 0xF0
 	mov ds, ax
@@ -226,7 +231,7 @@ FindKernelBinary:
 	sub si, 0x7E00
 	call PrintString
 	hlt
-	jmp $
+	jmp $-2
 
 ;Actually loads the kernel binary, based on the information we derived in FindKernelBinary.
 LoadInKernel:
@@ -321,7 +326,7 @@ fat_load_err:
 	hlt
 	jmp $
 
-
+;FIXME: aaarrgggh! These are getting clobbered by something :( 0x8245
 ;data
 FSErrString					db 'Could not load filesystem', 0x0d, 0x0a, 0
 NotFoundErrString			db 'Could not locate ANDY.SYS', 0x0d, 0x0a, 0

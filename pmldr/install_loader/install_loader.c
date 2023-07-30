@@ -104,6 +104,12 @@ int main(int argc, char **argv)
     // ---- copy over pmldr (the second-stage bootloader) as a regular file
     struct copied_file_info pmldr_info;
 
+    //FIXME: this is non-ideal, but the 2nd stage bootloader has trouble if we go over this.
+    if(bpb->logical_sectors_per_cluster>=8) {
+        fputs("ERROR We currently do not support 8 or more sectors per cluster\n", stderr);
+        exit(4);
+    }
+
     if(f32bpb) {
         f32_copy_file("pmldr/pmldr", raw_device_fd, bpb, f32bpb, &pmldr_info);
     } else if( bpb->total_logical_sectors!=0) {
