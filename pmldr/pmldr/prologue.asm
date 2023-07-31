@@ -5,24 +5,21 @@
 %include "../../andy_elf/memlayout.asm" ;ensure that e.g. TemporaryMemInfoBufferSeg is the same as for the kernel
 
 xor ebp, ebp
-push dx
+mov ax, 0
+mov ds, ax
+mov byte [ds:BiosBootDevicePtr], dl 	;dl should be the disk number
 
 ;hello world
 mov si, HelloString
 sub si, 0x7e00
 call PrintString
 
-;for debugging - set the div/0 interrupt handler so we can recognise it
-xor ax,ax
-mov ds, ax
-mov si, 0
-mov dword [si], 0xdeadbeef
-
 mov si, LocKernString
 sub si, 0x7e00
 call PrintString
 
 ;Load the kernel
+xor ecx, ecx				;ensure that the upper word of ecx is clear, we rely on this when loading low sector numbers.
 call LoadBootSector
 mov ax, BootSectorMemSectr
 mov ds, ax
@@ -37,14 +34,6 @@ sub si, 0x7e00
 call PrintString
 
 call detect_memory
-
-;also, get the boot drive's parameters. DL is already set to the BIOS disk number.
-; mov si, BootParamsString
-; sub si, 0x7e00
-pop dx
-; call PrintString
-; call get_boot_drive_params
-
 
 mov si, PrepString
 sub si, 0x7e00

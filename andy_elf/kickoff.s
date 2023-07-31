@@ -19,7 +19,6 @@ global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 
 ;assuming that DH is still the cursor row and DL is still the cursor position
 
-[BITS 32]
 _start:
 ;Now we need to re-set up the selectors as what we got from the bootloader was fairly minimal.
 mov ax, 0x10
@@ -182,10 +181,7 @@ rep stosd
 ;and then add in sections for TSS, user-mode CS and user-mode DS.
 ;This is done so we can protect the kernel code from tampering.
 cld										;clear direction flag, we want to write forwards
-mov edi, FullGDT			;movsd destination
-; mov esi, SimpleGDT		;movsd source
-; mov ecx, 8
-; rep movsd
+mov edi, FullGDT			;set up for writing GDT
 
 mov dword [edi], 0
 mov dword [edi+4], 0

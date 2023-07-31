@@ -117,8 +117,8 @@ DirectoryEntry *f32_get_root_dir(int raw_device_fd, BIOSParameterBlock *bpb, FAT
         return NULL;
     }
 
-    size_t reserved_sectors = (size_t)bpb->reserved_logical_sectors; // + (bpb->fat_count * f32bpb->logical_sectors_per_fat);
-    root_dir_offset += reserved_sectors * bpb->bytes_per_logical_sector;    //FIXME - why are we off by 2 sectors?
+    size_t reserved_sectors = (size_t)bpb->reserved_logical_sectors;
+    root_dir_offset += reserved_sectors * bpb->bytes_per_logical_sector;
 
     memset(buffer, 0, buffer_size);
     lseek(raw_device_fd, root_dir_offset, SEEK_SET);

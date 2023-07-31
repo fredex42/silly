@@ -9,17 +9,16 @@ pmldr_length: dw 0
 _bootsect:
 ; set up code segment for bootloader
 ; set up stack
-mov ax, 0x7000 ;4k stack space below the boot-loader, grows downwards to 0x50
+mov ax, 0x7000 ;Set up stack at the top of conventional memory
 mov ss, ax
-mov sp, 0
+mov sp, 0xFFF4
 
 ; set up data segment registers
-mov ax, 0x4000	;area below our stack and well above our code, which is at 0x7C00 (seg. 0x7C0) and the loading area at 0x7E00. Gives 192k of load space.
+mov ax, 0x4000	;data area below our stack and well above our code, which is at 0x7C00 (seg. 0x7C0) and the loading area at 0x7E00.
 mov es, ax
-mov ds, ax
 
 ;Store the boot device
-mov byte [BootDevice], dl
+mov byte [es:BootDevice], dl
 
 mov si, LoadingStart
 call PrintString
@@ -37,14 +36,12 @@ mov cx, word [pmldr_sector]
 mov bx, word [pmldr_length]
 mov ax, 0x7E0       ;we want to load PMLDR at 0x7E0:0000
 mov ds, ax          ;so set ds to 0x7E0
-call LoadDiskSectors	;break 7CA3
+call LoadDiskSectors
 
 ;Right, now we are loaded.  Jump into PMLDR.
-mov si, LoadingDone		;break 7CA9
+mov si, LoadingDone
 call PrintString
-push es
-pop ds
-mov dl, byte [BootDevice]
+mov dl, byte [es:BootDevice]
 jmp 0x7E0:0x0000
 
 ;We can't continue if int13 extensions are not available.
@@ -137,7 +134,4 @@ BootDevice      db 0    ;this is filled in from the dl register at startup
 CouldNotLoadErr db 'Could not load', 0
 LoadingStart db 'Loading...', 0
 LoadingDone db 'done.', 0
-LoadErr db 'BadELF', 0
-;ErrCodes db '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'
-TimeoutErr db 'T!', 0
 NoExtErr db 'No int13 extensions', 0

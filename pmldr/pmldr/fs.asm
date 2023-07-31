@@ -3,8 +3,11 @@
 LoadDiskSectors:
 	push ebp
 	mov ebp, esp
+	xor ax, ax
+	mov fs, ax
+
 ;Loads disk sectors into memory, at (ds):0000. Overwrites this memory and clobbers registers.
-;Arguments: bx = number of sectors to read in, cx = (16-bit) sector offset. Assume 1 sector = 512 bytes.
+;Arguments: bx = number of sectors to read in, ecx = (32-bit) sector offset. Assume 1 sector = 512 bytes.
 ;set up a disk address packet structure at 0x300:000. stos* stores at es:di and increments. int13 needs struct in ds:si
 	;this is a new version that loads one sector at a time, to accomodate bios quirks (see https://stackoverflow.com/questions/58564895/problem-with-bios-int-13h-read-sectors-from-drive)
 	cld		;make sure we are writing forwards
@@ -24,20 +27,19 @@ LoadDiskSectors:
 	stosw
 	mov ax, ds	;segment to write
 	stosw
-	mov ax, cx	;we want to read one sector from offset of sector 4, but this is little-endian. Write 48 bits in 4 words - LSW first
-	stosw
+	mov eax, ecx	;Write 48 bits in 4 words - LSW first
+	stosd
 	xor ax,ax
-	stosw
 	stosw
 	stosw		;now we are ready
 	mov ax, es
 	mov ds, ax
-	xor ax, ax
+	xor eax, eax
 
 	_load_next_sector:
 	mov si, 0x00
 	mov ah, 0x42
-	mov dl, 0x80					;FIXME: hardcoded disk number!
+	mov dl, [fs:BiosBootDevicePtr]
 	int 0x13
 	jc fat_load_err					;this hangs the bootloader so it does not really matter that we leave two values on the stack
 	dec bx							;track how many sectors we want to load in bx
@@ -146,8 +148,22 @@ LoadRootDirectory:
 	mov ax, BootSectorMemSectr
 	mov ds, ax
 
+	cmp word [FAT16RootDirEnt], 0
+	jnz .LRDFat16
+
 	;set cx to on-disk location of the root directory
 	call F32GetRootDirLocation
+	jmp .LRDCont
+
+	.LRDFat16:
+	;we don't currently support FAT16 load
+	mov si, [WrongFATErr]
+	sub si, 0x7e00
+	call PrintString
+	hlt
+	jmp $-2
+
+	.LRDCont:
 	mov cx, ax
 	;load in 1 cluster
 	xor ax, ax
@@ -254,7 +270,7 @@ LoadInKernel:
 	mov dx, 0										;Use dx to track the number of sectors loaded
 	mov ax, 0x1000									;start of write buffer
 	mov ds, ax
-	mov ax, word [fs:KernelClusterLocationLow]			;FIXME - upper word ignored in FAT32!
+	mov eax, dword [fs:KernelClusterLocationLow]			;FIXME - upper word ignored in FAT32!
 
 	xor ecx, ecx
 
@@ -269,14 +285,14 @@ LoadInKernel:
 	mul bx
 	mov bx, word [fs:DiskDataBlocksOffset]
 	add ax, bx
-	mov cx, ax	;LoadDiskSectors expects this value in cx.
+	mov ecx, eax	;LoadDiskSectors expects this value in cx.
 
-	push cx
+	push ecx
 	push dx
 	mov bx, word [gs:CustomDiskBlocksPerCluster]	;load 1 cluster's worth of blocks
 	call LoadDiskSectors
 	pop dx
-	pop cx
+	pop ecx
 	mov ax, word [fs:KernelSectorLength]
 	cmp dx, ax
 	jz _k_load_done
@@ -328,6 +344,7 @@ fat_load_err:
 
 ;FIXME: aaarrgggh! These are getting clobbered by something :( 0x8245
 ;data
+WrongFATErr					db 'FAT16 not currently supported', 0x0d, 0x0a, 0x0
 FSErrString					db 'Could not load filesystem', 0x0d, 0x0a, 0
 NotFoundErrString			db 'Could not locate ANDY.SYS', 0x0d, 0x0a, 0
 KernelName 					db 'ANDY    SYS'

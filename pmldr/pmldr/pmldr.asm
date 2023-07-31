@@ -29,6 +29,7 @@
 %define KernelSizeInBytesPtr    0x9F00  ;dword
 %define CursorColPtr            0x9F04  ;byte
 %define CursorRowPtr            0x9F05  ;byte
+%define BiosBootDevicePtr       0x9F06  ;byte
 
 ;We implement the following layout:	(512byte sectors = 0x200)
 ;At present, partitioned media is not supported.
