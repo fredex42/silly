@@ -1,4 +1,4 @@
-[BITS 16]
+[BITS 32]
 section .text
 global _start
 global idle_loop			;NOTE this is NOT a function but a label, a place that gets returned to.
@@ -14,116 +14,12 @@ global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 %include "memlayout.asm"
 %include "exceptions.inc"
 
-jmp _start
-
-; We want to keep the GDT where we can easily access them with 16-bit offsets
-; to make life easier with the assembler / linker, but we need more functionality later.
-; SimpleGDT is used to bootstrap protected mode, then later on the GDT is shifted to "FullGDT" which
+; We start off using the GDT which was configured by PMLDR, then later on the GDT is shifted to "FullGDT" which
 ; includes ring3 code/data selectors and a Task Segment Selector as well.
 
-;basic GDT configuration. Each entry is 8 bytes long
-SimpleGDT:
-;entry 0: null entry
-dd 0
-dd 0
-;entry 1 (segment 0x08): kernel CS
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x0000	;base bits 16-23
-db 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
-db 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
-dw 0xffff	;limit bits 0-15
-dw 0x0000	;base bits 0-15
-db 0x00		;base bits 16-23. Start from 0meg.
-db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
-dw 0xFFFF	; limit bits 0-15.
-dw 0x0000	; base bits 0-15
-db 0x0A		; base bits 16-23. Start from 0x0A0000
-db 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
-db 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
-db 0x00		;base bits 24-31
-
-
-SimpleGDTPtr:
-dw 0x20		;length in bytes
-dd 0x0		;offset, filled in by code
-
 ;assuming that DH is still the cursor row and DL is still the cursor position
+
 _start:
-;before we go to PM, retrieve the bios memory map
-call detect_memory
-
-;Try to enter protected mode - https://wiki.osdev.org/Protected_Mode
-;Disable interrupts
-cli
-
-;Disable NMI - https://wiki.osdev.org/Non_Maskable_Interrupt
-in AL, 0x70
-or al, 0x80
-out 0x70, al
-in al, 0x71
-
-in al, 0x92	;a20 not enabled, do it now
-or al, 2
-out 0x92, al
-a20_enabled:
-
-;Now set up Global Descriptor Table
-mov ax, cs
-mov ds, ax
-xor eax, eax
-mov eax, SimpleGDT		;get the location of the GDT, add the absolute location of our data segment
-mov si, SimpleGDTPtr
-sub si, 0x7E00
-mov [si+2], eax	;set the GDT location into the pointer structure
-lgdt [si]
-
-;Get the current cursor position
-mov ax, 0x0300
-mov bx, 0
-int 0x10
-;DH is row and DL is column
-
-;now we are ready!
-mov eax, cr0
-or al, 1
-mov cr0, eax	;hello protected mode
-jmp 0x08:_pm_start	;Here goes nothing!
-
-;retrieve the BIOS memory map. This must be compiled and run in 16-bit mode, easiest way
-;is to call it before the switch to PM.
-detect_memory:
-	mov ax, TemporaryMemInfoBufferSeg  ;target location is 0x250:000
-	mov es, ax
-	mov di, 2
-	xor si, si	;use si as a counter
-	xor ebx,ebx
-	mem_det_loop:
-	mov edx, 0x534d4150
-	mov eax, 0xe820
-  mov ecx, 24
-
-	inc si
-	int 0x15
-	jc mem_det_done
-	test ebx, ebx
-	jz mem_det_done
-
-	add di, 24
-	jmp mem_det_loop
-
-	mem_det_done:
-	mov word [es:000], si
-	ret
-
-
-[BITS 32]
-_pm_start:
 ;Now we need to re-set up the selectors as what we got from the bootloader was fairly minimal.
 mov ax, 0x10
 mov ds, ax
@@ -285,10 +181,35 @@ rep stosd
 ;and then add in sections for TSS, user-mode CS and user-mode DS.
 ;This is done so we can protect the kernel code from tampering.
 cld										;clear direction flag, we want to write forwards
-mov edi, FullGDT			;movsd destination
-mov esi, SimpleGDT		;movsd source
-mov ecx, 8
-rep movsd
+mov edi, FullGDT			;set up for writing GDT
+
+mov dword [edi], 0
+mov dword [edi+4], 0
+add edi, 8
+;entry 1 (segment 0x08): kernel CS
+mov word [edi], 0xffff	;limit bits 0-15
+mov word [edi+2], 0x0000	;base bits 0-15
+mov byte [edi+4], 0x00	;base bits 16-23
+mov byte [edi+5], 0x9A		;access byte. Set Pr, Privl=0, S=1, Ex=1, DC=0, RW=1, Ac=0
+mov byte [edi+6], 0xCF		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov byte [edi+7], 0x00		;base bits 24-31
+add edi, 8
+;entry 2 (segment 0x10): kernel DS. Allow this to span the whole addressable space.
+mov word [edi], 0xffff	;limit bits 0-15
+mov word [edi+2], 0x0000	;base bits 0-15
+mov word [edi+4], 0x00		;base bits 16-23. Start from 0meg.
+mov word [edi+5], 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+mov word [edi+6], 0xCf		;limit bits 16-19 [lower], flags [higher]. Set Gr=1 [page addressing], Sz=1 [32-bit sector]
+mov word [edi+7], 0x00		;base bits 24-31
+add edi, 8
+;entry 3 (segment 0x18): video RAM. See https://wiki.osdev.org/Memory_Map_(x86).
+mov word [edi], 0xFFFF	; limit bits 0-15.
+mov word [edi+2], 0x0000	; base bits 0-15
+mov word [edi+4], 0x0A		; base bits 16-23. Start from 0x0A0000
+mov word [edi+5], 0x92		;access byte. Set Pr, Privl=0, S=1, Ex=0, DC=0, RW=1, Ac=0
+mov word [edi+6], 0x41		;limit bits 16-19 [lower], flags [higher]. Set Gr=0 [byte addressing], Sz=1 [32-bit sector]
+mov word [edi+7], 0x00		;base bits 24-31
+add edi, 8
 
 ;edi should now be pointing to FullGDT+0x20
 ;entry 4 (segment 0x20): TSS. See https://wiki.osdev.org/Task_State_Segment.

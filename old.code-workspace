@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"nasm.outputFormat": "bin",
+		"nasm.extraFlags": [
+			"-i /home/andy/silly"
+		],
+		"files.associations": {
+			"panic.h": "c"
+		}
+	}
+}
