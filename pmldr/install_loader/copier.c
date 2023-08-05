@@ -36,8 +36,9 @@ int f16_copy_file(char *source_file_name, int raw_device_fd, BIOSParameterBlock 
     }
 
     uint16_t cluster_count = file_size_to_clusters(source_file_size, bpb);
-    fprintf(stdout, "INFO Copying %s which is %ld bytes or %d clusters\n", source_file_name, source_file_size, cluster_count);
-
+    //fprintf(stdout, "INFO Copying %s which is %ld bytes or %d clusters\n", source_file_name, source_file_size, cluster_count);
+    fprintf(stderr, "ERROR FAT16 copy has not been implemented yet\n");
+    exit(5);
 }
 
 /**

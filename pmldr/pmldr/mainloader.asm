@@ -123,8 +123,10 @@ _bl_relocation:
     mov DH, byte [CursorRowPtr]
     mov dl, byte [CursorColPtr]
 
-    ;now enter the kernel
-    jmp 0x08:0x7e00
+    ;now enter the kernel. Push the address and use `ret` in order to get an absolute jump.
+    mov esi, dword [KERNEL_BINARY_BASE+ELF_ENTRY_POINT]
+    push esi
+    ret
 
 ;Check that the file we loaded has an ELF header, and is 32-bit LE.
 CheckKernelFormat:
