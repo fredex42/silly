@@ -126,12 +126,6 @@ _bl_relocation:
     ;now enter the kernel
     jmp 0x08:0x7e00
 
-    ; mov esi, Temporary
-    ; add esi, 0x100000
-    ; call PMPrintString
-    ; hlt
-    ; jmp $
-
 ;Check that the file we loaded has an ELF header, and is 32-bit LE.
 CheckKernelFormat:
     push ebp
@@ -213,9 +207,9 @@ LoadInSection:
     pop ecx
     pop ebp
     ret
+    
 ;Data
 ElfHeaderBytes  db  0x7F, 0x45, 0x4c, 0x46      ;the "magic number" header at the start of a valid ELF file
 
 InvalidFile     db 'The kernel is not a valid ELF executable', 0x0d, 0x0a, 0
 InvalidElf      db 'The kernel is not compatible with this architecture', 0x0d, 0x0a, 0
-Temporary       db 'Not implemented yet....', 0x0d, 0x0a, 0

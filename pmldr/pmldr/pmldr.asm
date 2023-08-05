@@ -36,9 +36,10 @@
 ; 0x500		0x700	Boot sector image
 ; 0x700		0xF00	Cluster 1 of FAT
 ; 0xF00		0x1700	Cluster 1 of root directory
-; 0x1700	0x2500	Free
+; 0x1700	0x2500	Free (expansion for root dir)
 ; 0x2500	0x2700	Read buffer (overwritten by memory info after loading)
 ; 0x3000	0x3100	disk address packet buffer
+; 0x3100    0x3150  drive parameters buffer (http://www.ctyme.com/intr/rb-0715.htm)
 ; 0x7c00    0x9000  our code
 ; 0x9F00    0x10000 Our values storage (see above)
 ; 0x10000   0x7F000 kernel image loading buffer (458k)

@@ -14,6 +14,8 @@ mov si, HelloString
 sub si, 0x7e00
 call PrintString
 
+call get_boot_drive_params		;FIXME - the BIOS now reports the number of bytes per sector, we should use that insted of the hard-coded value
+
 mov si, LocKernString
 sub si, 0x7e00
 call PrintString
@@ -136,11 +138,15 @@ get_boot_drive_params:
 	push ebp
 	mov ebp, esp
 
-	;disk info buffer goes at 0x500 in conventional RAM, i.e. 0x50:0x00 in seg/offset
-	mov ax, 0x50
+	xor ax, ax
+	mov es, ax
+	;disk info buffer goes at 0x3100 in conventional RAM, i.e. 0x310:0x00 in seg/offset
+	mov ax, 0x310
 	mov ds, ax
 	mov si, 0x0
-	mov ah, 0x48
+	mov word [ds:si], 0x42					;request version 3 metadata
+	mov ax, 0x4800
+	mov dl, byte [es:BiosBootDevicePtr]
 	int 0x13
 	jc drive_param_err
 	pop ebp
