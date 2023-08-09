@@ -35,15 +35,15 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
     return;
   }
   //see https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system, under "File allocation table"
-  if(buffer[1]==0xFF && buffer[2]==0xFF && buffer[3]!=0xFF) {
+  if(buffer[1]=0xFF && buffer[2]==0xFF && buffer[3]==0x0F) {
+    kprintf("INFO Detected a FAT32 filesystem\r\n");
+    new_fs->cluster_map->bitsize=32;
+  } else if(buffer[1]==0xFF && buffer[2]==0xFF && buffer[3]!=0xFF) {
     kprintf("INFO Detected a FAT12 filesystem\r\n");
     new_fs->cluster_map->bitsize=12;
   } else if(buffer[1]=0xFF && buffer[2]==0xFF && buffer[3]==0xFF && buffer[4]!=0x0F) {
     kprintf("INFO Detected a FAT16 filesystem\r\n");
     new_fs->cluster_map->bitsize=16;
-  } else if(buffer[1]=0xFF && buffer[2]==0xFF && buffer[3]==0x0F) {
-    kprintf("INFO Detected a FAT32 filesystem\r\n");
-    new_fs->cluster_map->bitsize=32;
   } else {
     kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
     if(buffer) free(buffer);
