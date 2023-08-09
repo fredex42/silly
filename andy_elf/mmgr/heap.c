@@ -129,11 +129,12 @@ struct HeapZoneStart* _expand_zone(struct HeapZoneStart* zone, size_t page_count
 {
   if(zone->magic!=HEAP_ZONE_SIG) k_panic("Kernel memory heap is corrupted\r\n");
 
-  void *slab = vm_alloc_pages(NULL, page_count, MP_PRESENT|MP_READWRITE);
+  //Add 1 to the page count, because if we allocate a new zone then we need space for the header information too!
+  void *slab = vm_alloc_pages(NULL, page_count+1, MP_PRESENT|MP_READWRITE);
   if(!slab) return NULL;
 
   if((char*)zone + zone->zone_length == (char *)slab) {
-    zone->zone_length+=page_count*PAGE_SIZE;
+    zone->zone_length+=(page_count+1)*PAGE_SIZE;
     zone->dirty=1;
     struct PointerHeader* ptr = _last_pointer_of_zone(zone);
     if(ptr->in_use) { //end of the zone is in use, we should add another PointerHeader after it.
@@ -142,13 +143,16 @@ struct HeapZoneStart* _expand_zone(struct HeapZoneStart* zone, size_t page_count
       #ifdef MMGR_VERBOSE
       kprintf("DEBUG _expand_zone last block not in use, expanding");
       #endif
-      ptr->block_length += page_count*PAGE_SIZE;
+      ptr->block_length += (page_count+1)*PAGE_SIZE;
       return zone;
     }
   } else {
+    #ifdef MMGR_VERBOSE
+    kputs("DEBUG _expand_zone memory blocks are not continous, creating a new zone\r\n");
+    #endif
     struct HeapZoneStart *new_zone = (struct HeapZoneStart*)slab;
     new_zone->magic = HEAP_ZONE_SIG;
-    new_zone->zone_length = page_count*PAGE_SIZE;
+    new_zone->zone_length = (page_count+1)*PAGE_SIZE;
     new_zone->allocated = 0;
     new_zone->dirty = 0;
     new_zone->next_zone=NULL;
@@ -156,11 +160,12 @@ struct HeapZoneStart* _expand_zone(struct HeapZoneStart* zone, size_t page_count
 
     struct PointerHeader* ptr = (struct PointerHeader *)((char *)(slab + sizeof(struct HeapZoneStart)));
     ptr->magic = HEAP_PTR_SIG;
-    ptr->block_length = zone->zone_length - sizeof(struct HeapZoneStart);
+    ptr->block_length = new_zone->zone_length - sizeof(struct HeapZoneStart);
     ptr->in_use=0;
     ptr->next_ptr = NULL;
 
     new_zone->first_ptr = ptr;
+    kprintf("DEBUG _expand_zone new zone is at 0x%x and size is 0x%x\r\n", new_zone, new_zone->zone_length);
     return new_zone;
   }
 }
@@ -172,6 +177,10 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
 {
   size_t remaining_length = 0;
   struct PointerHeader* new_ptr=NULL;
+
+  #ifdef MMGR_VERBOSE
+  kprintf("DEBUG _zone_alloc request for %l (0x%x) bytes in zone 0x%x\r\n", bytes, bytes, zone);
+  #endif
 
   struct PointerHeader *p=zone->first_ptr;
   while(1) {
@@ -322,10 +331,10 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
   }
 
   #ifdef MMGR_VERBOSE
-  kputs("DEBUG No existing heap zones had space, expanding last zone\r\n");
+  kprintf("DEBUG No existing heap zones had space to allocate %l (0x%x) bytes, expanding last zone\r\n", bytes, bytes);
   #endif
   //if we get here, then no zones had available space. z should be set to the last zone.
-  size_t pages_required = bytes / PAGE_SIZE;
+  size_t pages_required = (bytes / PAGE_SIZE) +1; //if bytes is an exact page size, we'll need more space for zone and block headers.
   //always allocate at least MIN_ZONE_SIZE_PAGES
   size_t pages_to_alloc = pages_required > MIN_ZONE_SIZE_PAGES ? pages_required : MIN_ZONE_SIZE_PAGES;
   z = _expand_zone(z, pages_to_alloc);
