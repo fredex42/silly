@@ -123,7 +123,16 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
       fp->current_cluster_number = vfat_cluster_map_next_cluster(fp->parent_fs->cluster_map, fp->current_cluster_number);
     }
 
-    if(fp->current_cluster_number==CLUSTER_MAP_EOF_MARKER) {
+    if(fp->current_cluster_number==-1) {
+      //we failed
+      kputs("ERROR Could not get next cluster number during load.\r\n");
+      free(buffer);
+      t->fp->busy = 0;
+      t->callback(t->fp, -1, t->buffer_write_offset, t->real_buffer, t->cb_extradata);
+      free(t);
+      validate_pointer(t->fp->parent_fs->bpb, 1);
+      return;     
+    } else if(fp->current_cluster_number==CLUSTER_MAP_EOF_MARKER) {
       //we are done!
       free(buffer);
       t->fp->busy = 0;
@@ -178,7 +187,7 @@ size_t _vfat_scroll_clusters(VFatOpenFile *fp, size_t cluster_count, size_t star
   size_t current_cluster = start_cluster;
   for(size_t i=cluster_count;i>0;i--) {
     current_cluster = vfat_cluster_map_next_cluster(fp->parent_fs->cluster_map, current_cluster);
-    if(current_cluster==CLUSTER_MAP_EOF_MARKER) break;
+    if(current_cluster==CLUSTER_MAP_EOF_MARKER || current_cluster==-1) break;
   }
   return current_cluster;
 }
@@ -220,6 +229,10 @@ uint8_t vfat_seek(VFatOpenFile *fp, size_t offset, uint8_t whence)
       fp->sector_offset_in_cluster += cluster_offset_in_sectors;
       while(fp->sector_offset_in_cluster > fp->parent_fs->bpb->logical_sectors_per_cluster) {
         fp->current_cluster_number = vfat_cluster_map_next_cluster(fp->parent_fs->cluster_map, fp->current_cluster_number);
+        if(fp->current_cluster_number==-1) {
+          kputs("ERROR vfat_seek could not load next cluster\r\n");
+          return 1;
+        }
         fp->sector_offset_in_cluster = fp->sector_offset_in_cluster - fp->parent_fs->bpb->logical_sectors_per_cluster;
       }
       fp->current_cluster_number = _vfat_scroll_clusters(fp, total_offset_in_clusters, fp->current_cluster_number);
