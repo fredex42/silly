@@ -17,6 +17,7 @@ echo -----------------------------
 echo Copying kernel
 echo -----------------------------
 mcopy -i test.fat ../andy_elf/test.elf ::/andy.sys
+mcopy -i test.fat ../shell.app/shell.app ::/shell.app
 
 echo -----------------------------
 echo Done
