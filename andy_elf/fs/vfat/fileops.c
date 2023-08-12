@@ -37,6 +37,9 @@ VFatOpenFile* vfat_open_by_location(FATFS *fs_ptr, size_t cluster_location_start
     return NULL;
   }
 
+  kprintf("DEBUG vfat_open_by_location cluster start is 0x%x, size is 0x%x\r\n", cluster_location_start, file_size);
+  kprintf("DEBUG vfat_open_by_location sector offset is 0x%x\r\n", sector_offset);
+  
   fp->parent_fs = fs_ptr;
   fs_ptr->open_file_count++;
   fp->current_cluster_number = cluster_location_start;
