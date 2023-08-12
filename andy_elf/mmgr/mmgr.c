@@ -129,7 +129,7 @@ void initialise_pagedir_ptrs() {
   ((vaddr *)0x3FF000)[pageent_idx] = (vaddr)phys_ptr[2] | MP_PRESENT | MP_READWRITE;
   mb();
 
-  //first_pagedir_entry[0x3FF] = 0;
+  first_pagedir_entry[0x3FF] = 0;
 
   //now add the first directory into the root
   kernel_paging_directory[pagedir_idx] = (vaddr)phys_ptr[0] | MP_PRESENT | MP_READWRITE;
@@ -137,7 +137,6 @@ void initialise_pagedir_ptrs() {
   vaddr *pagedir_entries = (vaddr *)PAGEDIR_ENTRIES_LOCATION;
 
   mb();
-  //uint32_t *pagedir_entries = k_map_page_bytes(NULL, phys_ptr, (void *)PAGEDIR_ENTRIES_LOCATION, MP_PRESENT|MP_READWRITE);
   pagedir_entries[0] = FIRST_PAGEDIR_ENTRY_LOCATION;
 }
 
@@ -272,7 +271,6 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
   }
 
   uint32_t *pagedir_phys = (uint32_t *)(actual_root[pagedir_idx] & MP_ADDRESS_MASK);
-  //uint32_t *pagedir = (uint32_t *)k_map_if_required(NULL, pagedir_phys, MP_READWRITE);
 
   //FIXME: we should map the physical pagedir pointer to a temporary location
   pagedir[pageent_idx] = ((vaddr)phys_addr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
@@ -352,7 +350,6 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
       pagedir_entry_vptr = vm_add_dir(root_page_dir, i, flags);  //if we don't have a virtual memory directory then add one
     } else {
       pagedir_entry_phys = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
-      //pagedir_entry_vptr = (uint32_t *)k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
       pagedir_entry_vptr = ((vaddr *)pagedir_entries)[i];
       if(!pagedir_entry_vptr) k_panic("ERROR vm_map_next_unallocated_pages page was present in physical map but not in virtual\r\n");
     }
@@ -380,8 +377,6 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   i = starting_page_dir;
   j = starting_page_off;
   for(p=0;p<pages;p++) {
-    // pagedir_entry_phys = (size_t *) (root_page_dir[i] & MP_ADDRESS_MASK);
-    // pagedir_entry_vptr = k_map_if_required(NULL, pagedir_entry_phys, MP_READWRITE);
     pagedir_entry_vptr = ((vaddr *)pagedir_entries)[i];
     if(!pagedir_entry_vptr) k_panic("ERROR vm_map_next_unallocated_pages page was present in physical map but not in virtual\r\n");
 
@@ -447,7 +442,6 @@ void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *vmem_ptr, size_
       kprintf("ERROR deallocating ptr 0x%x from root dir 0x%x page %l phys_ptr is null\r\n", vmem_ptr, root_page_dir, i+off);
       continue;
     }
-    //k_unmap_page(root_page_dir, dir ,off);
     pagedir_ent[off] = (uint32_t)0;
     vaddr vptr_to_invalidate = dir*0x400000 + off*0x1000;
 
@@ -561,7 +555,6 @@ void* vm_find_existing_mapping(uint32_t *base_directory_vptr, void *phys_addr, s
     }
 
     for(register int j=0;j<1023;j++) {
-      //if(i!=0) kprintf("DEBUG vm_find_existing_mapping checking dir %d (value 0x%x) page %d\r\n", i, pagedir_entry_vptr[i], j);
 
       if( (pagedir_entry_vptr[j] & MP_ADDRESS_MASK) == page_value) {
         vaddr v_addr = (vaddr)((i << 22)+ (j << 12)) + (vaddr)page_offset;
@@ -635,7 +628,7 @@ uint8_t find_next_unallocated_page(uint32_t *base_directory_vptr, int16_t *dir, 
 
   for(register int16_t i=*dir; i<1024; i++) {
     if(! (base_directory_vptr[i] & MP_PRESENT)) continue;
-    //uint32_t *directory_phys_ptr = (uint32_t *)(base_directory_vptr[i] & MP_ADDRESS_MASK);
+
     uint32_t *directory_vptr = pagedir_entries[i] & MP_ADDRESS_MASK;
     if(!directory_vptr) k_panic("ERROR find_next_unallocated_page, page directory entry was present in physical map but not in virtual map\r\n");
     while(j<1024) {
@@ -780,7 +773,7 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   /**
   initial populate of the physical memory map. We use the "dirty" flag in the physical memory
   map to indicate "in use".
-  Pages 0x7->0xd  (0x7000  -> 0xd000) are reserved for kernel
+  Pages 0x7->0x15  (0x7000  -> 0x15000) are reserved for kernel
   Pages 0x80->0xff(0x80000 -> 0x100000) are reserved for bios
   */
   physical_memory_map[0].in_use=1;                        //always protect first page, reserved for SMM
