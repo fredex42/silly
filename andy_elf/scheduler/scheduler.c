@@ -35,13 +35,7 @@ void scheduler_tick()
   SchedulerTask *to_run;
 
   cli();
-  //FIXME: this is just for debugging!!
-  uint32_t current_ticks = rtc_get_ticks();
-  uint32_t epoch_time = rtc_get_unix_time();
-  uint32_t boot_time = rtc_get_boot_time();
 
-  kprintf("DEBUG: There have been %l elapsed 512Hz ticks. System startup was at %l, Current unix time is %l\r\n", current_ticks, boot_time, epoch_time);
-  
   ++global_scheduler_state->ticks_elapsed;
   //FIXME: run deadline tasks first
   //FIXME: run after-time tasks second

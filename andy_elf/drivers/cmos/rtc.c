@@ -60,7 +60,7 @@ Note that this modifies the struct pointed to in its argument - the values are n
 uint32_t rtc_raw_data_to_epoch(struct RealTimeClockRawData *raw)
 {
     rtc_normalise_time(raw);
-    rtc_print_data(raw);
+    //rtc_print_data(raw);
 
     //Algorithm courtesy of https://stackoverflow.com/questions/7960318/math-to-convert-seconds-since-1970-into-date-and-vice-versa?noredirect=1&lq=1 !
     // Cumulative days for each previous month of the year

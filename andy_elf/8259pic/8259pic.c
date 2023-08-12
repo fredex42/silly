@@ -1,6 +1,6 @@
 #include <types.h>
 #include "8259pic.h"
-#include "../cpuid.h"
+#include <cpuid.h>
 #include "picroutines.h"
 
 /*
