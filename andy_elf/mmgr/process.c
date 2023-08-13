@@ -189,6 +189,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   *process_stack_temp = elf->file_header->i386_subheader.entrypoint;
   new_entry->saved_regs.esp -= 0x0C;
   //the stack should now be ready for `iret`, we don't need access to it any more.
+  kprintf("DEBUG new_process unmapping process stack at 0x%x from kernel\r\n", new_entry->stack_kmem_ptr);
   k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
   new_entry->stack_kmem_ptr = NULL;
 

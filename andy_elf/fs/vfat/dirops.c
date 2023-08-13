@@ -147,10 +147,14 @@ struct opendir_transient_data {
 
 DirectoryEntry* vfat_read_dir_next(VFatOpenDir *dir)
 {
+  kprintf("DEBUG vfat_read_dir_next reading 0x%x\r\n", dir);
   size_t byte_offset = dir->current_dir_idx * sizeof(DirectoryEntry);
+  kprintf("DEBUG vfat_read_dir_next current index is 0x%x, byte_offset is 0x%x,\r\n length in bytes is 0x%x\r\n", dir->current_dir_idx, dir->length_in_bytes);
   if(byte_offset >= dir->length_in_bytes) return NULL;  //we got to the end of the directory
 
   DirectoryEntry *result = &dir->buffer[dir->current_dir_idx]; //the buffer is typed to DirectoryEntry so we need a block offset not byte offset.
+  kprintf("DEBUG vfat_read_dir_next result data is at 0x%x\r\n", result);
+
   if(result->file_size==0 && result->attributes==0) return NULL;  //we got to the end of useful content
   ++dir->current_dir_idx;
   return result;
@@ -205,7 +209,7 @@ void vfat_opendir_root(FATFS *fs_ptr, void* extradata, void(*callback)(VFatOpenF
 {
   size_t start_location_cluster;
   if(fs_ptr->f32bpb) {
-    start_location_cluster = fs_ptr->f32bpb->root_directory_entry_cluster;
+    start_location_cluster = (fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->fat_count * fs_ptr->f32bpb->logical_sectors_per_fat)) / fs_ptr->bpb->logical_sectors_per_cluster;
   } else {
     start_location_cluster = (fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->fat_count * fs_ptr->bpb->logical_sectors_per_fat)) / fs_ptr->bpb->logical_sectors_per_cluster;
   }

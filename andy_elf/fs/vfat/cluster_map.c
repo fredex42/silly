@@ -11,6 +11,7 @@ Returns 0x0FFFFFFF when end-of-file is reached
 uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_cluster_num)
 {
   size_t offset;
+  kprintf("DEBUG vfat_cluster_map_next_cluster for 0x%x\r\n", current_cluster_num);
 
   switch(m->bitsize) {
     case 12:
@@ -31,7 +32,7 @@ uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_clust
     case 32:
       offset = current_cluster_num*4;
       uint32_t dvalue = ((uint32_t *)m->buffer)[current_cluster_num] & 0x0FFFFFFF; //upper 4 bits are reserved and must be masked off, apparently
-      if(dvalue>=0x0FFFFFF8) {  //all of thses signify end-of-file
+      if(dvalue>=0x0FFFFFF8 || dvalue==0) {  //all of thses signify end-of-file
         return CLUSTER_MAP_EOF_MARKER;
       } else {
         return dvalue;
