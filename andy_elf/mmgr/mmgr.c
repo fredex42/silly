@@ -290,7 +290,7 @@ Returns:
 void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags)
 {
   void *phys_ptr=NULL; //only one entry
-  kprintf("DEBUG Adding a new directory into the virtual memory table\r\n");
+  kprintf("DEBUG Adding a new directory into the virtual memory table at 0x%d\r\n", idx);
   size_t allocd = allocate_free_physical_pages(1, &phys_ptr);
   kprintf("DEBUG allocd %d pages at 0x%x\r\n", allocd, phys_ptr);
 
@@ -480,11 +480,23 @@ void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageen
   if(root_page_dir==NULL) root_page_dir = kernel_paging_directory;
 
   uint32_t *pagedir_ent_phys = (vaddr)root_page_dir[pagedir_idx] & MP_ADDRESS_MASK;
+  uint32_t *pagedir_ent;
+
   if(pagedir_ent_phys==NULL) {
     kprintf("ERROR cannot unmap page %d-%d from root dir 0x%x as it is not present\r\n",pagedir_idx, pageent_idx, root_page_dir);
     return;
   }
-  uint32_t *pagedir_ent = k_map_if_required(NULL, pagedir_ent_phys, MP_READWRITE);
+
+  if(root_page_dir==kernel_paging_directory) {
+    uint32_t *pagedir_entries = (uint32_t *)PAGEDIR_ENTRIES_LOCATION;
+    pagedir_ent = pagedir_entries[pageent_idx];
+    if(!pagedir_ent) {
+      kprintf("ERROR k_unmap_page page directory %d shown as present in root dir but no vptr in cache table\r\n", pageent_idx);
+      return;
+    }
+  } else {
+    pagedir_ent = k_map_if_required(NULL, pagedir_ent_phys, MP_READWRITE);
+  }
   pagedir_ent[pageent_idx] = 0;
 }
 

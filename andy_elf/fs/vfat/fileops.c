@@ -15,8 +15,9 @@ on the disk (otherwise we effectively discount the disk headers by assuming that
 */
 size_t vfat_get_sector_offset(FATFS *fs_ptr) {
   if(fs_ptr->f32bpb) {
-    size_t root_dir_location_cluster = fs_ptr->f32bpb->root_directory_entry_cluster;
-    k_panic("vfat_add_fs_offset not implemented yet for FAT32\r\n");
+    size_t root_dir_location_sector = (fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->fat_count * fs_ptr->f32bpb->logical_sectors_per_fat));
+
+    return root_dir_location_sector - 2*fs_ptr->bpb->logical_sectors_per_cluster;
   } else {
     size_t root_dir_location_sector = (fs_ptr->bpb->reserved_logical_sectors + (fs_ptr->bpb->fat_count * fs_ptr->bpb->logical_sectors_per_fat));
     size_t root_dir_size_sectors = (fs_ptr->bpb->max_root_dir_entries * sizeof(DirectoryEntry)) / ATA_SECTOR_SIZE;
