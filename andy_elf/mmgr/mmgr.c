@@ -11,7 +11,7 @@
   #include <types.h>
   #include <sys/mmgr.h>
 #endif
-
+#include <sys/pagefault.h>
 #include <memops.h>
 #include <stdio.h>
 #include <cfuncs.h>
@@ -164,6 +164,7 @@ void initialise_flat_pagetables() {
 
   memset((void *)temp_ptr, 0, PAGE_SIZE);
   temp_ptr[0] = (vaddr)first_pagedir_entry | MP_READWRITE | MP_PRESENT;
+  temp_ptr[0x3C0] = (vaddr)phys_ptrs[0] | MP_READWRITE | MP_PRESENT;
   kernel_paging_directory[target_pagedir] = (vaddr)phys_ptrs[0] | MP_READWRITE | MP_PRESENT;
   first_pagedir_entry[temp_pagedir] = 0;
   __invalidate_vptr(temp_ptr);
@@ -380,7 +381,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   for(i=0;i<(1024*1024);i++) {
     //i counts the page where we are
     uint32_t *pageptr = (uint32_t *)((vaddr)flat_pagetables_ptr + (vaddr)(i * sizeof(vaddr)));
-    kprintf("DEBUG vm_map_next_unallocated_pages pageptr for page %d is 0x%x\r\n", i, pageptr);
+    //kprintf("DEBUG vm_map_next_unallocated_pages pageptr for page %d is 0x%x\r\n", i, pageptr);
     if(! ((*pageptr) & MP_PRESENT) ) {
       if(starting_page_dir==0xFFFF) starting_page_dir = i >> 12;
       if(starting_page_off==0xFFFF) starting_page_off = (starting_page_dir << 12) | (i & 0x3FF);
@@ -855,4 +856,77 @@ uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys)
 
   mb();
   return app_paging_dir_root_kmem;
+}
+
+vaddr _mmgr_get_pd();
+
+/**
+ * This is called from the pagefault handler and it will allocate extra paging directories as required, provided that the fault occurred from
+ * kernel code when accessing the page mapped area.
+ * 
+ * Returns 0 if the exception was handled and 1 otherwise.
+*/
+uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags)
+{
+  void *phys_ptr;
+  if((vaddr)pf_load_addr >= (vaddr)flat_pagetables_ptr && (vaddr)pf_load_addr <= (vaddr)flat_pagetables_ptr+0x100000) { //the fault occurred in the mapped page-tables range
+    kputs("DEBUG handle_allocation_fault detected in pagetables area\r\n");
+    if(faulting_codeseg!=0x08 || error_code&PAGEFAULT_ERR_USER) {
+      kputs("DEBUG the fault occurred in user code, not handling.\r\n");
+      return 1;
+    }
+    if(error_code&PAGEFAULT_ERR_PRESENT) {  //if not set, caused by page-not-present
+      kputs("DEBUG error was a protection violation, not handling\r\n");
+      return 1;
+    }
+
+    //OK, so we need to allocate a page table entry. Work out where it goes.
+    vaddr pf_loc = (vaddr)pf_load_addr - (vaddr) flat_pagetables_ptr;
+    vaddr pagedir_idx = pf_loc >> 12;
+    vaddr pagedir_ent = (pf_loc >> 2) & 0x3FF;
+    kprintf("DEBUG allocating pagedir at %l-%l from 0x%x\r\n", pagedir_idx, pagedir_ent, pf_loc);
+    uint32_t *current_pd = (uint32_t *)_mmgr_get_pd();
+    kprintf("DEBUG current PD is 0x%x\r\n", current_pd);
+    if(current_pd!=kernel_paging_directory) {
+      kputs("ERROR JIT allocation to non-kernel directories is not implemented yet\r\n");
+      return 1;
+    }
+
+    //this code only works for the kernel PD as it's identity-mapped
+    //need to get some kind of translation table for others
+    uint32_t allocd = allocate_free_physical_pages(1, &phys_ptr);
+    if(allocd!=1) {
+      kputs("ERROR Could not allocate more physical RAM\r\n");
+      return 1;
+    }
+    kprintf("DEBUG physical ptr to map is 0x%x\r\n", phys_ptr);
+
+    //set up the new page in the root paging directory.
+    current_pd[pagedir_idx] = ((vaddr)phys_ptr & MP_ADDRESS_MASK) | MP_PRESENT | MP_READWRITE;
+
+    //also, map it into RAM at the right place in the page-tables area.  For that we need to get a pointer
+    //to the page entry holding the page-tables area.
+
+    vaddr flat_pagetables_ptr_pageoff = (vaddr)flat_pagetables_ptr >> 10;
+    uint32_t* pagetables_entry = (uint32_t *)((vaddr)flat_pagetables_ptr + flat_pagetables_ptr_pageoff);
+    pagetables_entry[pagedir_idx] = (vaddr)phys_ptr | MP_PRESENT | MP_READWRITE;
+    kprintf("DEBUG handle_allocation_fault flat pagetables at 0x%x\r\n", flat_pagetables_ptr);
+    kprintf("DEBUG pagetables address of pagetables is 0x%x\r\n", pagetables_entry);
+
+    //the faulting operation can now be retried by returning 0
+    return 0;
+  } else {  //not relevant to us.
+    return 1;
+  }
+}
+
+/**
+ * internal function to return the physical address of the current paging directory
+*/
+vaddr _mmgr_get_pd()
+{
+  vaddr result;
+
+  asm("mov %%cr3, %0" : "=r"(result) : );
+  return result;
 }

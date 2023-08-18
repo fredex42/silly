@@ -174,9 +174,15 @@ IPageFault:	;leaves error code
 	mov eax, cr2
 	push eax
 	call c_except_pagefault
+	cmp eax, 0
+	jz .recovered
+
 	mov eax, PageFaultMsg
 	call FatalMsg
-
+	.recovered:
+	add esp, 8
+	iret
+	
 IFloatingPointExcept:
 	mov eax, FPExceptMsg
 	call FatalMsg
