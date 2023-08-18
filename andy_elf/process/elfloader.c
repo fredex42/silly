@@ -59,7 +59,7 @@ void _elf_next_segment_loaded(VFatOpenFile *fp, uint8_t status, size_t bytes_rea
 
 void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
 {
-
+  cli();
   if(t->_scanned_segment_count>=t->program_headers_count) {
     kprintf("DEBUG elf_load_next_segment Loaded all %l section headers.\r\n", t->program_headers_count);
     t->callback(E_OK, t, t->extradata);
@@ -115,14 +115,10 @@ void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
   kprintf("DEBUG allocated %d pages, first one is at 0x%x phys\r\n", allocd_pages, seg->content_phys_pages[0]);
 
   //Step two - (temporarily) map into kernel space as R/W so we can load them
-  cli();
   seg->content_virt_page = vm_map_next_unallocated_pages(NULL, MP_READWRITE, seg->content_phys_pages, seg->page_count);
-  sti();
   if(seg->content_virt_page==NULL) {
     kprintf("ERROR Could not map allocated pages into kernel-space\r\n");
-    cli();
     deallocate_physical_pages(allocd_pages, seg->content_phys_pages);
-    sti();
     free(seg->content_phys_pages);
     seg->content_phys_pages = NULL;
     t->callback(E_NOMEM,t, t->extradata);

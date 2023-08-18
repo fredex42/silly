@@ -44,6 +44,7 @@ void apply_memory_map_protections(struct BiosMemoryMap *ptr);
 void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags);
 uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks);
 void *k_map_page_bytes(uint32_t *root_page_dir, void *phys_addr, void *target_virt_addr, uint32_t flags);
+vaddr _mmgr_get_pd();
 
 /**
 Kickoff entrypoint
@@ -257,10 +258,8 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
   uint32_t *actual_root;
   uint32_t *pagedir;
 
-  if(root_page_dir==NULL) {
-    actual_root = kernel_paging_directory;
-  } else {
-    actual_root = root_page_dir;
+  if((vaddr)root_page_dir != _mmgr_get_pd()) {
+    k_panic("ERROR Not implemented yet - can't map pages in non-active directory.\r\n");
   }
   if(pagedir_idx>1023 || pageent_idx>1023) return NULL; //out of bounds
 
@@ -270,21 +269,7 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
   vaddr vptr = (vaddr)pagedir_idx << 22 | (vaddr)pageent_idx << 12;
 
   kprintf("DEBUG k_map_page successfully mapped physical pointer 0x%x to vptr 0x%x\r\n", phys_addr, vptr);
-  // if(! (actual_root[pagedir_idx] & MP_PRESENT)){
-  //   uint32_t dir_flags = MP_READWRITE;
-  //   if(flags&MP_USER) dir_flags |= MP_USER;
-  //   pagedir = vm_add_dir(actual_root, pagedir_idx, dir_flags);
-  // } else {
-  //   uint32_t *pagedir_entries = (uint32_t *)PAGEDIR_ENTRIES_LOCATION;
-  //   pagedir = (uint32_t *)pagedir_entries[pagedir_idx];
-  // }
-
-  // uint32_t *pagedir_phys = (uint32_t *)(actual_root[pagedir_idx] & MP_ADDRESS_MASK);
-
-  // //FIXME: we should map the physical pagedir pointer to a temporary location
-  // pagedir[pageent_idx] = ((vaddr)phys_addr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
-
-  // return (void *)(pagedir_idx*0x400000 + pageent_idx*0x1000);
+  return (void *)vptr;
 }
 
 /**
@@ -353,32 +338,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //discontinues phys_addr pointers onto them with the given flags.
   //then, return the vmem ptr to the first one.
   //Don't map anything into the first Mb to avoid confusion.
-  // for(i=0;i<1024;i++) {
-  //   // if(!((vaddr)root_page_dir[i] & MP_PRESENT)) {
-  //   //   kprintf("    DEBUG page %d not present in directory, adding one\r\n", i);
-  //   //   pagedir_entry_vptr = vm_add_dir(root_page_dir, i, flags);  //if we don't have a virtual memory directory then add one
-  //   // } else {
-  //   //   pagedir_entry_phys = (size_t *)((vaddr)root_page_dir[i] & MP_ADDRESS_MASK);
-  //   //   pagedir_entry_vptr = ((vaddr *)pagedir_entries)[i];
-  //   //   if(!pagedir_entry_vptr) k_panic("ERROR vm_map_next_unallocated_pages page was present in physical map but not in virtual\r\n");
-  //   // }
-
-  //   for(j= i==0 ? 256 : 0;j<1024;j++) {
-  //     if( ! (pagedir_entry_vptr[j] & MP_PRESENT) ) {
-  //       if(starting_page_dir==0xFFFF) starting_page_dir = i;
-  //       if(starting_page_off==0xFFFF) starting_page_off = j;
-  //       continuous_page_count++;
-  //       if(continuous_page_count>=pages) break;
-  //     } else {
-  //       starting_page_dir==0xFFFF;
-  //       starting_page_off==0xFFFF;
-  //       continuous_page_count=0;
-  //     }
-  //   }
-  //   if(continuous_page_count>=pages) break;
-  // }
-
-  for(i=0;i<(1024*1024);i++) {
+  for(i=0x100;i<(1024*1024);i++) {
     //i counts the page where we are
     uint32_t *pageptr = (uint32_t *)((vaddr)flat_pagetables_ptr + (vaddr)(i * sizeof(vaddr)));
     //kprintf("DEBUG vm_map_next_unallocated_pages pageptr for page %d is 0x%x\r\n", i, pageptr);
