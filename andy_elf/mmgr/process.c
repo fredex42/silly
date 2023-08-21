@@ -97,7 +97,6 @@ struct ProcessTableEntry* new_process()
   cli();
   struct ProcessTableEntry *e = get_next_available_process();
   if(e==NULL) {
-    sti();
     return NULL;  //failed so bail out.
   }
 
@@ -111,7 +110,6 @@ struct ProcessTableEntry* new_process()
   if(c<3) {
     kprintf("ERROR Cannot allocate memory for new process\r\n");
     remove_process(e);
-    sti();
     return NULL;
   }
   e->root_paging_directory_phys = phys_ptrs[0];

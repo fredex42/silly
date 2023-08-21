@@ -800,8 +800,35 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
 }
 
-uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys)
+/*
+* This function sets up a paging directory and memory map for a new process
+* @param phys_ptr_list  - pointer to an array of at least 6 allocated physical memory page pointers
+* @param phys_ptr_count - size of the list in phys_ptr_list, for checks.
+* @return pointer to the app root paging directory, in kernel vmem.
+*
+* The memory layout created looks like this:
+*
+*  0     1Mb     2Mb   3Mb   4Mb   ..... 0xFF000000  0xFF400000  ..... 0xFFFFBFFF 0xFFFFFFFF
+*  [system] -------n/a-------------      [sparse mapped paging dirs]  .. [app stack]
+* The system area contains the IDT (on page 1) and this is read-only for processes. Otherwise it's copied directly
+* from the kernel mappings so is unavailable unless in ring 0
+*/
+uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
 {
+  if(phys_ptr_list==NULL) return NULL;
+  if(phys_ptr_count != 6) {
+    kprintf("ERROR Cannot intialise a process with %d pages, need ????\r\n", phys_ptr_count);
+    return NULL;
+  }
+
+  uint32_t *temp_ptr;
+  void *root_dir_phys = phys_ptr_list[0];
+  void *page_one_phys = phys_ptr_list[1];
+  void *stack_paging_table = phys_ptr_list[2];
+  void *stack_paging_dir = phys_ptr_list[3];
+  void *stack_initial_page = phys_ptr_list[4];
+  void *pd_area_paging_table = phys_ptr_list[5];
+
   uint32_t *app_paging_dir_root_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &root_dir_phys, 1);
 
   app_paging_dir_root_kmem[0] = (uint32_t)page_one_phys | MP_PRESENT | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
@@ -813,8 +840,44 @@ uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys)
 
   //this page contains the IDT
   page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
-
+  k_unmap_page_ptr(NULL, page_one);
   mb();
+
+  //That's the system area taken care of. Now we need the app stack.  This will get extended by a fault handler.
+  app_paging_dir_root_kmem[0x3FF] = (vaddr)stack_paging_table | MP_PRESENT | MP_READWRITE | MP_USER;
+  temp_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, stack_paging_table, 1);
+  mb();
+  memset(temp_ptr, 0, PAGE_SIZE);
+  temp_ptr[0x3FF] = (vaddr)stack_paging_dir | MP_PRESENT | MP_READWRITE | MP_USER;
+  mb();
+  k_unmap_page_ptr(NULL, temp_ptr);
+  mb();
+  temp_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, stack_paging_dir, 1);
+  mb();
+  memset(temp_ptr, 0, PAGE_SIZE);
+  temp_ptr[0x3FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
+  mb();
+  k_unmap_page_ptr(NULL, temp_ptr);
+  mb();
+  temp_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, stack_initial_page, 1);
+  mb();
+  memset(temp_ptr, 0, PAGE_SIZE);
+  mb();
+  k_unmap_page_ptr(NULL, temp_ptr);
+  mb();
+
+  //Finally we need the (sparsely-mapped) paging directory area. This will enable JIT allocation of memory pages
+  //to the process through the same mechanism as used in the kernel.  The process does not need access to this area.
+  app_paging_dir_root_kmem[0x3FC] = (vaddr)pd_area_paging_table | MP_PRESENT | MP_READWRITE;
+  temp_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, pd_area_paging_table, 1);
+  memset(temp_ptr, 0, PAGE_SIZE);
+  temp_ptr[0] = (vaddr)page_one_phys | MP_PRESENT | MP_READWRITE;
+  temp_ptr[0x3FF] = (vaddr)stack_paging_dir | MP_PRESENT | MP_READWRITE;
+  temp_ptr[0x3FC] = (vaddr)pd_area_paging_table | MP_PRESENT | MP_READWRITE;
+  mb();
+  k_unmap_page_ptr(NULL, temp_ptr);
+  mb();
+
   return app_paging_dir_root_kmem;
 }
 
@@ -831,6 +894,9 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
   void *phys_ptr;
   if((vaddr)pf_load_addr >= (vaddr)flat_pagetables_ptr && (vaddr)pf_load_addr <= (vaddr)flat_pagetables_ptr+0x100000) { //the fault occurred in the mapped page-tables range
     kputs("DEBUG handle_allocation_fault detected in pagetables area\r\n");
+    uint32_t *current_pd = (uint32_t *)_mmgr_get_pd();
+    kprintf("DEBUG current PD is 0x%x\r\n", current_pd);
+
     if(faulting_codeseg!=0x08 || error_code&PAGEFAULT_ERR_USER) {
       kputs("DEBUG the fault occurred in user code, not handling.\r\n");
       return 1;
@@ -845,8 +911,7 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     vaddr pagedir_idx = pf_loc >> 12;
     vaddr pagedir_ent = (pf_loc >> 2) & 0x3FF;
     kprintf("DEBUG allocating pagedir at %l-%l from 0x%x\r\n", pagedir_idx, pagedir_ent, pf_loc);
-    uint32_t *current_pd = (uint32_t *)_mmgr_get_pd();
-    kprintf("DEBUG current PD is 0x%x\r\n", current_pd);
+
     if(current_pd!=kernel_paging_directory) {
       kputs("ERROR JIT allocation to non-kernel directories is not implemented yet\r\n");
       return 1;
