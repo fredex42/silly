@@ -115,7 +115,7 @@ Arguments:
 */
 uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off);
 
-uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys);
+uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count);
 
 /** called from the page-fault handler for JIT allocation*/
 uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags);

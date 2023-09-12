@@ -115,19 +115,20 @@ struct ProcessTableEntry* new_process()
   e->root_paging_directory_phys = phys_ptrs[0];
   kprintf("DEBUG process paging directory at physical address 0x%x\r\n", e->root_paging_directory_phys);
 
-  e->root_paging_directory_kmem = initialise_app_pagingdir(e->root_paging_directory_phys, phys_ptrs[1]);
+  e->root_paging_directory_kmem = initialise_app_pagingdir(phys_ptrs, 6);
 
-  //now set up stack at the end of the process's VRAM
-  kputs("DEBUG new_process setting up process stack\r\n");
-  void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[2], 1023, 1023, MP_USER|MP_READWRITE);
-  kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
-  e->stack_page_count = 1;
-  e->saved_regs.esp = 0xFFFFFFF8;
-  e->stack_phys_ptr = phys_ptrs[2];
-  e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[2], 1);
-  if(e->stack_kmem_ptr==NULL) {
-    kputs("ERROR new_process could not map process stack into kmem for setup\r\n");
-  }
+  //stack etc. are now set up in initialise_app_pagingdir
+  // //now set up stack at the end of the process's VRAM
+  // kputs("DEBUG new_process setting up process stack\r\n");
+  // void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[2], 1023, 1023, MP_USER|MP_READWRITE);
+  // kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
+  // e->stack_page_count = 1;
+  // e->saved_regs.esp = 0xFFFFFFF8;
+  // e->stack_phys_ptr = phys_ptrs[2];
+  // e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[2], 1);
+  // if(e->stack_kmem_ptr==NULL) {
+  //   kputs("ERROR new_process could not map process stack into kmem for setup\r\n");
+  // }
 
   //finally setup stin, stdout, stderr
   e->files[0].type = FP_TYPE_CONSOLE;
