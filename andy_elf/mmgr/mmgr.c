@@ -276,37 +276,6 @@ void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_id
   return (void *)vptr;
 }
 
-/**
-adds a new blank directory to the virtual memory table
-Arguments:
-- root_page_dir - pointer to the root of the virtual memory directory
-- idx           - number of the directory to allocate into
-- flags         - any additional MP_ flags to apply to the memory. MP_PRESENT is always applied.
-Returns:
-- Pointer to the allocated memory, mapped into kernel-space
-*/
-// void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags)
-// {
-//   void *phys_ptr=NULL; //only one entry
-//   kprintf("DEBUG Adding a new directory into the virtual memory table at 0x%d\r\n", idx);
-//   size_t allocd = allocate_free_physical_pages(1, &phys_ptr);
-//   kprintf("DEBUG allocd %d pages at 0x%x\r\n", allocd, phys_ptr);
-
-//   if(allocd!=1) k_panic("Could not allocate physical ram for directory");
-  
-//   void *allocd_page_content = k_map_if_required(NULL, phys_ptr, MP_READWRITE);  //even if we are allocating for another process, it's the kernel that needs visibility of this.
-//   kprintf("DEBUG mapped RAM allocated from 0x%x to 0x%x\r\n", phys_ptr, allocd_page_content);
-
-//   memset(allocd_page_content, 0, PAGE_SIZE);  //ensure that the page content is blanked
-
-//   root_page_dir[idx] = ((size_t) phys_ptr & MP_ADDRESS_MASK) | MP_PRESENT | flags;
-//   kprintf("DEBUG setting page dir index %d to 0x%x\r\n", idx, root_page_dir[idx]);
-//   uint32_t *pagedir_entries = (uint32_t *)PAGEDIR_ENTRIES_LOCATION;
-//   pagedir_entries[idx] = allocd_page_content;
-
-//   return allocd_page_content;
-// }
-
 void *k_map_next_unallocated_pages(uint32_t flags, void **phys_addr, size_t pages)
 {
   return vm_map_next_unallocated_pages(kernel_paging_directory, flags, phys_addr, pages);
@@ -370,15 +339,6 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     //kprintf("DEBUG setting (0x%x + 0x%x) to 0x%x with flags 0x%x\r\n", pagedir_ptr, p, (vaddr)phys_addr[p] & MP_ADDRESS_MASK, flags | MP_PRESENT);
 
     pagedir_ptr[p] = ((vaddr)phys_addr[p] & MP_ADDRESS_MASK) | MP_PRESENT | flags;
-    // pagedir_entry_vptr = ((vaddr *)pagedir_entries)[i];
-    // if(!pagedir_entry_vptr) k_panic("ERROR vm_map_next_unallocated_pages page was present in physical map but not in virtual\r\n");
-
-    // pagedir_entry_vptr[j] = ((vaddr)phys_addr[p] & MP_ADDRESS_MASK) | MP_PRESENT | flags;
-    // j++;
-    // if(j>1024) {
-    //   i++;
-    //   j=0;
-    // }
   }
 
   //now calculate the virtual pointer
@@ -430,32 +390,6 @@ void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *vmem_ptr, size_
     __invalidate_vptr((vaddr)vmem_ptr+(p-pageptr_offset)*1024);
 
   }
-  // _resolve_vptr(vmem_ptr, &dir, &off);
-  // volatile uint32_t *pagedir_ent_phys = root_page_dir[dir] & MP_ADDRESS_MASK;
-  // volatile uint32_t *pagedir_ent = k_map_if_required(root_page_dir, pagedir_ent_phys, MP_READWRITE);
-
-  // for(register size_t i=0; i<page_count; i++) {
-  //   mb();
-  //   phys_ptr = (vaddr)pagedir_ent[off] & MP_ADDRESS_MASK;
-  //   if(phys_ptr==0) {
-  //     kprintf("ERROR deallocating ptr 0x%x from root dir 0x%x page %l phys_ptr is null\r\n", vmem_ptr, root_page_dir, i+off);
-  //     continue;
-  //   }
-  //   pagedir_ent[off] = (uint32_t)0;
-  //   vaddr vptr_to_invalidate = dir*0x400000 + off*0x1000;
-
-  //   __invalidate_vptr(vptr_to_invalidate);
-
-  //   phys_page_idx = phys_ptr >> 12;
-  //   physical_memory_map[phys_page_idx].in_use = 0;
-  //   off++;
-  //   if(off>=1024) {
-  //     off = 0;
-  //     dir++;
-  //     pagedir_ent_phys = root_page_dir[dir];
-  //     pagedir_ent = k_map_if_required(root_page_dir, pagedir_ent_phys, MP_READWRITE);
-  //   }
-  // }
   mb();
 }
 
@@ -478,25 +412,6 @@ void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageen
 
   if(root_page_dir==NULL) root_page_dir = kernel_paging_directory;
 
-  // uint32_t *pagedir_ent_phys = (vaddr)root_page_dir[pagedir_idx] & MP_ADDRESS_MASK;
-  // uint32_t *pagedir_ent;
-
-  // if(pagedir_ent_phys==NULL) {
-  //   kprintf("ERROR cannot unmap page %d-%d from root dir 0x%x as it is not present\r\n",pagedir_idx, pageent_idx, root_page_dir);
-  //   return;
-  // }
-
-  // if(root_page_dir==kernel_paging_directory) {
-  //   uint32_t *pagedir_entries = (uint32_t *)PAGEDIR_ENTRIES_LOCATION;
-  //   pagedir_ent = pagedir_entries[pageent_idx];
-  //   if(!pagedir_ent) {
-  //     kprintf("ERROR k_unmap_page page directory %d shown as present in root dir but no vptr in cache table\r\n", pageent_idx);
-  //     return;
-  //   }
-  // } else {
-  //   pagedir_ent = k_map_if_required(NULL, pagedir_ent_phys, MP_READWRITE);
-  // }
-  // pagedir_ent[pageent_idx] = 0;
   uint32_t* page_ptr = (uint32_t *)((vaddr)flat_pagetables_ptr + (vaddr)pagedir_idx << 12);
   kprintf("DEBUG k_unmap_page page for %d - %d is at 0x%x\r\n", pagedir_idx, pageent_idx, (vaddr)page_ptr);
   page_ptr[pageent_idx] = 0;
