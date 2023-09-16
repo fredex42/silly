@@ -2,6 +2,7 @@
 
 section .text
 global memset
+global memset_dw
 global memcpy
 global memcpy_dw
 global mb       ;memory barrier
@@ -45,6 +46,36 @@ memset:
   pop ebp
   ret
 
+;sets the given memory buffer to the provided DWORD value
+;Arguments:
+;1. pointer to the buffer to set (in current DS)
+;2. dword value to set (uint32_t)
+;3. size of the buffer in dwords (uint32_t). NOTE that this is 1/4 of the byte length!
+;Returns:
+;- pointer to the buffer that was set
+memset_dw:
+  push ebp
+  mov ebp, esp
+  push edi
+  push es
+  push ecx
+
+  mov ax, ds
+  mov es, ax
+  mov edi, [ebp+8]    ;first arg - buffer
+
+  mov eax, dword [ebp+12] ;second arg - value to set
+  mov ecx, dword [ebp+16] ;third arg  - dword count to copy
+
+  rep stosd
+
+  pop ecx
+  pop es
+  mov eax, edi
+  pop edi
+  pop ebp
+  ret
+  
 ;copy data from one memory buffer to another
 ;Arguments:
 ;1. pointer to the destination buffer
