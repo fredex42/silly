@@ -51,7 +51,9 @@ struct PhysMapEntry {
 #define MP_DIRTY      1 << 6  //if this is 0 then the page has not been written, if 1 then it has
 #define MP_PAGESIZE   1 << 7  //if this is 0 then the address refers to a page table, otherwise to a 4Mib block
 #define MP_GLOBAL     1 << 8  //don't invalidate when CR3 changes if set
-#define MP_PAGEATTRIBUTE 1 << 12 //1 if Page Attribute Table is supported. Keep to 0
+
+#define MPC_SPARSE    1 << 9  //custom attribute - if this is 1 then the page is "sparse", i.e. not present but can be mapped in
+#define MP_PAGEATTRIBUTE 1 << 12 //if Page Attribute Table is supported, forms a 3-bit index value with MP_PWT and MP_PCD
 
 #define MP_OSBITS_MASK 0xF00  //bitmask for the 3 os-dependent bits
 #define MP_ADDRESS_MASK 0xFFFFF000
