@@ -315,7 +315,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     //i counts the page where we are
     uint32_t *pageptr = (uint32_t *)((vaddr)flat_pagetables_ptr + (vaddr)(i * sizeof(vaddr)));
     //kprintf("DEBUG vm_map_next_unallocated_pages pageptr for page %d is 0x%x\r\n", i, pageptr);
-    if(! ((*pageptr) & MP_PRESENT) ) {
+    if(! ((*pageptr) & MP_PRESENT) && ! ((*pageptr) & MPC_SPARSE)) {  //if this vpage is in use, then there is either a page mapped to it (MP_PRESENT) or it's labelled MPC_SPARSE (map a physical page in on first access)
       if(starting_page_dir==0xFFFF) starting_page_dir = i >> 12;
       if(starting_page_off==0xFFFF) starting_page_off = (starting_page_dir << 12) | (i & 0x3FF);
       continuous_page_count++;
@@ -622,14 +622,16 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
   void *pd_area_paging_table = phys_ptr_list[5];
 
   uint32_t *app_paging_dir_root_kmem = k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &root_dir_phys, 1);
-
-  app_paging_dir_root_kmem[0] = (uint32_t)page_one_phys | MP_PRESENT | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
   kprintf("DEBUG App paging dir mapped into kmem at 0x%x\r\n", app_paging_dir_root_kmem);
+  memset_dw((void *)app_paging_dir_root_kmem, (uint32_t)MPC_SPARSE, PAGE_SIZE_DWORDS);
+
+  app_paging_dir_root_kmem[0] = (uint32_t)page_one_phys | MP_PRESENT | MPC_SPARSE | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
+
 
   //copy over the content of the first page of the kernel paging directory to the application paging directory
   uint32_t *page_one = (uint32_t *)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, &page_one_phys, 1);
 
-  memcpy_dw(page_one, (void *)FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE/8);
+  memcpy_dw(page_one, (void *)FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE/4);
 
   //this page contains the IDT
   page_one[1] = (1 << 12) | MP_PRESENT | MP_USER;       //user-mode needs readonly in order to access IDT
@@ -694,7 +696,7 @@ uint32_t page_value_for_vaddr(vaddr pf_load_addr) {
 uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags)
 {
   void *phys_ptr;
-  if(error_code&PAGEFAULT_ERR_PRESENT) {  //if not set, caused by page-not-present
+  if(error_code&PAGEFAULT_ERR_PRESENT) {  //if this is set, then the page _was_ present => protection violation => not an allocation fault => can't handle it here.
     kputs("DEBUG error was a protection violation, not handling\r\n");
     return 1;
   }
@@ -735,7 +737,7 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     kprintf("DEBUG physical ptr to map is 0x%x\r\n", phys_ptr);
 
     //set up the new page in the root paging directory.
-    current_pd[pagedir_idx] = ((vaddr)phys_ptr & MP_ADDRESS_MASK) | MP_PRESENT | MP_READWRITE;
+    current_pd[pagedir_idx] = ((vaddr)phys_ptr & MP_ADDRESS_MASK) | MPC_SPARSE | MP_PRESENT | MP_READWRITE;
 
     //also, map it into RAM at the right place in the page-tables area.  For that we need to get a pointer
     //to the page entry holding the page-tables area.

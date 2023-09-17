@@ -58,7 +58,8 @@ struct PhysMapEntry {
 #define MP_OSBITS_MASK 0xF00  //bitmask for the 3 os-dependent bits
 #define MP_ADDRESS_MASK 0xFFFFF000
 
-#define PAGE_SIZE     0x1000  //4k pages
+#define PAGE_SIZE         0x1000  //4k pages
+#define PAGE_SIZE_DWORDS  0x200
 
 /* external facing functions */
 /**
