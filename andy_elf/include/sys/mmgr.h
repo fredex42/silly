@@ -61,6 +61,10 @@ struct PhysMapEntry {
 #define PAGE_SIZE         0x1000  //4k pages
 #define PAGE_SIZE_DWORDS  0x200
 
+
+//We only create mapped app pagedirs in this region.
+#define APP_PAGEDIRS_BASE (vaddr)0xC0000000
+
 /* external facing functions */
 /**
 initialise the memory manager, applying protections as per the BiosMemoryMap pointed to
@@ -104,6 +108,16 @@ Returns:
 virtual memory to complete or `pages` was 0.
 */
 void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, void **phys_addr, size_t pages);
+
+/**
+ * Maps the contents of the given paging dir into memory, on a 4mb boundary
+*/
+uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from);
+
+/**
+ * Unmaps and invalidates the given paging dir, the argument must have previously been obtained from map_app_pagingdir
+*/
+void unmap_app_pagingdir(uint32_t *mapped_pd);
 
 /* internal functions */
 void setup_paging();
