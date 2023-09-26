@@ -92,7 +92,7 @@ struct ProcessTableEntry *get_next_available_process()
 struct ProcessTableEntry* new_process()
 {
   kprintf("INFO Initialising new process entry\r\n");
-  void *phys_ptrs[3];
+  void *phys_ptrs[5];
 
   cli();
   struct ProcessTableEntry *e = get_next_available_process();
@@ -115,7 +115,8 @@ struct ProcessTableEntry* new_process()
   e->root_paging_directory_phys = phys_ptrs[0];
   kprintf("DEBUG process paging directory at physical address 0x%x\r\n", e->root_paging_directory_phys);
 
-  e->root_paging_directory_kmem = initialise_app_pagingdir(phys_ptrs, 5);
+  initialise_app_pagingdir(phys_ptrs, 5);
+  e->root_paging_directory_kmem = NULL;
 
   //stack etc. are now set up in initialise_app_pagingdir
   // //now set up stack at the end of the process's VRAM
@@ -147,12 +148,20 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     return 0;
   }
 
+  // for(register size_t i=0; i<PAGE_SIZE_DWORDS; i++) {
+  //   kprintf("DEBUG 0x%x value is 0x%x\r\n", &new_entry->root_paging_directory_kmem[i], ((uint32_t *)new_entry->root_paging_directory_kmem)[i]);
+  // }
+
   kputs("returned from new_process\r\n");
   uint32_t *mapped_pagedirs = map_app_pagingdir((vaddr)new_entry->root_paging_directory_phys, APP_PAGEDIRS_BASE);
   if(!mapped_pagedirs) {
     kputs("ERROR Unable to map app paging dir\r\n");
     new_entry->status = PROCESS_NONE;
     return 0;
+  }
+
+  for(register size_t i=0; i<PAGE_SIZE_DWORDS; i++) {
+    kprintf("DEBUG 0x%x value is 0x%x\r\n", &mapped_pagedirs[i], mapped_pagedirs[i]);
   }
 
   kprintf("DEBUG app paging dirs remapped to 0x%x\r\n", mapped_pagedirs);
