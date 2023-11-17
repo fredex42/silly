@@ -73,6 +73,7 @@ struct ProcessTableEntry {
   struct SavedRegisterStates32 saved_regs;  //offset 0x28
   //open files
   struct FilePointer files[FILE_MAX];
+  pid_t pid;
 } __attribute__((packed));
 
 

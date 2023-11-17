@@ -21,6 +21,7 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
   memset(process_table, 0, sizeof(struct ProcessTableEntry)*PID_MAX);
   for(size_t i=0; i<PID_MAX; i++) {
     process_table[i].magic = PROCESS_TABLE_ENTRY_SIG;
+    process_table[i].pid = (pid_t)i;
   }
 
   //process 0 is kernel
@@ -119,17 +120,17 @@ struct ProcessTableEntry* new_process()
   e->root_paging_directory_kmem = NULL;
 
   //stack etc. are now set up in initialise_app_pagingdir
-  // //now set up stack at the end of the process's VRAM
+  //now set up stack at the end of the process's VRAM
   // kputs("DEBUG new_process setting up process stack\r\n");
-  // void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[2], 1023, 1023, MP_USER|MP_READWRITE);
-  // kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
-  // e->stack_page_count = 1;
-  // e->saved_regs.esp = 0xFFFFFFF8;
-  // e->stack_phys_ptr = phys_ptrs[2];
-  // e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[2], 1);
-  // if(e->stack_kmem_ptr==NULL) {
-  //   kputs("ERROR new_process could not map process stack into kmem for setup\r\n");
-  // }
+  // void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[4], 1023, 1023, MP_USER|MP_READWRITE);
+  //kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
+  e->stack_page_count = 1;
+  e->saved_regs.esp = 0xFFFFFFF8;
+  e->stack_phys_ptr = phys_ptrs[4]; //FIXME - magic number usage - this corresponds to physical page 4 being set up as the stack page in initialise_app_pagingdir
+  e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[4], 1);
+  if(e->stack_kmem_ptr==NULL) {
+    kputs("ERROR new_process could not map process stack into kmem for setup\r\n");
+  }
 
   kputs("INFO process info now set up\r\n");
   //finally setup stin, stdout, stderr
@@ -160,10 +161,6 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     return 0;
   }
 
-  for(register size_t i=0; i<PAGE_SIZE_DWORDS; i++) {
-    kprintf("DEBUG 0x%x value is 0x%x\r\n", &mapped_pagedirs[i], mapped_pagedirs[i]);
-  }
-
   kprintf("DEBUG app paging dirs remapped to 0x%x\r\n", mapped_pagedirs);
   
   for(size_t i=0; i<elf->_loaded_segment_count; i++) {
@@ -172,9 +169,10 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     size_t flags = MP_USER|MP_PRESENT;
     if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
     kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
+    kprintf("DEBUG internal_create_process physical RAM address of segment 0x%x\r\n", seg->content_phys_pages[0]);
     kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
     for(size_t p=0; p<seg->page_count; ++p) {
-      k_map_page_bytes(mapped_pagedirs, seg->content_phys_pages[p], seg->header->p_vaddr + p*PAGE_SIZE, flags);
+      k_map_page_bytes(mapped_pagedirs, seg->content_phys_pages[p], seg->header->p_vaddr, flags);
     }
     if(seg->content_virt_page!=NULL) {
       k_unmap_page_ptr(NULL, seg->content_virt_page);
@@ -216,6 +214,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   new_entry->status = PROCESS_READY;
   sti();
   kprintf("DEBUG new_process process initialised at 0x%x\r\n", new_entry);
+  return new_entry->pid;
 }
 
 void remove_process(struct ProcessTableEntry* e)

@@ -279,7 +279,7 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
   mb();
   vaddr vptr = (vaddr)pagedir_idx << 22 | (vaddr)pageent_idx << 12;
 
-  kprintf("DEBUG k_map_page successfully mapped physical pointer 0x%x to vptr 0x%x\r\n", phys_addr, vptr);
+  //kprintf("DEBUG k_map_page successfully mapped physical pointer 0x%x to vptr 0x%x\r\n", phys_addr, vptr);
   release_spinlock(&memlock);
   return (void *)vptr;
 }
@@ -695,8 +695,8 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
   memset(stack_paging_table_virt, 0, PAGE_SIZE);
   memset(stack_paging_dir_virt, 0, PAGE_SIZE);
   memset(stack_initial_page_virt, 0, PAGE_SIZE);
-  stack_paging_table_virt[0x1FF] = (vaddr)stack_paging_dir | MP_PRESENT | MP_READWRITE | MP_USER;
-  stack_paging_dir_virt[0x1FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
+  stack_paging_table_virt[0x3FF] = (vaddr)stack_paging_dir | MP_PRESENT | MP_READWRITE | MP_USER;
+  stack_paging_dir_virt[0x3FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
   
   memset_dw(root_dir_virt, MPC_PAGINGDIR, PAGE_SIZE_DWORDS);
 
@@ -745,9 +745,9 @@ vaddr _mmgr_get_pd();
 uint32_t page_value_for_vaddr(vaddr pf_load_addr) {
   size_t pf_load_dir = ADDR_TO_PAGEDIR_IDX(pf_load_addr);
   size_t pf_load_pg  = ADDR_TO_PAGEDIR_OFFSET(pf_load_addr);
-  kprintf("DEBUG page is at 0x%x-0x%x\r\n", pf_load_dir, pf_load_pg);
+  // kprintf("DEBUG page is at 0x%x-0x%x\r\n", pf_load_dir, pf_load_pg);
   vaddr ptr = (vaddr)flat_pagetables_ptr + ((vaddr)pf_load_dir << 12) + ((vaddr)pf_load_pg * sizeof(uint32_t));
-  kprintf("DEBUG page value is 0x%x\r\n", *(uint32_t *)ptr);
+  // kprintf("DEBUG page value is 0x%x\r\n", *(uint32_t *)ptr);
   return *(uint32_t *)ptr;
 }
 
@@ -819,9 +819,15 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     ((uint32_t *)pagetables_entry)[pagedir_idx] = (vaddr)phys_ptr | MP_PRESENT | MP_READWRITE | page_flags;
     kprintf("DEBUG handle_allocation_fault flat pagetables at 0x%x\r\n", &((uint32_t *)pagetables_entry)[pagedir_idx]);
     kprintf("DEBUG pagetables address of pagetables is 0x%x\r\n", pagetables_entry);
-
+    
+    vaddr pageaddr_nowmapped = pf_load_addr & 0xFFFFFC00; //base of the page we just mapped
+    kprintf("DEBUG page now mapped at base 0x%x, zeroing\r\n", pageaddr_nowmapped);
+    memset_dw((void *)pageaddr_nowmapped, 0, PAGE_SIZE_DWORDS);
+    kprintf("DEBUG done.\r\n");
+    
     //the faulting operation can now be retried by returning 0
     --pagefault_depth_ctr;
+    kputs("INFO handle_allocation_fault completed\r\n");
     return 0;
   } else {  //not relevant to us.
     return 1;
