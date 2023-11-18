@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "process.h": "c",
+        "fat_fileops.h": "c",
+        "spinlock.h": "c",
+        "functional": "c"
+    }
+}

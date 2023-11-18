@@ -21,6 +21,7 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
   memset(process_table, 0, sizeof(struct ProcessTableEntry)*PID_MAX);
   for(size_t i=0; i<PID_MAX; i++) {
     process_table[i].magic = PROCESS_TABLE_ENTRY_SIG;
+    process_table[i].pid = (pid_t)i;
   }
 
   //process 0 is kernel
@@ -92,12 +93,11 @@ struct ProcessTableEntry *get_next_available_process()
 struct ProcessTableEntry* new_process()
 {
   kprintf("INFO Initialising new process entry\r\n");
-  void *phys_ptrs[3];
+  void *phys_ptrs[5];
 
   cli();
   struct ProcessTableEntry *e = get_next_available_process();
   if(e==NULL) {
-    sti();
     return NULL;  //failed so bail out.
   }
 
@@ -107,30 +107,32 @@ struct ProcessTableEntry* new_process()
 
   //set up a paging directory
   kputs("DEBUG new_process Setting up paging directory\r\n");
-  size_t c = allocate_free_physical_pages(3, phys_ptrs);
-  if(c<3) {
+  size_t c = allocate_free_physical_pages(5, phys_ptrs);
+  if(c<5) {
     kprintf("ERROR Cannot allocate memory for new process\r\n");
     remove_process(e);
-    sti();
     return NULL;
   }
   e->root_paging_directory_phys = phys_ptrs[0];
   kprintf("DEBUG process paging directory at physical address 0x%x\r\n", e->root_paging_directory_phys);
 
-  e->root_paging_directory_kmem = initialise_app_pagingdir(e->root_paging_directory_phys, phys_ptrs[1]);
+  initialise_app_pagingdir(phys_ptrs, 5);
+  e->root_paging_directory_kmem = NULL;
 
+  //stack etc. are now set up in initialise_app_pagingdir
   //now set up stack at the end of the process's VRAM
-  kputs("DEBUG new_process setting up process stack\r\n");
-  void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[2], 1023, 1023, MP_USER|MP_READWRITE);
-  kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
+  // kputs("DEBUG new_process setting up process stack\r\n");
+  // void *process_stack = k_map_page(e->root_paging_directory_kmem, phys_ptrs[4], 1023, 1023, MP_USER|MP_READWRITE);
+  //kprintf("DEBUG new_process Set up 4k stack at 0x%x in process space\r\n", process_stack);
   e->stack_page_count = 1;
   e->saved_regs.esp = 0xFFFFFFF8;
-  e->stack_phys_ptr = phys_ptrs[2];
-  e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[2], 1);
+  e->stack_phys_ptr = phys_ptrs[4]; //FIXME - magic number usage - this corresponds to physical page 4 being set up as the stack page in initialise_app_pagingdir
+  e->stack_kmem_ptr = (uint32_t *)k_map_next_unallocated_pages(MP_READWRITE, &phys_ptrs[4], 1);
   if(e->stack_kmem_ptr==NULL) {
     kputs("ERROR new_process could not map process stack into kmem for setup\r\n");
   }
 
+  kputs("INFO process info now set up\r\n");
   //finally setup stin, stdout, stderr
   e->files[0].type = FP_TYPE_CONSOLE;
   e->files[1].type = FP_TYPE_CONSOLE;
@@ -147,15 +149,30 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     return 0;
   }
 
+  // for(register size_t i=0; i<PAGE_SIZE_DWORDS; i++) {
+  //   kprintf("DEBUG 0x%x value is 0x%x\r\n", &new_entry->root_paging_directory_kmem[i], ((uint32_t *)new_entry->root_paging_directory_kmem)[i]);
+  // }
+
+  kputs("returned from new_process\r\n");
+  uint32_t *mapped_pagedirs = map_app_pagingdir((vaddr)new_entry->root_paging_directory_phys, APP_PAGEDIRS_BASE);
+  if(!mapped_pagedirs) {
+    kputs("ERROR Unable to map app paging dir\r\n");
+    new_entry->status = PROCESS_NONE;
+    return 0;
+  }
+
+  kprintf("DEBUG app paging dirs remapped to 0x%x\r\n", mapped_pagedirs);
+  
   for(size_t i=0; i<elf->_loaded_segment_count; i++) {
     ElfLoadedSegment *seg = elf->loaded_segments[i];
 
     size_t flags = MP_USER|MP_PRESENT;
     if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
     kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
+    kprintf("DEBUG internal_create_process physical RAM address of segment 0x%x\r\n", seg->content_phys_pages[0]);
     kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
     for(size_t p=0; p<seg->page_count; ++p) {
-      k_map_page_bytes(new_entry->root_paging_directory_kmem, seg->content_phys_pages[p], seg->header->p_vaddr + p*PAGE_SIZE, flags);
+      k_map_page_bytes(mapped_pagedirs, seg->content_phys_pages[p], seg->header->p_vaddr, flags);
     }
     if(seg->content_virt_page!=NULL) {
       k_unmap_page_ptr(NULL, seg->content_virt_page);
@@ -167,12 +184,13 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   //now set up a heap
   kputs("DEBUG new_process setting up process heap\r\n");
   //the app prolog itself should configure the app heap, we just allocate it here.
-  new_entry->heap_start = vm_alloc_pages(new_entry->root_paging_directory_kmem, MIN_ZONE_SIZE_PAGES, MP_USER|MP_READWRITE);
+  new_entry->heap_start = vm_alloc_pages(mapped_pagedirs, MIN_ZONE_SIZE_PAGES, MP_USER|MP_READWRITE);
   new_entry->heap_allocated = MIN_ZONE_SIZE_PAGES;
   new_entry->heap_used = 0;
 
   kprintf("DEBUG new_process heap is at 0x%x [process-space]\r\n", new_entry->heap_start);
-
+  unmap_app_pagingdir(mapped_pagedirs);
+  
   //Finally, we must configure a stack frame so that the kernel can jump into the entrypoint of the app.
   //The jump is done by selecting the app paging directory, then its stack pointer and executing "IRET".
   //The "iret" instruction expects stack selector, stack pointer, eflags, code selector and execute address in that order.
@@ -196,6 +214,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   new_entry->status = PROCESS_READY;
   sti();
   kprintf("DEBUG new_process process initialised at 0x%x\r\n", new_entry);
+  return new_entry->pid;
 }
 
 void remove_process(struct ProcessTableEntry* e)

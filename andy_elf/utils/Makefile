@@ -11,5 +11,8 @@ ucs_conv.o: ucs_conv.c ucs_conv.h
 string.o: string.asm
 	nasm -f elf32 string.asm
 
-libutils.a: ucs_conv.o string.o
-	ar rcs libutils.a ucs_conv.o string.o
+spinlock.o: spinlock.c ../include/spinlock.h
+	gcc -c ${CFLAGS} spinlock.c
+
+libutils.a: ucs_conv.o string.o spinlock.o
+	ar rcs libutils.a ucs_conv.o string.o spinlock.o

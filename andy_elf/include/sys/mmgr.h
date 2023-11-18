@@ -51,12 +51,19 @@ struct PhysMapEntry {
 #define MP_DIRTY      1 << 6  //if this is 0 then the page has not been written, if 1 then it has
 #define MP_PAGESIZE   1 << 7  //if this is 0 then the address refers to a page table, otherwise to a 4Mib block
 #define MP_GLOBAL     1 << 8  //don't invalidate when CR3 changes if set
-#define MP_PAGEATTRIBUTE 1 << 12 //1 if Page Attribute Table is supported. Keep to 0
+
+#define MPC_PAGINGDIR    1 << 9  //custom attribute - if this is 1 then the page is a paging directory, i.e. not present but can be mapped in
+#define MP_PAGEATTRIBUTE 1 << 12 //if Page Attribute Table is supported, forms a 3-bit index value with MP_PWT and MP_PCD
 
 #define MP_OSBITS_MASK 0xF00  //bitmask for the 3 os-dependent bits
 #define MP_ADDRESS_MASK 0xFFFFF000
 
-#define PAGE_SIZE     0x1000  //4k pages
+#define PAGE_SIZE         0x1000  //4k pages
+#define PAGE_SIZE_DWORDS  0x400
+
+
+//We only create mapped app pagedirs in this region.
+#define APP_PAGEDIRS_BASE (vaddr)0xC0000000
 
 /* external facing functions */
 /**
@@ -102,6 +109,16 @@ virtual memory to complete or `pages` was 0.
 */
 void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, void **phys_addr, size_t pages);
 
+/**
+ * Maps the contents of the given paging dir into memory, on a 4mb boundary
+*/
+uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from);
+
+/**
+ * Unmaps and invalidates the given paging dir, the argument must have previously been obtained from map_app_pagingdir
+*/
+void unmap_app_pagingdir(uint32_t *mapped_pd);
+
 /* internal functions */
 void setup_paging();
 uint8_t find_next_unallocated_page(uint32_t *base_directory, int16_t *dir, int16_t *off);
@@ -115,6 +132,8 @@ Arguments:
 */
 uint8_t _resolve_vptr(void *vmem_ptr, uint16_t *dir, uint16_t *off);
 
-uint32_t *initialise_app_pagingdir(void *root_dir_phys, void *page_one_phys);
+uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count);
 
+/** called from the page-fault handler for JIT allocation*/
+uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags);
 #endif
