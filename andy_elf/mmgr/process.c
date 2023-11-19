@@ -162,24 +162,69 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   }
 
   kprintf("DEBUG app paging dirs remapped to 0x%x\r\n", mapped_pagedirs);
-  
-  for(size_t i=0; i<elf->_loaded_segment_count; i++) {
-    ElfLoadedSegment *seg = elf->loaded_segments[i];
 
-    size_t flags = MP_USER|MP_PRESENT;
-    if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+  ElfLoadedSegment *seg = elf->loaded_segments_list;
+  size_t i=0;
+  while(seg!=NULL) {
+    kprintf("INFO Segment %d is %d pages from src 0x%x\r\n", i, seg->page_count, seg->content);
+    if(! seg->header ) {
+      kprintf("ERROR internal_create_process section %d has no header\r\n", i);
+      continue;
+    }
+
+    if(! (seg->header->p_flags) & SHF_ALLOC ) continue;
+
     kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
-    kprintf("DEBUG internal_create_process physical RAM address of segment 0x%x\r\n", seg->content_phys_pages[0]);
-    kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
-    for(size_t p=0; p<seg->page_count; ++p) {
-      k_map_page_bytes(mapped_pagedirs, seg->content_phys_pages[p], seg->header->p_vaddr, flags);
+    void *base_kernel_ptr = NULL;
+
+    //first ensure that the RAM space is available
+    for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
+      void *page_addr = (void *) ( (seg->header->p_vaddr & ~0x3FF) + pagenum*PAGE_SIZE);
+      if(!vm_is_address_present(mapped_pagedirs, page_addr)) {
+        kprintf("DEBUG Address 0x%x is not mapped yet.\r\n", page_addr);
+        size_t flags = MP_USER|MP_PRESENT;
+        if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+        kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
+        void *kernel_ptr = vm_alloc_specific_page(mapped_pagedirs, page_addr, flags);
+        kprintf("DEBUG page mapped into kmem at 0x%x\r\n", kernel_ptr);
+        if(!kernel_ptr) {
+          kprintf("ERROR Unable to allocate memory for 0x%x in 0x%x\r\n", page_addr, mapped_pagedirs);
+          k_panic("Aborting\r\n");  //FIXME - yeah should bail and cleanup, here.
+        }
+        if(base_kernel_ptr==NULL) base_kernel_ptr = kernel_ptr;
+        memset_dw(kernel_ptr, 0, PAGE_SIZE_DWORDS);  //ensure that the page is blank before we use it.
+      }
     }
-    if(seg->content_virt_page!=NULL) {
-      k_unmap_page_ptr(NULL, seg->content_virt_page);
-      seg->content_virt_page = NULL;
-      seg->content_virt_ptr = NULL;
+
+    kprintf("DEBUG copying 0x%x bytes into 0x%x\r\n", seg->header->p_filesz, seg->header->p_vaddr);
+    //now that the space is definitely there, copy the loaded data into it.  The pointers are freed at the end of this routine.
+    memcpy(seg->header->p_vaddr, seg->content, seg->header->p_filesz);
+    for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
+      k_unmap_page_ptr(NULL, (vaddr)(base_kernel_ptr + pagenum*PAGE_SIZE));
     }
+    i++;
+    seg = seg->next;
   }
+
+  // for(size_t i=0; i<elf->_loaded_segment_count; i++) {
+  //   ElfLoadedSegment *seg = elf->loaded_segments[i];
+
+  //   size_t flags = MP_USER|MP_PRESENT;
+  //   if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+    // kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
+    // kprintf("DEBUG internal_create_process physical RAM address of segment 0x%x\r\n", seg->content_phys_pages[0]);
+    // kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
+  //   //FIXME - we need to put a mapping in place for virtual address of _every_ physical page, not just the root.
+  //   //(because we are loading the segments from a flat list)
+  //   for(size_t p=0; p<seg->page_count; ++p) {
+  //     k_map_page_bytes(mapped_pagedirs, seg->content_phys_pages[p], seg->header->p_vaddr, flags);
+  //   }
+  //   if(seg->content_virt_page!=NULL) {
+  //     k_unmap_page_ptr(NULL, seg->content_virt_page);
+  //     seg->content_virt_page = NULL;
+  //     seg->content_virt_ptr = NULL;
+  //   }
+  // }
 
   //now set up a heap
   kputs("DEBUG new_process setting up process heap\r\n");
