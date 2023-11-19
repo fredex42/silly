@@ -417,6 +417,9 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
   return result;
 }
 
+/**
+ * Removes the mappings of the given paging directory
+*/
 void unmap_app_pagingdir(uint32_t *mapped_pd) {
   if((vaddr)mapped_pd & 0x3FFFFF != 0) {
     kprintf("DEBUG unmap_app_pagingdir pd location 0x%x is not correctly aligned\r\n", mapped_pd);
@@ -433,6 +436,47 @@ void unmap_app_pagingdir(uint32_t *mapped_pd) {
     __invalidate_vptr(target);
   }
 
+  release_spinlock(&memlock);
+}
+
+/**
+ * 
+*/
+void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
+  size_t unmap_counter = 0;
+  if((vaddr)mapped_pd & 0x3FFFFF != 0) {
+    kprintf("DEBUG unmap_app_pagingdir pd location 0x%x is not correctly aligned\r\n", mapped_pd);
+    return;
+  }
+
+  uint32_t *paging_dir_root = (uint32_t *)((vaddr)mapped_pd + 0x03c0000); //the root directory is mapped at the end of the 
+  acquire_spinlock(&memlock);
+  for(size_t i=0; i<1024;i++) {
+    if( (paging_dir_root[i] & MP_PRESENT) && ! (paging_dir_root[i] & MP_GLOBAL)) {
+      //first, unmap every page that is in the directory
+      uint32_t *paging_dir_ent = (uint32_t *)((vaddr)mapped_pd + i*PAGE_SIZE);
+      for(size_t j=0; j<1024; j++) {
+        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_root[i] & MP_GLOBAL)) {
+          ++unmap_counter;
+          kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) & (j<<12));
+          vaddr addr = paging_dir_ent[j] & MP_ADDRESS_MASK;
+          kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", addr);
+          deallocate_physical_pages(1, &addr);
+          paging_dir_ent[j] = 0;
+        }
+      }
+      //now, unmap the directory itself
+      ++unmap_counter;
+      vaddr pg_addr = paging_dir_root[i] & MP_ADDRESS_MASK;
+      kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", pg_addr);
+      deallocate_physical_pages(1, &pg_addr);
+    }
+  }
+  //finally unmap the actual root directory
+  deallocate_physical_pages(1, &root_pd_phys);
+  ++unmap_counter;
+
+  kprintf("INFO free_app_memory deallocated %d pages of RAM\r\n", unmap_counter);
   release_spinlock(&memlock);
 }
 
