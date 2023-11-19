@@ -54,7 +54,6 @@ init_native_api:
 native_api_landing_pad:
   cmp eax, API_EXIT
   jnz .napi_2
-  ;call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   call api_terminate_current_process ;does not return
   call enter_kernel_context
   jmp .napi_rtn_to_kern

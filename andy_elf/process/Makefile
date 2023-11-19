@@ -8,5 +8,8 @@ clean:
 elfloader.o: elfloader.c elfloader.h
 	gcc -c ${CFLAGS} elfloader.c
 
-libprocess.a: elfloader.o
-	ar rcs libprocess.a elfloader.o
+cleanup.o: cleanup.c
+	gcc -c ${CFLAGS} cleanup.c
+
+libprocess.a: elfloader.o cleanup.o
+	ar rcs libprocess.a elfloader.o cleanup.o
