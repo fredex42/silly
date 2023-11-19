@@ -277,6 +277,10 @@ call init_native_api
 extern mount_root_device
 call mount_root_device
 
+;this will start of the load of a shell app once the root FS has been mounted.
+extern schedule_shell_startup
+call schedule_shell_startup
+
 extern scheduler_tick
 extern enter_next_process
 

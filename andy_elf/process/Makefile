@@ -11,5 +11,8 @@ elfloader.o: elfloader.c elfloader.h
 cleanup.o: cleanup.c
 	gcc -c ${CFLAGS} cleanup.c
 
-libprocess.a: elfloader.o cleanup.o
-	ar rcs libprocess.a elfloader.o cleanup.o
+shell_process.o: shell_process.o
+	gcc -c ${CFLAGS} shell_process.c
+
+libprocess.a: elfloader.o cleanup.o shell_process.o
+	ar rcs libprocess.a elfloader.o cleanup.o shell_process.o

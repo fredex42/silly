@@ -34,6 +34,17 @@ void cleanup_process(SchedulerTask *t)
     kprintf("DEBUG cleanup_process unmapping\r\n");
     unmap_app_pagingdir(pagingdir);
     kprintf("INFO cleanup_process done\r\n");
+
+    process->status = PROCESS_NONE;
+    process->heap_allocated = 0;
+    process->heap_start = 0;
+    process->heap_used = 0;
+    process->root_paging_directory_phys=NULL;
+    process->root_paging_directory_kmem=NULL;
+    process->stack_kmem_ptr=NULL;
+    process->stack_page_count=0;
+    process->stack_phys_ptr=NULL;
+    
 }
 
 /**
