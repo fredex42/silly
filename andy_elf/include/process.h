@@ -50,6 +50,8 @@ struct SavedRegisterStates32 {
   uint32_t esp;       //offset 0x48
 } __attribute__((packed));
 
+#define PROCESS_TABLE_MAGIC_NUMBER  0x54504552
+
 struct ProcessTableEntry {
   uint32_t magic; //must be 0x54504552 = 'PTBE'               //offset 0x0
   //saved register states are on the process's stack

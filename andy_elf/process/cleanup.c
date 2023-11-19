@@ -3,15 +3,37 @@
 #include <scheduler/scheduler.h>
 #include <malloc.h>
 #include <memops.h>
+#include <panic.h>
+#include <sys/mmgr.h>
 
 /**
  * Routine to actually cleanup the process.  This is called from the scheduler by schedule_cleanup_task
 */
-void cleanup_process(void *data)
+void cleanup_process(SchedulerTask *t)
 {
-    kprintf("DEBUG entered cleanup_process");
-    pid_t pid = (pid_t)data;
+    kprintf("DEBUG entered cleanup_process\r\n");
+    pid_t pid = (pid_t)t->data;
+    struct ProcessTableEntry *process = get_process(pid);
 
+    kprintf("DEBUG pid %d is at 0x%d\r\n", pid, process);
+    if(process->magic!=PROCESS_TABLE_MAGIC_NUMBER) {
+        k_panic("ERROR process table corruption detected");
+        return;
+    }
+
+    if(process->status!=PROCESS_TERMINATING) {
+        kprintf("WARNING process not in terminating state\r\n");
+        return;
+    }
+
+    //get hold of the process's memory table
+    kprintf("DEBUG cleanup_process mapping\r\n");
+    uint32_t *pagingdir = map_app_pagingdir(process->root_paging_directory_phys, APP_PAGEDIRS_BASE);
+    kprintf("DEBUG cleanup_process deallocating\r\n");
+    free_app_memory(pagingdir, process->root_paging_directory_phys);
+    kprintf("DEBUG cleanup_process unmapping\r\n");
+    unmap_app_pagingdir(pagingdir);
+    kprintf("INFO cleanup_process done\r\n");
 }
 
 /**
@@ -20,13 +42,7 @@ void cleanup_process(void *data)
 */
 void schedule_cleanup_task(pid_t pid)
 {
-    SchedulerTask *t = (SchedulerTask *)malloc(sizeof(SchedulerTask));
-    memset(t, 0, sizeof(SchedulerTask));
-
-    t->task_type = TASK_ASAP;
-    t->task_proc = cleanup_process;
-    t->data = (void *)pid;
-    t->process_id = 0;
+    SchedulerTask *t = new_scheduler_task(TASK_ASAP, &cleanup_process, (void *)pid);
 
     schedule_task(t);
 }
