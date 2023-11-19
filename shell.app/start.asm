@@ -12,7 +12,10 @@ _start:
 
   ;cli     ;this should cause a GPF
 
-  jmp $
+  mov eax, 0x1        ;"API exit()"
+  int 0x60
+
+  jmp _start
 
 section .rodata
 
