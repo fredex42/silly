@@ -15,13 +15,13 @@ struct FilePointer {
   void *content;  //the type of this pointer depends on the `type` field.
 } __attribute__((packed));
 
-#define PROCESS_NONE    0
-#define PROCESS_LOADING 1
-#define PROCESS_READY   2
-#define PROCESS_BUSY    3
-#define PROCESS_IDLE    4
-#define PROCESS_IOWAIT  5
-
+#define PROCESS_NONE        0
+#define PROCESS_LOADING     1
+#define PROCESS_READY       2
+#define PROCESS_BUSY        3
+#define PROCESS_IDLE        4
+#define PROCESS_IOWAIT      5
+#define PROCESS_TERMINATING 6
 #define PROCESS_TABLE_ENTRY_SIG 0x54504552
 
 //total size: 0x4C bytes
