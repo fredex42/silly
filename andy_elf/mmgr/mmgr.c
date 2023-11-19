@@ -776,16 +776,11 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
   k_unmap_page_ptr(NULL, root_dir_virt);
 
   mb();
-  // __invalidate_vptr(stack_initial_page_virt);
-  // __invalidate_vptr(stack_paging_dir_virt);
-  // __invalidate_vptr(stack_paging_table_virt);
-  // __invalidate_vptr(page_one_virt);
-  // __invalidate_vptr(root_dir_virt);
+  __invalidate_vptr(stack_initial_page_virt);
+  __invalidate_vptr(stack_paging_table_virt);
+  __invalidate_vptr(page_one_virt);
+  __invalidate_vptr(root_dir_virt);
   __asm__ volatile ("wbinvd" : : : ); //write back everything in the CPU cache and invalidate
-
-  // for(register size_t i=0; i<PAGE_SIZE_DWORDS; i++) {
-  //   kprintf("DEBUG 0x%x value is 0x%x\r\n", &root_dir_virt[i], root_dir_virt[i]);
-  // }
 
   return root_dir_virt;
 }
@@ -795,9 +790,7 @@ vaddr _mmgr_get_pd();
 uint32_t page_value_for_vaddr(vaddr pf_load_addr) {
   size_t pf_load_dir = ADDR_TO_PAGEDIR_IDX(pf_load_addr);
   size_t pf_load_pg  = ADDR_TO_PAGEDIR_OFFSET(pf_load_addr);
-  // kprintf("DEBUG page is at 0x%x-0x%x\r\n", pf_load_dir, pf_load_pg);
   vaddr ptr = (vaddr)flat_pagetables_ptr + ((vaddr)pf_load_dir << 12) + ((vaddr)pf_load_pg * sizeof(uint32_t));
-  // kprintf("DEBUG page value is 0x%x\r\n", *(uint32_t *)ptr);
   return *(uint32_t *)ptr;
 }
 
