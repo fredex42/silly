@@ -68,7 +68,10 @@ void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* parsed_app, vo
   }
   kprintf("SHELL.APP loaded\r\n");
 
-  internal_create_process(parsed_app);
+  pid_t pid = internal_create_process(parsed_app);
+  kprintf("SHELL.APP running with PID %d\r\n", pid);
+  
+  //FIXME: should delete parsed_app data here
 }
 
 void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extradata)
