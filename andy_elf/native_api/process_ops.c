@@ -13,6 +13,7 @@ void api_terminate_current_process()
 
     kprintf("DEBUG api_terminate PID %d is at 0x%x\r\n", current_pid, entry);
     entry->status = PROCESS_TERMINATING;
+    schedule_cleanup_task(current_pid);
 }
 
 void api_sleep_current_process()

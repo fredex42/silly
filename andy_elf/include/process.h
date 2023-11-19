@@ -77,6 +77,10 @@ struct ProcessTableEntry {
 } __attribute__((packed));
 
 
-
+// in mmgr/process.c
 struct ProcessTableEntry* get_process(pid_t pid);
+
+// in process/cleanup.c
+void schedule_cleanup_task(pid_t pid);
+
 #endif
