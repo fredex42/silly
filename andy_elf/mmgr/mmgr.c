@@ -217,6 +217,9 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
   for(register size_t i=0;i<page_count;i++) {
     phys_addr = (vaddr)blocks[i];
     size_t page_idx = phys_addr / PAGE_SIZE;
+    if(page_idx==0) {
+      k_panic("ERROR attempt to free page 0! That shouldn't happen\r\n");
+    }
     physical_memory_map[i].in_use=0;
   }
 }
@@ -440,7 +443,9 @@ void unmap_app_pagingdir(uint32_t *mapped_pd) {
 }
 
 /**
- * 
+ * frees all the physical memory associated with the mapped paging directory by both un-mapping it
+ * and deallocating the underlying physical pages.
+ * the root directory itself is also de-allocated and should not be used after this.
 */
 void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
   size_t unmap_counter = 0;
@@ -460,16 +465,20 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
           ++unmap_counter;
           kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) & (j<<12));
           vaddr addr = paging_dir_ent[j] & MP_ADDRESS_MASK;
-          kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", addr);
-          deallocate_physical_pages(1, &addr);
-          paging_dir_ent[j] = 0;
+          if(addr!=0) {
+            kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", addr);
+            deallocate_physical_pages(1, &addr);
+            paging_dir_ent[j] = 0;
+          }
         }
       }
       //now, unmap the directory itself
       ++unmap_counter;
       vaddr pg_addr = paging_dir_root[i] & MP_ADDRESS_MASK;
-      kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", pg_addr);
-      deallocate_physical_pages(1, &pg_addr);
+      if(pg_addr) {
+        kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", pg_addr);
+        deallocate_physical_pages(1, &pg_addr);
+      }
     }
   }
   //finally unmap the actual root directory
