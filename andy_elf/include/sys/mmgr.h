@@ -119,6 +119,16 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from);
 */
 void unmap_app_pagingdir(uint32_t *mapped_pd);
 
+/**
+ * Check if the given page is mapped into the page-directory area
+*/
+uint8_t vm_is_address_present(uint32_t *mapped_pagedirs, void *ptr);
+
+/**
+ * allocates a new page of physical RAM and maps it to the given dest_vaddr
+*/
+void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t flags);
+
 /* internal functions */
 void setup_paging();
 uint8_t find_next_unallocated_page(uint32_t *base_directory, int16_t *dir, int16_t *off);

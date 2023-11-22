@@ -9,6 +9,7 @@
 #include <fs.h>
 #include <errors.h>
 #include "../mmgr/process.h"
+#include "../process/elfloader.h"
 
 //pointer to the filesystem for each device
 static struct fat_fs* device_fs_map[MAX_DEVICE];
@@ -68,7 +69,10 @@ void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* parsed_app, vo
   }
   kprintf("SHELL.APP loaded\r\n");
 
-  internal_create_process(parsed_app);
+  pid_t pid = internal_create_process(parsed_app);
+  kprintf("SHELL.APP running with PID %d\r\n", pid);
+
+  delete_elf_parsed_data(parsed_app);
 }
 
 void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extradata)

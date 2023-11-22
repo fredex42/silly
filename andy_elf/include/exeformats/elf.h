@@ -131,11 +131,11 @@ typedef struct elf_section_header_i386 {
 
 
 typedef struct ElfLoadedSegment {
-  ElfProgramHeader32 *header;
+  struct ElfLoadedSegment *next;
+  ElfProgramHeader32 *header; //to get the byte size, use header->p_memsz. To get the vaddr, use header->p_vaddr. Note that this is a weak reference.
+  void *content;            //pointer to loaded content
   size_t page_count;
-  void **content_phys_pages;  //physical pages which contain the content. May be shared with other sections.
-  void *content_virt_page;  //address of the page base in kernel virtual RAM. May be shared with other sections.
-  void *content_virt_ptr;   //actual pointer to the data within the page - i.e. content_virt_page + offset.
+  void *content_virt_ptr;   //the virtual-memory pointer where this data should live, in process-space
 } ElfLoadedSegment;
 
 typedef struct elf_parsed_data {
@@ -146,7 +146,8 @@ typedef struct elf_parsed_data {
   void *section_headers_buffer;
   size_t section_headers_count;
 
-  ElfLoadedSegment **loaded_segments;
+  ElfLoadedSegment *loaded_segments_list;
+  ElfLoadedSegment *last_loaded_segment;
   size_t _loaded_segment_count;
   size_t _scanned_segment_count;
 

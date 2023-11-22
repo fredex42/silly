@@ -12,7 +12,7 @@ _start:
 
   ;cli     ;this should cause a GPF
 
-  jmp _start
+  jmp $
 
 section .rodata
 
