@@ -2,6 +2,7 @@
 #include <sys/mmgr.h>
 #include <sys/gdt.h>
 #include <panic.h>
+#include <spinlock.h>
 #include "heap.h"
 #include "process.h"
 
@@ -9,12 +10,15 @@
 static struct ProcessTableEntry* process_table;
 static uint16_t current_running_processid;
 static uint16_t last_assigned_processid;
+static spinlock_t process_table_lock = 0;
 
 void initialise_process_table(uint32_t* kernel_paging_directory)
 {
   kprintf("INFO Initialising process table\r\n");
+
   size_t pages_required = (sizeof(struct ProcessTableEntry) * PID_MAX) / PAGE_SIZE;
 
+  acquire_spinlock(&process_table_lock);
   process_table = (struct ProcessTableEntry*) vm_alloc_pages(NULL, pages_required+1, MP_PRESENT|MP_READWRITE);
 
   kprintf("INFO Process table is at 0x%x\r\n", process_table);
@@ -31,12 +35,14 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
   process_table->root_paging_directory_kmem = kernel_paging_directory;
   process_table->status = PROCESS_READY;
   last_assigned_processid = 0;
+  release_spinlock(&process_table_lock);
 }
 
 struct ProcessTableEntry* get_process(uint16_t pid)
 {
   if(pid>PID_MAX) return NULL;
 
+  acquire_spinlock(&process_table_lock);
   size_t offset = pid * sizeof(struct ProcessTableEntry);
   struct ProcessTableEntry* e = (struct ProcessTableEntry *)((char *)process_table + offset);
 
@@ -44,6 +50,7 @@ struct ProcessTableEntry* get_process(uint16_t pid)
     kprintf("DEBUG get_process entry for pid %d is 0x%x\r\n", pid, e);
     k_panic("get_process Process table corruption detected\r\n");
   }
+  release_spinlock(&process_table_lock);
 
   return e;
 }
@@ -70,10 +77,13 @@ This should be treated as non-interruptable and therefore called with interrupts
 */
 struct ProcessTableEntry *get_next_available_process()
 {
+  acquire_spinlock(&process_table_lock);
+
   for(uint16_t i=last_assigned_processid+1; i<PID_MAX; i++) {
     if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("get_next_available_process loop 1: Process table corruption detected\r\n");
     if(process_table[i].status==PROCESS_NONE) {
       last_assigned_processid = i;
+      release_spinlock(&process_table_lock);
       return &process_table[i];
     }
   }
@@ -82,6 +92,7 @@ struct ProcessTableEntry *get_next_available_process()
     if(process_table[i].magic!=PROCESS_TABLE_ENTRY_SIG) k_panic("get_next_available_process loop 2: Process table corruption detected\r\n");
     if(process_table[i].status==PROCESS_NONE) {
       last_assigned_processid = i;
+      release_spinlock(&process_table_lock);
       return &process_table[i];
     }
   }
@@ -101,9 +112,11 @@ struct ProcessTableEntry* new_process()
     return NULL;  //failed so bail out.
   }
 
+  pid_t pid = e->pid;
   memset(e, 0, sizeof(struct ProcessTableEntry));
   e->magic  = PROCESS_TABLE_ENTRY_SIG;
   e->status = PROCESS_LOADING;
+  e->pid = pid;
 
   //set up a paging directory
   kputs("DEBUG new_process Setting up paging directory\r\n");
@@ -168,7 +181,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     if(! (seg->header->p_flags) & SHF_ALLOC ) continue;
 
     kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
-    void *base_kernel_ptr = NULL;
+    void *base_kernel_ptr = NULL; //base_kernel_ptr points to the first of a set of allocated pages, mapped into kernel-space. this is so that they can be bulk-unmapped below.
 
     //first ensure that the RAM space is available
     for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
@@ -211,9 +224,9 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   
   process_initial_stack(new_entry, elf->file_header);
   //the stack should now be ready for `iret`, we don't need access to it any more.
-  // kprintf("DEBUG new_process unmapping process stack at 0x%x from kernel\r\n", new_entry->stack_kmem_ptr);
-  // k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
-  // new_entry->stack_kmem_ptr = NULL;
+  kprintf("DEBUG new_process unmapping process stack at 0x%x from kernel\r\n", new_entry->stack_kmem_ptr);
+  k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
+  new_entry->stack_kmem_ptr = NULL;
 
   new_entry->status = PROCESS_READY;
   sti();
