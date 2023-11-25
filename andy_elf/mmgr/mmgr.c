@@ -41,7 +41,7 @@ static size_t physical_page_count = 0;
 
 #define __invalidate_vptr(vptr_to_invalidate) asm inline volatile("invlpg (%0)" : : "r" (vptr_to_invalidate) : "memory")
 void idpaging(uint32_t *first_pte, vaddr from, int size);
-void allocate_physical_map(struct BiosMemoryMap *ptr);
+size_t allocate_physical_map(struct BiosMemoryMap *ptr);
 void parse_memory_map(struct BiosMemoryMap *ptr);
 void apply_memory_map_protections(struct BiosMemoryMap *ptr);
 void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags);
@@ -59,16 +59,19 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
     kputs("CPU supports physical address extension.\r\n");
   }
   parse_memory_map(ptr);
-  kputs("Setup paging....\r\n");
-  setup_paging();
   kputs("Allocating physical map space...\r\n");
-  allocate_physical_map(ptr);
+  size_t last_map_page = allocate_physical_map(ptr);
+
+  kputs("Setup paging....\r\n");
+  setup_paging(last_map_page);
   kputs("Applying memory map protections...\r\n");
   apply_memory_map_protections(ptr);
   kputs("Initialising pagetables area");
   initialise_flat_pagetables();
   kputs("Memory manager initialised.\r\n");
+  validate_kernel_memory_allocations();
   initialise_process_table(kernel_paging_directory);
+  validate_kernel_memory_allocations();
   initialise_heap(get_process(0), MIN_ZONE_SIZE_PAGES*4);
 }
 
@@ -110,7 +113,7 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
 /**
 set up the base kernel paging directory
 */
-void setup_paging() {
+void setup_paging(size_t last_map_page) {
   register uint32_t i;
   kputs("  Initialise kernel vmem...\r\n");
   kernel_paging_directory = (uint32_t *) ROOT_PAGE_DIR_LOCATION;
@@ -126,9 +129,12 @@ void setup_paging() {
 
   kputs("  Setup ID paging...\r\n");
   /*
-  now do identity-paging the first Mb
+  now do identity-paging the parts of the first Mb we're using
   */
-  idpaging((uint32_t *)first_pagedir_entry, 0x0, 0x100000);
+  //idpaging((uint32_t *)first_pagedir_entry, 0x0, 0x100000);
+  kprintf("DEBUG physical memory map reaches page 0x%x\r\n", last_map_page);
+  idpaging(first_pagedir_entry, 0x0, last_map_page*PAGE_SIZE);
+  idpaging(&first_pagedir_entry[0x60], 0x60000, 0x90000);
 
   kputs("  Enter paged mode...\r\n");
   mb();
@@ -455,7 +461,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
   }
 
   uint32_t *paging_dir_root = (uint32_t *)((vaddr)mapped_pd + 0x03c0000); //the root directory is mapped at the end of the 
-  acquire_spinlock(&memlock);
+
   for(size_t i=0; i<1024;i++) {
     if( (paging_dir_root[i] & MP_PRESENT) && ! (paging_dir_root[i] & MP_GLOBAL)) {
       //first, unmap every page that is in the directory
@@ -463,7 +469,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
       for(size_t j=0; j<1024; j++) {
         if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_root[i] & MP_GLOBAL)) {
           ++unmap_counter;
-          kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) & (j<<12));
+          kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) | (j<<12));
           vaddr addr = paging_dir_ent[j] & MP_ADDRESS_MASK;
           if(addr!=0) {
             kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", addr);
@@ -486,7 +492,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
   ++unmap_counter;
 
   kprintf("INFO free_app_memory deallocated %d pages of RAM\r\n", unmap_counter);
-  release_spinlock(&memlock);
+
 }
 
 /**
@@ -695,7 +701,11 @@ void apply_memory_map_protections(struct BiosMemoryMap *ptr)
   }
 }
 
-void allocate_physical_map(struct BiosMemoryMap *ptr)
+/**
+ * allocates the memory for the physical RAM map area.
+ * Returns the highest page number that is a part of the area.
+*/
+size_t allocate_physical_map(struct BiosMemoryMap *ptr)
 {
   register int i;
   //find the highest value in the physical memory map. We must allocate up to here.
@@ -754,9 +764,11 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   physical_memory_map[dir_page].in_use=1;
 
   for(i=7;i<=0x15;i++) physical_memory_map[i].in_use=1;    //kernel memory, incl. initial paging directories
-  for(i=0x70;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
+  for(i=0x60;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
   for(i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
   for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
+
+  return pages_to_allocate+0x18;
 }
 
 /*
@@ -952,4 +964,40 @@ vaddr _mmgr_get_pd()
 void _mmgr_set_pd(vaddr pd)
 {
   asm("mov %0, %%cr3" : : "r"(pd) : );
+}
+
+/**
+ * ensures that all pages mapped into kernel-space are also backed by allocated ram.
+ * if they are not, it raises a kernel panic.
+*/
+void validate_kernel_memory_allocations()
+{
+  kprintf("INFO Checking kernel memory allocations...\r\n");
+  acquire_spinlock(&memlock);
+  for(register size_t i=0; i<1024; i++) {
+    vaddr dir = kernel_paging_directory[i];
+    if(dir & MP_PRESENT) { //if we were to hit the page content directly, it could trigger a page-fault which would result in allocation. We don't want that.
+      for(register size_t j=0; j<1024; j++) {
+        size_t index = i*1024 + j;
+        vaddr page = flat_pagetables_ptr[index];
+        if(page & MP_PRESENT) {
+          vaddr page_phys = page & MP_ADDRESS_MASK;
+          size_t phys_index = page_phys / PAGE_SIZE;
+          if(!physical_memory_map[phys_index].in_use) {
+            vaddr virt = (vaddr)(i<<22) | (vaddr)(j<<12);
+            kprintf("ERROR page %d/%d (0x%x) references physical addres 0x%x\r\n",i, j, virt, page_phys);
+            kprintf("ERROR physical 0x%x is index %d which is freed!\r\n", page_phys, phys_index);
+            k_panic("Attempt to free physical RAM that is still mapped\r\n");
+          }
+          if(!physical_memory_map[phys_index].present) {
+            kprintf("ERROR page %d/%d (0x%x) references physical addres 0x%x\r\n",i, j, (i<<22) | (j<<12), page_phys);
+            kprintf("ERROR physical 0x%x is index %d which is not present!\r\n", page_phys, phys_index);
+            k_panic("Attempt to use physical RAM that is not present\r\n");
+          }
+        }
+      }
+    }
+  }
+  release_spinlock(&memlock);
+  kprintf("INFO Kernel allocations check done.\r\n");
 }

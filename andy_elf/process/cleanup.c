@@ -34,6 +34,7 @@ void cleanup_process(SchedulerTask *t)
     kprintf("DEBUG cleanup_process unmapping\r\n");
     unmap_app_pagingdir(pagingdir);
     kprintf("INFO cleanup_process done\r\n");
+    validate_kernel_memory_allocations();
 }
 
 /**

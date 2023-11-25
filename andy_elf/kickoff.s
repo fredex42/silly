@@ -251,14 +251,18 @@ push eax
 call initialise_mmgr  ;initialise memory management
 add esp, 4
 
+call validate_kernel_memory_allocations
+
 ;extern load_acpi_data
 ;call load_acpi_data
 
 extern setup_pic
 call setup_pic
+call validate_kernel_memory_allocations
 
 extern initialise_scheduler
 call initialise_scheduler
+call validate_kernel_memory_allocations
 
 ;need to reprogram the PIC before enabling interrupts or a double-fault happens
 ;specifically, the timer needs somewhere to go
@@ -267,21 +271,25 @@ sti
 ;set up the real-time clock tick counter
 extern cmos_init_rtc_interrupt
 call cmos_init_rtc_interrupt
+call validate_kernel_memory_allocations
 
 extern initialise_ata_driver
 call initialise_ata_driver
+call validate_kernel_memory_allocations
 
 extern init_native_api
 call init_native_api
+call validate_kernel_memory_allocations
 
 extern mount_root_device
 call mount_root_device
 
 extern scheduler_tick
 extern enter_next_process
-
+extern validate_kernel_memory_allocations
 idle_loop:
 sti
+call validate_kernel_memory_allocations
 call scheduler_tick	;check if we have any work to do
 call enter_next_process	;check if there is another process we need to go to
 hlt									;pause processor until an interrupt comes along. We will be regularly woken by the timer interrupt.

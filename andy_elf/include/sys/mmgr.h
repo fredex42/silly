@@ -134,6 +134,12 @@ void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t 
 */
 void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys);
 
+/**
+ * ensures that all pages mapped into kernel-space are also backed by allocated ram.
+ * if they are not, it raises a kernel panic.
+*/
+void validate_kernel_memory_allocations();
+
 /* internal functions */
 void setup_paging();
 uint8_t find_next_unallocated_page(uint32_t *base_directory, int16_t *dir, int16_t *off);
