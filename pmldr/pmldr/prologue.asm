@@ -37,6 +37,8 @@ call PrintString
 
 call detect_memory
 
+call detect_pci
+
 mov si, PrepString
 sub si, 0x7e00
 call PrintString
@@ -110,6 +112,39 @@ detect_memory:
 	mov word [es:000], si
 	pop ebp
 	ret
+
+;retrieve the PCI 32-bit entrypoint
+detect_pci:
+	push ebp
+	mov ebp, esp
+	xor edi, edi
+	mov ax, 0xB101
+	int 0x1A
+
+	jc .no_pci	;docs say that CF should be clear
+	test ah, ah	;docs say that AH should be 0 if PCI BIOS present
+	jnz .no_pci
+
+	push edi
+	mov ax, TemporaryPciInfoBufferSeg
+	mov es, ax
+	mov di, TemporaryPciInfoBufferOffset
+	pop eax	;take the EDI value from the call into EAX
+	stosd
+
+	mov si, PciDetectedString
+	sub si, 0x7e00
+	call PrintString
+
+	.det_pci_done:
+	pop ebp
+	ret
+
+	.no_pci:
+	mov si, NoPciString
+	sub si, 0x7e00
+	call PrintString
+	jmp .det_pci_done
 
 ; uses BIOS int10 to output the character in AL to the screen
 PrintCharacter:
@@ -200,6 +235,8 @@ BootParamsString db 'Detecting boot drive...', 0x0d, 0x0a, 0
 PrepString db 'Entering protected mode...', 0x0d, 0x0a, 0
 DoneString db 'Moving on', 0x0d, 0x0a, 0
 DriveParamErrString db 'Unable to determine boot drive params', 0x0d, 0x0a, 0
+NoPciString db 'No PCI present.', 0x0d, 0x0a, 0
+PciDetectedString db 'PCI BIOS detected.', 0x0d, 0x0a, 0
 
 ;basic GDT configuration. Each entry is 8 bytes long
 SimpleGDT:
