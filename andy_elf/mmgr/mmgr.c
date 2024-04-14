@@ -69,9 +69,7 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
   kputs("Initialising pagetables area");
   initialise_flat_pagetables();
   kputs("Memory manager initialised.\r\n");
-  validate_kernel_memory_allocations();
   initialise_process_table(kernel_paging_directory);
-  validate_kernel_memory_allocations();
   initialise_heap(get_process(0), MIN_ZONE_SIZE_PAGES*4);
 }
 
@@ -226,7 +224,8 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
     if(page_idx==0) {
       k_panic("ERROR attempt to free page 0! That shouldn't happen\r\n");
     }
-    physical_memory_map[i].in_use=0;
+    kprintf("DEBUG freeing physical 0x%x (0x%x)\r\n", phys_addr, page_idx);
+    physical_memory_map[page_idx].in_use=0;
   }
 }
 
@@ -467,7 +466,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
       //first, unmap every page that is in the directory
       uint32_t *paging_dir_ent = (uint32_t *)((vaddr)mapped_pd + i*PAGE_SIZE);
       for(size_t j=0; j<1024; j++) {
-        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_root[i] & MP_GLOBAL)) {
+        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_ent[j] & MP_GLOBAL)) {
           ++unmap_counter;
           kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) | (j<<12));
           vaddr addr = paging_dir_ent[j] & MP_ADDRESS_MASK;
@@ -483,7 +482,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
       vaddr pg_addr = paging_dir_root[i] & MP_ADDRESS_MASK;
       if(pg_addr) {
         kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", pg_addr);
-        deallocate_physical_pages(1, &pg_addr);
+        if(pg_addr!=0) deallocate_physical_pages(1, &pg_addr);
       }
     }
   }
@@ -915,6 +914,7 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
       return 1;
     }
     kprintf("DEBUG physical ptr to map is 0x%x\r\n", phys_ptr);
+
 
     //set up the new page in the root paging directory.
     if(current_pd != pagetables_entry) {
