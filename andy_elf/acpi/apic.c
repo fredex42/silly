@@ -99,6 +99,8 @@ void read_madt_info(char *madt_ptr)
   APICGeneralInformation *apic_general = (APICGeneralInformation *)&madt_ptr[ctr];
 
   kprintf("  Local APIC physical address is 0x%x\r\n", apic_general->local_apic_address);
+  return;
+
   if(apic_general->legacy_flags & APIC_GENERAL_LEGACY_PIC_PRESENT) {
     kputs("  Legacy APIC is present, disabling\r\n");
     legacy_pic_remap(0x20, 0x28);
@@ -125,7 +127,7 @@ void read_madt_info(char *madt_ptr)
         temp = (uint32_t *)&madt_ptr[ctr+4];
         kprintf("    IOAPIC id %d address should be 0x%x\r\n", (uint32_t)ioapic->io_apic_id, *temp);
 
-        configure_ioapic((vaddr)temp);
+        //configure_ioapic((vaddr)temp);
 
         if(apic_io_identity_mapping(*temp)==NULL) {
           kputs("    ERROR unable to memory-map io apic\r\n");

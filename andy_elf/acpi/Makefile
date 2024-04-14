@@ -6,8 +6,8 @@ all: libacpi.a
 clean:
 	rm -f *.o *.a
 
-search_mem.o: search_mem.asm
-	nasm -f elf32 search_mem.asm
+search_mem.o: search_mem.c
+	gcc -c ${CFLAGS} search_mem.c
 
 rsdp.o: rsdp.c ../include/sys/mmgr.h
 	gcc -c ${CFLAGS} rsdp.c

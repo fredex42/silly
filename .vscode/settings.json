@@ -3,6 +3,7 @@
         "process.h": "c",
         "fat_fileops.h": "c",
         "spinlock.h": "c",
-        "functional": "c"
+        "functional": "c",
+        "mmgr.h": "c"
     }
 }

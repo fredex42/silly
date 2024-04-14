@@ -119,6 +119,11 @@ _bl_relocation:
     mov ecx, eax
     rep movsb
 
+    ;and the PCI pointer, at 0x3000
+    mov edi, TemporaryPciInfoLocation
+    mov esi, TemporaryPciInfoLocation+0x100000
+    movsd
+    
     ;tell the kernel where the cursor should be
     mov DH, byte [CursorRowPtr]
     mov dl, byte [CursorColPtr]

@@ -244,6 +244,13 @@ lgdt [edi]
 mov ax, TSS_Selector
 ltr ax
 
+extern pci_preinit
+mov eax, TemporaryPciInfoLocation
+push eax
+call pci_preinit
+add esp, 4
+
+
 extern initialise_mmgr
 
 mov eax, TemporaryMemInfoLocation  ;location of the memory map passed by the bootloader
@@ -251,8 +258,8 @@ push eax
 call initialise_mmgr  ;initialise memory management
 add esp, 4
 
-;extern load_acpi_data
-;call load_acpi_data
+extern load_acpi_data
+call load_acpi_data
 
 extern setup_pic
 call setup_pic
