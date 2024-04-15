@@ -654,8 +654,10 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
 
   for(i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
-    size_t entry_limit = (size_t) e->base_addr + (size_t)e->length;
-    if(entry_limit>highest_value) highest_value = entry_limit;
+    //if(e->type==MMAP_TYPE_RESERVED) continue; //ignore reserved regions for this calculation
+    // size_t entry_limit = (size_t) e->base_addr + (size_t)e->length;
+    // if(entry_limit>highest_value) highest_value = entry_limit;
+    highest_value += (size_t)e->length;
   }
 
   physical_page_count = highest_value / PAGE_SIZE;  //4k pages
