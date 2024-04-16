@@ -29,6 +29,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
   void *phys_ptr;
   char sig_str[8];
   char id_str[8];
+  uint8_t pci_init_done = 0;
 
   kprintf("DEBUG RSDT virt 0x%x phys 0x%x\r\n", rsdt, rsdt_phys);
   memset(sig_str, 0, 8);
@@ -71,11 +72,18 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
       kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, sig_str, id_str, h->Length, (uint32_t)valid);
       if(h->Signature[0]=='A' && h->Signature[1]=='P' && h->Signature[2]=='I' && h->Signature[3]=='C') {
         read_madt_info((char *)h);
+      } else if (h->Signature[0]=='M' && h->Signature[1]=='C' && h->Signature[2]=='F' && h->Signature[3]=='G') {
+        pci_init((void *)h);
+        pci_init_done = 1;
       }
     } else {
       kprintf("WARNING unable to access entry %d as it is on another RAM page\r\n", i);
     }
     if(i>10) break;
+  }
+
+  if(!pci_init_done) {
+    pci_init(NULL);
   }
   // for(int i=1; i< entries+1; i++) {
   //   struct ACPISDTHeader *h = (struct ACPISDTHeader *) k_map_if_required(rsdt->PointerToOtherSDT[i], 0);

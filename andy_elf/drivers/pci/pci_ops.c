@@ -64,19 +64,19 @@ void pci_preinit(void **pci_entrypoint)
     uint8_t last_pci_bus;
 
     kprintf("PCI pre-initialisation...\r\n");
-    kprintf("DEBUG pci_preinit 32-bit entrypoint ptr is at 0x%x\r\n", pci_entrypoint);
+    kprintf("   DEBUG pci_preinit 32-bit entrypoint ptr is at 0x%x\r\n", pci_entrypoint);
     pci_entrypoint_phys = (vaddr)*pci_entrypoint;
-    kprintf("DEBUG pci_preinit 32-bit entrypoint is at 0x%x\r\n", pci_entrypoint_phys);
+    kprintf("   DEBUG pci_preinit 32-bit entrypoint is at 0x%x\r\n", pci_entrypoint_phys);
     if(pci_entrypoint_phys==0) {
         kprintf("WARNING PCI not detected, staying in ISA-only mode");
         mode = ISA_ONLY;
     } else {
-        kprintf("DEBUG pci_preinit checking access method...\r\n");
+        kprintf("   DEBUG pci_preinit checking access method...\r\n");
 
         asm("mov $0xB101, %%eax\n\t"
             "mov $0, %%edi\n\t"
-            "push %%cs\n\t"   //required to complete FAR return at end of function
-            "call *%4\n\t"      //this requires unmapped memory as far as i can tell http://www.ctyme.com/intr/rb-2371.htm
+            "push %%cs\n\t"     //required to complete FAR return at end of function. this is an indirect jump to the pointer given to us by BIOS
+            "call *%5\n\t"      //this requires unmapped memory as far as i can tell http://www.ctyme.com/intr/rb-2371.htm
             "mov %%al, %0\n\t"
             "mov %%bh, %1\n\t"
             "mov %%bl, %2\n\t"
@@ -92,8 +92,8 @@ void pci_preinit(void **pci_entrypoint)
 
         switch(status) {
             case 0:
-                kprintf("DEBUG pci_preinit hardware_characteristics 0x%x\r\n", hardware_characteristics);
-                kprintf("DEBUG pci_preinit version 0x%x.0x%x\r\n", interface_major_bcd, interface_minor_bcd);
+                kprintf("   DEBUG pci_preinit hardware_characteristics 0x%x\r\n", hardware_characteristics);
+                kprintf("   DEBUG pci_preinit version 0x%x.0x%x\r\n", interface_major_bcd, interface_minor_bcd);
                 if((hardware_characteristics & (1<<0))) {
                     kprintf("  Configuration space access mechanism #1 supported\r\n");
                     mode = LEGACY1;
@@ -104,11 +104,11 @@ void pci_preinit(void **pci_entrypoint)
                     kprintf("  Error, no configuration space access mechanism given\r\n");
                     mode = ISA_ONLY;
                 }
-                kprintf("DEBUG pci_preinit bus count is %d\r\n", last_pci_bus);
+                kprintf("   DEBUG pci_preinit bus count is %d\r\n", last_pci_bus);
                 last_pci_bus_num = last_pci_bus;
                 break;
             case 0x81:
-                kprintf("ERROR pci_preinit installation check not supported\r\n");
+                kprintf("   ERROR pci_preinit installation check not supported\r\n");
                 mode = ISA_ONLY;
                 break;
             default:
@@ -118,6 +118,8 @@ void pci_preinit(void **pci_entrypoint)
         }
     }
 
+    kputs("PCI scanning devices...\r\n");
+    pci_recursive_scan();
     kputs("PCI pre-initialisation done.\r\n");
 }
 
@@ -129,6 +131,22 @@ void pci_preinit(void **pci_entrypoint)
 void pci_init(void *mcfg_table)
 {
     if(mcfg_table==NULL) {
-        kprintf("INFO pci_init PCI-express not detected, checking other versions\r\n");
+        kprintf("INFO pci_init PCI-express not detected.\r\n");
+        switch(mode) {
+            case ISA_ONLY:
+                kputs("INFO No PCI detected :(. Old-skool!\r\n");
+                return;
+            case LEGACY1:
+                kputs("INFO Using PCI 2.x access\r\n");
+                break;
+            case LEGACY2: 
+                kputs("INFO Using PCI 1.x access\r\n");
+                break;
+            default:
+                kprintf("ERROR Invalid PCI mode value %d\r\n", (uint32_t)mode);
+                break;
+        }
+    } else {
+        kputs("INFO pci_init ACPI informs us that PCI-Express is available\r\n");
     }
 }
