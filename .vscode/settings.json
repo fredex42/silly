@@ -4,6 +4,7 @@
         "fat_fileops.h": "c",
         "spinlock.h": "c",
         "functional": "c",
-        "mmgr.h": "c"
+        "mmgr.h": "c",
+        "pci_categorisation.h": "c"
     }
 }
