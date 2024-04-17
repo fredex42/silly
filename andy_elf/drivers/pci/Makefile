@@ -8,7 +8,7 @@ libpci.a: pci_ops.o pci_scanner.o
 pci_ops.o: pci_ops.c pci_ops.h
 	gcc ${CFLAGS} -c pci_ops.c
 
-pci_scanner.o: pci_scanner.c pci_scanner.h
+pci_scanner.o: pci_scanner.c pci_scanner.h pci_ops.h pci_categorisation.h
 	gcc ${CFLAGS} -c pci_scanner.c
 
 clean:

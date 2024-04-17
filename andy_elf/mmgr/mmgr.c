@@ -700,7 +700,7 @@ memory block
 void _reserve_memory_block(size_t base_addr, uint32_t page_count) {
   size_t base_phys_page = ADDR_TO_PAGEDIR_IDX(base_addr);
 
-  //kprintf("     Protecting %d pages from %x\r\n", page_count, base_phys_page);
+  kprintf("     Protecting %d pages from %x, memory map starts at 0x%x\r\n", page_count, base_phys_page, physical_memory_map);
 
   for(register size_t i=0;i<page_count;i++) {
     physical_memory_map[i+base_phys_page].in_use=1;
@@ -768,17 +768,19 @@ size_t allocate_physical_map(struct BiosMemoryMap *ptr)
   //2. We assume that the kernel itself (code and static data) fits within 16 pages (64k)
   //3. We assume a standard memory layout, i.e. the kernel is loaded from 0x7e00 (page 0x07)
   //and that there is a memory hole at 0x80000 (page 0x80=128)
-  //Therefore, we can start out pseudo-allocation from page 24 (=0x18) but can't go beyond 0x80 - limit of 0x5c = 92 pages
+  //Therefore, we can start out pseudo-allocation from page 25 (=0x19) but can't go beyond 0x80 - limit of 0x5b = 91 pages
   //Given each page takes up 1 byte each page should be able to take 4096 of them
 
+  //FIXME - these assumptions are getting shonky. We need to improve the overall structure here, by allocating
+  //some RAM far enough out of the way we don't crash into things or stomp the kernel's static data
   kprintf("DEBUG %d map entries per 4k page\r\n", entries_per_page);
   kprintf("Allocating %d pages to physical ram map\r\n", pages_to_allocate);
-  if(pages_to_allocate>92) {
+  if(pages_to_allocate>91) {
     kprintf("Needed to allocate %d pages for physical memory map but have a limit of 92\r\n");
     k_panic("Unable to allocate physical memory map\r\n");
   }
 
-  physical_memory_map = (struct PhysMapEntry *)0x18000;
+  physical_memory_map = (struct PhysMapEntry *)0x19000;
   for(i=0;i<physical_page_count;i++) {
     physical_memory_map[i].present=1;
     physical_memory_map[i].in_use=0;
@@ -799,9 +801,9 @@ size_t allocate_physical_map(struct BiosMemoryMap *ptr)
   for(i=7;i<=0x15;i++) physical_memory_map[i].in_use=1;    //kernel memory, incl. initial paging directories
   for(i=0x60;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
   for(i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
-  for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
+  for(i=0x18;i<pages_to_allocate+0x19;i++) physical_memory_map[i].in_use=1; //physical memory map itself
 
-  return pages_to_allocate+0x18;
+  return pages_to_allocate+0x19;
 }
 
 /*

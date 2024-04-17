@@ -5,9 +5,9 @@ static enum PCI_MODE mode = ISA_ONLY;   //i.e., PCI disabled initially. This val
 vaddr pci_entrypoint_phys;
 uint8_t last_pci_bus_num;
 
-// Read a word from the PCI configuration space.  See https://wiki.osdev.org/PCI for details
+// Read a DWORD from the PCI configuration space.  See https://wiki.osdev.org/PCI for details
 // This does not use PCI-express enhancements, which should be used if available.
-uint16_t pci_config_legacy1_read_word(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) 
+uint32_t pci_config_legacy1_read_dword(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) 
 {
     uint32_t address;
     uint32_t lbus = (uint32_t) bus;
@@ -32,24 +32,31 @@ uint16_t pci_config_legacy1_read_word(uint8_t bus, uint8_t slot, uint8_t func, u
     //Read in the data from the data port 0xCFC
     asm ("movl $0xCFC, %%edx\n\tinl %%dx, %%eax\n\tmovl %%eax, %0\n\t" : "=m"(value) : : "edx", "eax");
 
-    //shift the result by the offset and return lower 16 bits
-    return (uint16_t)((value >> ((offset & 2) * 8)) & 0xFFFF);
+    return value;
+}
+
+uint32_t pci_config_read_dword(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
+{
+    switch(mode) {
+        case ISA_ONLY:
+            return 0xFFFFFFFF;  //same as PCI "not present"
+        case LEGACY1:
+            return pci_config_legacy1_read_dword(bus,slot,func,offset);
+        case LEGACY2:
+            kputs("ERROR PCI access mechanism #2 not implemented\r\n");
+            return 0xFFFFFFFF;
+        case PCI_EX:
+            kputs("ERROR PCI-Express not implemented\r\n");
+            return 0xFFFFFFFF;
+    }
 }
 
 uint16_t pci_config_read_word(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
 {
-    switch(mode) {
-        case ISA_ONLY:
-            return 0xFFFF;  //same as PCI "not present"
-        case LEGACY1:
-            return pci_config_legacy1_read_word(bus,slot,func,offset);
-        case LEGACY2:
-            kputs("ERROR PCI access mechanism #2 not implemented\r\n");
-            return 0xFFFF;
-        case PCI_EX:
-            kputs("ERROR PCI-Express not implemented\r\n");
-            return 0xFFFF;
-    }
+    uint32_t value = pci_config_read_dword(bus, slot, func, offset);
+    
+    //shift the result by the offset and return lower 16 bits
+    return (uint16_t)((value >> ((offset & 2) * 8)) & 0xFFFF);
 }
 
 /**
@@ -118,8 +125,6 @@ void pci_preinit(void **pci_entrypoint)
         }
     }
 
-    kputs("PCI scanning devices...\r\n");
-    pci_recursive_scan();
     kputs("PCI pre-initialisation done.\r\n");
 }
 
@@ -138,9 +143,13 @@ void pci_init(void *mcfg_table)
                 return;
             case LEGACY1:
                 kputs("INFO Using PCI 2.x access\r\n");
+                kputs("PCI scanning devices...\r\n");
+                pci_recursive_scan();
                 break;
             case LEGACY2: 
                 kputs("INFO Using PCI 1.x access\r\n");
+                kputs("PCI scanning devices...\r\n");
+                pci_recursive_scan();
                 break;
             default:
                 kprintf("ERROR Invalid PCI mode value %d\r\n", (uint32_t)mode);
