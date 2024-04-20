@@ -136,9 +136,9 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys);
 
 /**
  * ensures that all pages mapped into kernel-space are also backed by allocated ram.
- * if they are not, it raises a kernel panic.
+ * if they are not, it raises a kernel panic if should_panic is non-zero; otherwise it will unmap the offending page.
 */
-void validate_kernel_memory_allocations();
+void validate_kernel_memory_allocations(uint8_t should_panic);
 
 /* internal functions */
 void setup_paging();

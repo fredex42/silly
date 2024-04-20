@@ -11,7 +11,7 @@
 */
 void cleanup_process(SchedulerTask *t)
 {
-    kprintf("DEBUG entered cleanup_process\r\n");
+    kputs("DEBUG entered cleanup_process\r\n");
     pid_t pid = (pid_t)t->data;
     struct ProcessTableEntry *process = get_process(pid);
 
@@ -27,18 +27,14 @@ void cleanup_process(SchedulerTask *t)
     }
 
     //get hold of the process's memory table
-        validate_kernel_memory_allocations();
-    kprintf("DEBUG cleanup_process mapping\r\n");
+    //kprintf("DEBUG cleanup_process mapping\r\n");
     uint32_t *pagingdir = map_app_pagingdir(process->root_paging_directory_phys, APP_PAGEDIRS_BASE);
-        validate_kernel_memory_allocations();
-    kprintf("DEBUG cleanup_process deallocating\r\n");
+    //kprintf("DEBUG cleanup_process deallocating\r\n");
     free_app_memory(pagingdir, process->root_paging_directory_phys);
-        validate_kernel_memory_allocations();
-    kprintf("DEBUG cleanup_process unmapping\r\n");
+    //kprintf("DEBUG cleanup_process unmapping\r\n");
     unmap_app_pagingdir(pagingdir);
-        validate_kernel_memory_allocations();
+    validate_kernel_memory_allocations(0);  //don't panic if there are left-over maps in the kernel, just remove them
     kprintf("INFO cleanup_process done\r\n");
-    validate_kernel_memory_allocations();
 }
 
 /**
