@@ -54,8 +54,8 @@ init_native_api:
 native_api_landing_pad:
   cmp eax, API_EXIT
   jnz .napi_2
-  call api_terminate_current_process ;does not return
-  call enter_kernel_context
+  call api_terminate_current_process ;puts the process record into a TERMINATING state. The scheduler will trigger cleanup
+  call enter_kernel_context          ;exit back to the kernel idle loop
   jmp .napi_rtn_to_kern
 .napi_2:
   cmp eax, API_SLEEP
