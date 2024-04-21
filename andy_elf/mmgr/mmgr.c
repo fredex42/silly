@@ -129,7 +129,6 @@ void setup_paging(size_t last_map_page) {
   /*
   now do identity-paging the parts of the first Mb we're using
   */
-  //idpaging((uint32_t *)first_pagedir_entry, 0x0, 0x100000);
   kprintf("DEBUG physical memory map reaches page 0x%x\r\n", last_map_page);
   idpaging(first_pagedir_entry, 0x0, last_map_page*PAGE_SIZE);
   idpaging(&first_pagedir_entry[0x60], 0x60000, 0x90000);
@@ -218,6 +217,7 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
 {
   vaddr phys_addr;
 
+  //FIXME: should assert spinlock
   for(register size_t i=0;i<page_count;i++) {
     phys_addr = (vaddr)blocks[i];
     size_t page_idx = phys_addr / PAGE_SIZE;
@@ -497,7 +497,6 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
             deallocate_physical_pages(1, &addr);
             paging_dir_ent[j] = 0;
           }
-          // paging_dir_ent[j] = 0;
         }
       }
       //now, unmap the directory itself
@@ -509,7 +508,6 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
         #endif
         if(pg_addr!=0) deallocate_physical_pages(1, &pg_addr);
       }
-      // paging_dir_root[i] = 0;
     }
   }
   //finally unmap the actual root directory
