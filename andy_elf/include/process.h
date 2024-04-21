@@ -15,13 +15,13 @@ struct FilePointer {
   void *content;  //the type of this pointer depends on the `type` field.
 } __attribute__((packed));
 
-#define PROCESS_NONE    0
-#define PROCESS_LOADING 1
-#define PROCESS_READY   2
-#define PROCESS_BUSY    3
-#define PROCESS_IDLE    4
-#define PROCESS_IOWAIT  5
-
+#define PROCESS_NONE        0
+#define PROCESS_LOADING     1
+#define PROCESS_READY       2
+#define PROCESS_BUSY        3
+#define PROCESS_IDLE        4
+#define PROCESS_IOWAIT      5
+#define PROCESS_TERMINATING 6
 #define PROCESS_TABLE_ENTRY_SIG 0x54504552
 
 //total size: 0x4C bytes
@@ -50,6 +50,8 @@ struct SavedRegisterStates32 {
   uint32_t esp;       //offset 0x48
 } __attribute__((packed));
 
+#define PROCESS_TABLE_MAGIC_NUMBER  0x54504552
+
 struct ProcessTableEntry {
   uint32_t magic; //must be 0x54504552 = 'PTBE'               //offset 0x0
   //saved register states are on the process's stack
@@ -77,6 +79,10 @@ struct ProcessTableEntry {
 } __attribute__((packed));
 
 
-
+// in mmgr/process.c
 struct ProcessTableEntry* get_process(pid_t pid);
+
+// in process/cleanup.c
+void schedule_cleanup_task(pid_t pid);
+
 #endif

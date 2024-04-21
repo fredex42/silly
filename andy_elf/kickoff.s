@@ -279,11 +279,12 @@ call mount_root_device
 
 extern scheduler_tick
 extern enter_next_process
-
+extern validate_kernel_memory_allocations
 idle_loop:
-sti
+;call validate_kernel_memory_allocations
 call scheduler_tick	;check if we have any work to do
 call enter_next_process	;check if there is another process we need to go to
+sti
 hlt									;pause processor until an interrupt comes along. We will be regularly woken by the timer interrupt.
 jmp idle_loop
 

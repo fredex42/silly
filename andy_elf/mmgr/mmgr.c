@@ -41,7 +41,7 @@ static size_t physical_page_count = 0;
 
 #define __invalidate_vptr(vptr_to_invalidate) asm inline volatile("invlpg (%0)" : : "r" (vptr_to_invalidate) : "memory")
 void idpaging(uint32_t *first_pte, vaddr from, int size);
-void allocate_physical_map(struct BiosMemoryMap *ptr);
+size_t allocate_physical_map(struct BiosMemoryMap *ptr);
 void parse_memory_map(struct BiosMemoryMap *ptr);
 void apply_memory_map_protections(struct BiosMemoryMap *ptr);
 void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags);
@@ -59,10 +59,11 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
     kputs("CPU supports physical address extension.\r\n");
   }
   parse_memory_map(ptr);
-  kputs("Setup paging....\r\n");
-  setup_paging();
   kputs("Allocating physical map space...\r\n");
-  allocate_physical_map(ptr);
+  size_t last_map_page = allocate_physical_map(ptr);
+
+  kputs("Setup paging....\r\n");
+  setup_paging(last_map_page);
   kputs("Applying memory map protections...\r\n");
   apply_memory_map_protections(ptr);
   kputs("Initialising pagetables area");
@@ -110,7 +111,7 @@ void idpaging(uint32_t *first_pte, vaddr from, int size) {
 /**
 set up the base kernel paging directory
 */
-void setup_paging() {
+void setup_paging(size_t last_map_page) {
   register uint32_t i;
   kputs("  Initialise kernel vmem...\r\n");
   kernel_paging_directory = (uint32_t *) ROOT_PAGE_DIR_LOCATION;
@@ -126,9 +127,11 @@ void setup_paging() {
 
   kputs("  Setup ID paging...\r\n");
   /*
-  now do identity-paging the first Mb
+  now do identity-paging the parts of the first Mb we're using
   */
-  idpaging((uint32_t *)first_pagedir_entry, 0x0, 0x100000);
+  kprintf("DEBUG physical memory map reaches page 0x%x\r\n", last_map_page);
+  idpaging(first_pagedir_entry, 0x0, last_map_page*PAGE_SIZE);
+  idpaging(&first_pagedir_entry[0x60], 0x60000, 0x90000);
 
   kputs("  Enter paged mode...\r\n");
   mb();
@@ -214,10 +217,17 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
 {
   vaddr phys_addr;
 
+  //FIXME: should assert spinlock
   for(register size_t i=0;i<page_count;i++) {
     phys_addr = (vaddr)blocks[i];
     size_t page_idx = phys_addr / PAGE_SIZE;
-    physical_memory_map[i].in_use=0;
+    if(page_idx==0) {
+      k_panic("ERROR attempt to free page 0! That shouldn't happen\r\n");
+    }
+    #ifdef MMGR_VERBOSE
+    kprintf("DEBUG freeing physical 0x%x (0x%x)\r\n", phys_addr, page_idx);
+    #endif
+    physical_memory_map[page_idx].in_use=0;
   }
 }
 
@@ -253,7 +263,9 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
 
   uint32_t *pagetables;
   if((vaddr)app_paging_dir==NULL || (vaddr)app_paging_dir==_mmgr_get_pd()) {
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG k_map_page for kernel usage");
+    #endif
     pagetables = flat_pagetables_ptr;
   } else {
     pagetables = app_paging_dir;
@@ -270,7 +282,9 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
   acquire_spinlock(&memlock);
 
   vaddr page_ptr = (vaddr)pagetables + ((vaddr)pagedir_idx << 12) + ((vaddr)pageent_idx * sizeof(uint32_t));
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_map_page page ptr for %d - %d is 0x%x\r\n", pagedir_idx, pageent_idx, page_ptr);
+  #endif
   //If the page_ptr is not valid, then this line triggers a page fault. The fault handler detects that the access was
   //from the kernel in the flat_pagetables area and maps a page of RAM into place for us then jumps back to retry to operation.
   *(uint32_t *)page_ptr = (vaddr)phys_addr | MP_PRESENT | flags;
@@ -280,7 +294,9 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
     *(uint32_t *)page_ptr = (vaddr)phys_addr | MP_PRESENT | flags;
     mb();
 
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG k_map_page new value is 0x%x\r\n", *(uint32_t *)page_ptr);
+    #endif
   }
   vaddr vptr = (vaddr)pagedir_idx << 22 | (vaddr)pageent_idx << 12;
 
@@ -368,7 +384,9 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
 
   //now map the pages
   uint32_t *pagedir_ptr =&flat_pagetables_ptr[i];
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG vm_map_next_unallocated_pages starting allocation from 0x%x\r\n", pagedir_ptr);
+  #endif
 
   for(p=0;p<pages;p++) {
     pagedir_ptr[p] = ((vaddr)phys_addr[p] & MP_ADDRESS_MASK) | MP_PRESENT | flags;
@@ -393,7 +411,9 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
   }
 
   size_t start_page = starting_from >> 22;
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG map_app_paging_dir start address 0x%x is root page 0x%x\r\n", starting_from, start_page);
+  #endif
   uint32_t *result = NULL;
 
   //we are going to map the _entire_ app root paging dir onto a level 1 entry of the kernel's directory
@@ -402,9 +422,13 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
   //find a spare block
   for(register size_t i=start_page;i<1024;i++) {
     vaddr p = (vaddr)kernel_paging_directory[i];
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG page value for 0x%x is 0x%x\r\n", i, p);
+    #endif
     if(! (p & MP_PRESENT)) {
+      #ifdef MMGR_VERBOSE
       kprintf("DEBUG map_app_paging_dir found space at 0x%x\r\n", i);
+      #endif
       //now map it in
       kernel_paging_directory[i] = (uint32_t *)(paging_dir_phys | MP_PRESENT | MP_READWRITE);
       result = (uint32_t *)(i << 22);
@@ -417,6 +441,9 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
   return result;
 }
 
+/**
+ * Removes the mappings of the given paging directory
+*/
 void unmap_app_pagingdir(uint32_t *mapped_pd) {
   if((vaddr)mapped_pd & 0x3FFFFF != 0) {
     kprintf("DEBUG unmap_app_pagingdir pd location 0x%x is not correctly aligned\r\n", mapped_pd);
@@ -425,7 +452,9 @@ void unmap_app_pagingdir(uint32_t *mapped_pd) {
 
   acquire_spinlock(&memlock);
   size_t page_num = (vaddr)mapped_pd >> 22;
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG unmap_app_pagingdir pd location 0x%x is page 0x%x\r\n", mapped_pd, page_num);
+  #endif
   kernel_paging_directory[page_num] = NULL;
   
   for(register size_t i=0; i<0x400; i++) {
@@ -434,6 +463,59 @@ void unmap_app_pagingdir(uint32_t *mapped_pd) {
   }
 
   release_spinlock(&memlock);
+}
+
+/**
+ * frees all the physical memory associated with the mapped paging directory by both un-mapping it
+ * and deallocating the underlying physical pages.
+ * the root directory itself is also de-allocated and should not be used after this.
+*/
+void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
+  size_t unmap_counter = 0;
+  if((vaddr)mapped_pd & 0x3FFFFF != 0) {
+    kprintf("WARNING unmap_app_pagingdir pd location 0x%x is not correctly aligned\r\n", mapped_pd);
+    return;
+  }
+
+  uint32_t *paging_dir_root = (uint32_t *)((vaddr)mapped_pd + 0x03c0000); //the root directory is mapped at the end of the 
+
+  for(size_t i=0; i<1024;i++) {
+    if( (paging_dir_root[i] & MP_PRESENT) && ! (paging_dir_root[i] & MP_GLOBAL)) {
+      //first, unmap every page that is in the directory
+      uint32_t *paging_dir_ent = (uint32_t *)((vaddr)mapped_pd + i*PAGE_SIZE);
+      for(size_t j=0; j<1024; j++) {
+        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_ent[j] & MP_GLOBAL)) {
+          ++unmap_counter;
+          #ifdef MMGR_VERBOSE
+          kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) | (j<<12));
+          #endif
+          vaddr addr = paging_dir_ent[j] & MP_ADDRESS_MASK;
+          if(addr!=0) {
+            #ifdef MMGR_VERBOSE
+            kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", addr);
+            #endif
+            deallocate_physical_pages(1, &addr);
+            paging_dir_ent[j] = 0;
+          }
+        }
+      }
+      //now, unmap the directory itself
+      ++unmap_counter;
+      vaddr pg_addr = paging_dir_root[i] & MP_ADDRESS_MASK;
+      if(pg_addr) {
+        #ifdef MMGR_VERBOSE
+        kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", pg_addr);
+        #endif
+        if(pg_addr!=0) deallocate_physical_pages(1, &pg_addr);
+      }
+    }
+  }
+  //finally unmap the actual root directory
+  deallocate_physical_pages(1, &root_pd_phys);
+  ++unmap_counter;
+
+  kprintf("INFO free_app_memory deallocated %d pages of RAM\r\n", unmap_counter);
+
 }
 
 /**
@@ -485,7 +567,9 @@ void k_unmap_page_ptr(uint32_t *root_page_dir, void *vptr)
 {
   size_t idx = ADDR_TO_PAGEDIR_IDX(vptr);
   size_t off = ADDR_TO_PAGEDIR_OFFSET(vptr);
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_unmap_page_ptr 0x%x corresponds to index %l, offset %l\r\n", vptr, idx, off);
+  #endif
   k_unmap_page(root_page_dir, idx, off);
 }
 
@@ -502,7 +586,9 @@ void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageen
 
   mb();
   uint32_t* page_ptr = (uint32_t *)((vaddr)flat_pagetables_ptr + ((vaddr)pagedir_idx << 12));
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_unmap_page page for %d - %d is at 0x%x\r\n", pagedir_idx, pageent_idx, &page_ptr[pageent_idx]);
+  #endif
   page_ptr[pageent_idx] = 0;
   mb();
 }
@@ -518,19 +604,23 @@ void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
   void *phys_ptrs[512];
 
   uint32_t allocd = allocate_free_physical_pages(page_count, (void **)&phys_ptrs);
+  #ifdef MMGR_VERBOSE
   kprintf("  DEBUG allocated %d free physical pages\r\n", allocd);
+  #endif
   if(allocd<page_count) {
-    kputs("  DEBUG insufficient pages allocd, deallocating and removing\r\n");
+    kputs("  WARNING insufficient pages allocd, deallocating and removing\r\n");
     deallocate_physical_pages(allocd,(void **) &phys_ptrs);
     return NULL;
   }
 
   mb();
 
+  #ifdef MMGR_VERBOSE
   kprintf("  DEBUG mapping pages into vram\r\n");
+  #endif
   void* vmem_ptr = vm_map_next_unallocated_pages(root_page_dir, flags, phys_ptrs, page_count);
   if(vmem_ptr==NULL) {
-    kprintf("  DEBUG mapping failed, deallocating physical pages and returning\r\n");
+    kprintf("  WARNING mapping failed, deallocating physical pages and returning\r\n");
     deallocate_physical_pages(allocd, (void **)&phys_ptrs);
     return NULL;
   }
@@ -548,7 +638,7 @@ void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t 
   void *phys_ptr = 0xdeadbeef;
   uint32_t allocd = allocate_free_physical_pages(1, &phys_ptr);
   if(allocd!=1) {
-    kputs("  DEBUG insufficient pages allocd, deallocating and removing\r\n");
+    kputs("  WARNING insufficient pages allocd, deallocating and removing\r\n");
     release_spinlock(&memlock);
     return NULL;
   }
@@ -642,7 +732,11 @@ void apply_memory_map_protections(struct BiosMemoryMap *ptr)
   }
 }
 
-void allocate_physical_map(struct BiosMemoryMap *ptr)
+/**
+ * allocates the memory for the physical RAM map area.
+ * Returns the highest page number that is a part of the area.
+*/
+size_t allocate_physical_map(struct BiosMemoryMap *ptr)
 {
   register int i;
   //find the highest value in the physical memory map. We must allocate up to here.
@@ -703,9 +797,11 @@ void allocate_physical_map(struct BiosMemoryMap *ptr)
   physical_memory_map[dir_page].in_use=1;
 
   for(i=7;i<=0x15;i++) physical_memory_map[i].in_use=1;    //kernel memory, incl. initial paging directories
-  for(i=0x70;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
+  for(i=0x60;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
   for(i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
   for(i=0x18;i<pages_to_allocate+0x18;i++) physical_memory_map[i].in_use=1; //physical memory map itself
+
+  return pages_to_allocate+0x18;
 }
 
 /*
@@ -747,10 +843,12 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
   uint32_t *stack_paging_table_virt = (uint32_t *) (temp_ptr + (2*PAGE_SIZE));  
   uint32_t *stack_initial_page_virt = (uint32_t *) (temp_ptr + (3*PAGE_SIZE));  
 
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG root_dir_virt=0x%x\r\n", root_dir_virt);
   kprintf("DEBUG page_one_virt=0x%x\r\n", page_one_virt);
   kprintf("DEBUG stack_paging_table_virt=0x%x\r\n", stack_paging_table_virt);
-  
+  #endif
+
   memset(stack_paging_table_virt, 0, PAGE_SIZE);
   memset(stack_initial_page_virt, 0, PAGE_SIZE);
   stack_paging_table_virt[0x3FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
@@ -835,10 +933,14 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     vaddr pf_loc = (vaddr)pf_load_addr & 0x3FFFFF;  //the bits representing lower 4Mb is the page location
     vaddr pagedir_idx = pf_loc >> 12;
     vaddr pagedir_ent = (pf_loc >> 2) & 0x3FF;
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG allocating pagedir at 0x%x-0x%x from 0x%x\r\n", pagedir_idx, pagedir_ent, pf_loc);
+    #endif
     vaddr pagetables_entry = ((vaddr)pf_load_addr & 0xFFC00000) + 0x03c0000; //the bits representing the upper portion should give us the paging dir base address.  
                                                                         //The root paging dir should be mapped at offset 0x3fc00 beyond this.
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG pagetable_ptr is 0x%x\r\n", pagetables_entry);
+    #endif
 
     //if it's not into the kernel space then we need user-access too
     if(pagetables_entry != ROOT_PAGE_DIR_LOCATION) {
@@ -851,12 +953,16 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
       --pagefault_depth_ctr;
       return 1;
     }
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG physical ptr to map is 0x%x\r\n", phys_ptr);
+    #endif
 
     //set up the new page in the root paging directory.
     if(current_pd != pagetables_entry) {
+      #ifdef MMGR_VERBOSE
       kprintf("DEBUG mapping to alternate PD 0x%x (current 0x%x)\r\n", pagetables_entry, current_pd);
       kprintf("DEBUG pagedir_idx is 0x%x\r\n", pagedir_idx);
+      #endif
       current_pd[pagedir_idx] = ((vaddr)phys_ptr & MP_ADDRESS_MASK) | MPC_PAGINGDIR | MP_PCD | MP_PRESENT | MP_READWRITE;
     }
     
@@ -867,14 +973,20 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     // uint32_t* pagetables_entry = (uint32_t *)(pagetable_ptr + flat_pagetables_ptr_pageoff);
     ((uint32_t *)pagetables_entry)[pagedir_idx] = (vaddr)phys_ptr | MP_PRESENT | MP_PCD | MP_READWRITE | page_flags;
     mb();
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG handle_allocation_fault flat pagetables at 0x%x\r\n", &((uint32_t *)pagetables_entry)[pagedir_idx]);
     kprintf("DEBUG pagetables address of pagetables is 0x%x\r\n", pagetables_entry);
-    
+    #endif
+
     vaddr pageaddr_nowmapped = pf_load_addr & 0xFFFFFC00; //base of the page we just mapped
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG page now mapped at base 0x%x, zeroing\r\n", pageaddr_nowmapped);
+    #endif
     memset_dw((void *)pageaddr_nowmapped, 0, PAGE_SIZE_DWORDS);
+    #ifdef MMGR_VERBOSE
     kprintf("DEBUG done.\r\n");
-    
+    #endif
+
     //the faulting operation can now be retried by returning 0
     --pagefault_depth_ctr;
     kputs("INFO handle_allocation_fault completed\r\n");
@@ -901,4 +1013,45 @@ vaddr _mmgr_get_pd()
 void _mmgr_set_pd(vaddr pd)
 {
   asm("mov %0, %%cr3" : : "r"(pd) : );
+}
+
+/**
+ * ensures that all pages mapped into kernel-space are also backed by allocated ram.
+ * if they are not, it either frees them or raises a kernel panic.
+*/
+void validate_kernel_memory_allocations(uint8_t should_panic)
+{
+  kprintf("INFO Checking kernel memory allocations...\r\n");
+  acquire_spinlock(&memlock);
+  for(register size_t i=0; i<1024; i++) {
+    vaddr dir = kernel_paging_directory[i];
+    if(dir & MP_PRESENT) { //if we were to hit the page content directly, it could trigger a page-fault which would result in allocation. We don't want that.
+      for(register size_t j=0; j<1024; j++) {
+        size_t index = i*1024 + j;
+        vaddr page = flat_pagetables_ptr[index];
+        if(page & MP_PRESENT) {
+          vaddr page_phys = page & MP_ADDRESS_MASK;
+          size_t phys_index = page_phys / PAGE_SIZE;
+          if(!physical_memory_map[phys_index].in_use) {
+            vaddr virt = (vaddr)(i<<22) | (vaddr)(j<<12);
+            if(should_panic) {
+              kprintf("ERROR page %d/%d (0x%x) references physical address 0x%x\r\n",i, j, virt, page_phys);
+              kprintf("ERROR physical 0x%x is index %d which is freed!\r\n", page_phys, phys_index);
+              k_panic("Attempt to free physical RAM that is still mapped\r\n");
+            } else {
+              kprintf("INFO unmapping left-over app memory phys 0x%x from 0x%x\r\n", page_phys, virt);
+              flat_pagetables_ptr[index] = MPC_PAGINGDIR;
+            }
+          } 
+          if(!physical_memory_map[phys_index].present) {
+            kprintf("ERROR page %d/%d (0x%x) references physical addres 0x%x\r\n",i, j, (i<<22) | (j<<12), page_phys);
+            kprintf("ERROR physical 0x%x is index %d which is not present!\r\n", page_phys, phys_index);
+            k_panic("Attempt to use physical RAM that is not present\r\n");
+          }
+        }
+      }
+    }
+  }
+  release_spinlock(&memlock);
+  kprintf("INFO Kernel allocations check done.\r\n");
 }
