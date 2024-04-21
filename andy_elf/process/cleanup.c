@@ -27,13 +27,16 @@ void cleanup_process(SchedulerTask *t)
     }
 
     //get hold of the process's memory table
-    //kprintf("DEBUG cleanup_process mapping\r\n");
     uint32_t *pagingdir = map_app_pagingdir(process->root_paging_directory_phys, APP_PAGEDIRS_BASE);
-    //kprintf("DEBUG cleanup_process deallocating\r\n");
     free_app_memory(pagingdir, process->root_paging_directory_phys);
-    //kprintf("DEBUG cleanup_process unmapping\r\n");
     unmap_app_pagingdir(pagingdir);
-    validate_kernel_memory_allocations(0);  //don't panic if there are left-over maps in the kernel, just remove them
+
+    /*
+      don't panic if there are left-over maps in the kernel, just remove them.
+      this is because the allocation process leaves on page (the upper-level paging dir) mapped in kernel space AND in
+      process-space; so we need to make sure it gets removed here to prevent a memory leak.
+    */
+    validate_kernel_memory_allocations(0);  
     kprintf("INFO cleanup_process done\r\n");
 }
 
