@@ -1,6 +1,7 @@
 #include "pci_scanner.h"
 #include "pci_ops.h"
 #include "pci_categorisation.h"
+#include "pci_ide.h"
 
 //Mostly taken from https://wiki.osdev.org/PCI#Enumerating_PCI_Buses !
 const char* pci_description_string(uint8_t pci_class, uint8_t subclass) {
@@ -168,11 +169,138 @@ void pci_scanner_check_function(uint8_t bus, uint8_t device, uint8_t function) {
     uint8_t sub_class  = (uint8_t)(class_values & 0xFF);
     kprintf("    DEBUG 0x%x:0x%x:0x%x is class 0x%x:0x%x\r\n", (uint32_t)bus, (uint32_t)device, (uint32_t)function, (uint32_t)base_class, (uint32_t)sub_class);
     kprintf("    DEBUG Found '%s'\r\n", pci_description_string(base_class, sub_class));
-    if(base_class==0x06 && sub_class==0x04) {
+    if(base_class==PCI_CC_BRIDGE && sub_class==PCI_SUBC_BRIDGE_PCI) {
         uint16_t bus_values = pci_config_read_word(bus, device, function, 0x18);    //Primary & secondary bus values
         uint8_t secondary_bus = (uint8_t)(bus_values >> 8);
         kprintf("    DEBUG Secondary bus ID is 0x%x\r\n", secondary_bus);
         pci_scanner_check_bus(secondary_bus);
+    } else if(base_class==PCI_CC_MASS_STORAGE && sub_class==PCI_SUBC_MASS_IDE) {
+        
+    }
+    pci_init_device(bus, device, function, base_class, sub_class);
+}
+
+void pci_decode_type0(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_class, uint8_t sub_class, uint8_t prog_if)
+{
+    uint32_t bar[6];
+    bar[0] = pci_config_read_dword(bus,slot,func, 0x10);
+    bar[1] = pci_config_read_dword(bus,slot,func, 0x14);
+    bar[2] = pci_config_read_dword(bus,slot,func, 0x18);
+    bar[3] = pci_config_read_dword(bus,slot,func, 0x1c);
+    bar[4] = pci_config_read_dword(bus,slot,func, 0x20);
+    bar[5] = pci_config_read_dword(bus,slot,func, 0x24);
+    for(register uint8_t i=0;i<6;i++) {
+        if(BAR_IS_IOSPACE(bar[i])) {
+            kprintf("      BAR #%d: IO port 0x%x\r\n", (uint32_t)i, BAR_DECODE_IOSPACE(bar[i]));
+        } else {
+            uint8_t bar_type = BAR_MEM_TYPE(bar[i]);
+            switch(bar_type) {
+                case BAR_TYPE_32BIT:
+                    kprintf("      BAR #%d: Memory 0x%x\r\n", (uint32_t)i, BAR_DECODE_MEM32(bar[i]));
+                    break;
+                case BAR_TYPE_RESERVED:
+                    kprintf("      BAR #%d: type is 'reserved'\r\n", (uint32_t)i);
+                    break;
+                case BAR_TYPE_64BIT:
+                    kprintf("      BAR #%d: type is '64-bit'\r\n", (uint32_t)i);
+                    break;
+            }
+        }
+    }
+
+    uint32_t latency_grant_intpin_intline = pci_config_read_dword(bus,slot,func, 0x3c);
+
+    kprintf("      DEBUG 0x%x\r\n", latency_grant_intpin_intline);
+    uint8_t interrupt_line = (uint8_t)latency_grant_intpin_intline;
+    uint8_t interrupt_pin = (uint8_t)(latency_grant_intpin_intline >> 8);
+    uint8_t min_grant = (uint8_t)(latency_grant_intpin_intline >> 16);
+    uint8_t max_latency = (uint8_t)(latency_grant_intpin_intline >> 24);
+    kprintf("      Legacy PIC interrupt line 0x%x\r\n", (uint32_t)interrupt_line);
+    kprintf("      APIC interrupt pin 0x%x\r\n", (uint32_t)interrupt_pin);
+
+    switch(base_class) {
+        case PCI_CC_MASS_STORAGE:
+            switch(sub_class) {
+                case PCI_SUBC_MASS_IDE:
+                    pci_ide_init(bus, slot, func, prog_if);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void pci_decode_type1(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_class, uint8_t sub_class)
+{
+    uint32_t bar[2];
+    bar[0] = pci_config_read_dword(bus,slot,func, 0x10);
+    bar[1] = pci_config_read_dword(bus,slot,func, 0x14);
+
+    for(register uint8_t i=0;i<2;i++) {
+        if(BAR_IS_IOSPACE(bar[i])) {
+            kprintf("      BAR #%d: IO port 0x%x\r\n", (uint32_t)i, BAR_DECODE_IOSPACE(bar[i]));
+        } else {
+            uint8_t bar_type = BAR_MEM_TYPE(bar[i]);
+            switch(bar_type) {
+                case BAR_TYPE_32BIT:
+                    kprintf("      BAR #%d: Memory 0x%x\r\n", (uint32_t)i, BAR_DECODE_MEM32(bar[i]));
+                    break;
+                case BAR_TYPE_RESERVED:
+                    kprintf("      BAR #%d: type is 'reserved'\r\n", (uint32_t)i);
+                    break;
+                case BAR_TYPE_64BIT:
+                    kprintf("      BAR #%d: type is '64-bit'\r\n", (uint32_t)i);
+                    break;
+            }
+        }
+    }
+
+    uint32_t io_base_io_lim_secondary_status = pci_config_read_dword(bus,slot, func, 0x1c);
+    uint8_t io_base = (uint8_t) io_base_io_lim_secondary_status;
+    uint8_t io_limit = (uint8_t) (io_base_io_lim_secondary_status >> 8);
+    uint16_t secondary_status = (uint16_t) (io_base_io_lim_secondary_status >> 16);
+    kprintf("    Bridge IO base 0x%x IO limit 0x%x\r\n", (uint32_t)io_base, (uint8_t)io_limit);
+
+}
+
+/**
+ * Initialise (well, dump data for the time being!) an IDE controller at the specified PCI address
+*/
+void pci_init_device(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_class, uint8_t sub_class)
+{
+    //Pull in the header type data
+    uint32_t device_vendor_id = pci_config_read_dword(bus, slot, func, 0);
+    uint32_t status_cmd = pci_config_read_dword(bus, slot, func, 0x04);
+    uint32_t class_subclass_progif_revision = pci_config_read_word(bus, slot, func, 0x08);
+    uint32_t bis_ht_latency_cacheline = pci_config_read_dword(bus,slot,func, 0x0c);
+
+    uint8_t header_type = (uint8_t)(bis_ht_latency_cacheline >> 16);
+
+    uint16_t status_value = (uint16_t)(status_cmd >> 8);
+    uint16_t command_value = (uint16_t)(status_cmd);
+
+    kprintf("      Status value 0x%x, command register 0x%x\r\n", (uint32_t)status_value, (uint32_t)command_value);    
+    uint8_t bist = (uint8_t)(bis_ht_latency_cacheline >> 24);
+    kprintf("      BIST value 0x%x\r\n", (uint32_t)bist);
+
+    uint8_t prog_if = (uint8_t)(class_subclass_progif_revision >> 8);
+
+    switch(header_type) {
+        case 0: //regular PCI device
+            pci_decode_type0(bus, slot, func, base_class, sub_class, prog_if);
+            break;
+        case 1: //PCI - PCI bridge
+            pci_decode_type1(bus, slot, func, base_class, sub_class);
+            break;
+        case 2: //PCI-Cardbus bridge
+            kputs("PCI-Cardbus bridge not supported\r\n");
+            break;
+        default:
+            kprintf("Unexpected header type 0x%x. Entire register was 0x%x\r\n", (uint32_t)header_type, bis_ht_latency_cacheline);
+            break;
     }
 }
 

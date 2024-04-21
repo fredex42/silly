@@ -5,6 +5,7 @@
         "spinlock.h": "c",
         "functional": "c",
         "mmgr.h": "c",
-        "pci_categorisation.h": "c"
+        "pci_categorisation.h": "c",
+        "stdio.h": "c"
     }
 }
