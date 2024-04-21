@@ -96,6 +96,33 @@ const char* pci_description_string(uint8_t pci_class, uint8_t subclass) {
             default:
                 return "Unknown PCI Bridge";
             }
+        //fixme: more to come in here!
+
+        case PCI_CC_SERIALBUS:
+            switch(subclass) {
+                case PCI_SUBC_SBUS_FIREWIRE:
+                    return "Fibrechannel controller";
+                case PCI_SUBC_SBUS_ACCESS:
+                    return "ACCESS Bus Controller";
+                case PCI_SUBC_SBUS_SSA:
+                    return "SSA Controller";
+                case PCI_SUBC_SBUS_USB:
+                    return "USB Host Controller";
+                case PCI_SUBC_SBUS_FIBRECHANNEL:
+                    return "FibreChannel Controller";
+                case PCI_SUBC_SBUS_SMBUS:
+                    return "SMBUS Controller";
+                case PCI_SUBC_SBUS_INFINIBAND:
+                    return "Infiniband Controller";
+                case PCI_SUBC_SBUS_IPMI:
+                    return "IPMI Controller";
+                case PCI_SUBC_SBUS_SERCOS:
+                    return "SERCOS Controller";
+                case PCI_SUBC_SBUS_CANBUS:
+                    return "CANBUS Controller";
+                default:
+                    return "Unknown serial bus";
+            }
         default:
             return "Not recognised yet!";
     }
