@@ -23,3 +23,9 @@
 %define TemporaryMemInfoBufferOffset 0x0
 ;protected-mode pointer to the same thing
 %define TemporaryMemInfoLocation 0x2500
+
+;real-mode segment pointers for place to store PCI entrypoint
+%define TemporaryPciInfoBufferSeg 0x300
+%define TemporaryPciInfoBufferOffset 0x0
+;protected-mode pointer to the same thing
+%define TemporaryPciInfoLocation 0x3000

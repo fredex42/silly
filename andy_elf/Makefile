@@ -85,8 +85,8 @@ test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
 		-Ldrivers/early_serial -learly_serial -Lnative_api -lnative_api -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
-		-Ldrivers/cmos -lcmos \
-		-Ttext 0x7E00 -Tdata 0x15000  \
+		-Ldrivers/cmos -lcmos -Ldrivers/pci -lpci \
+		-Ttext 0x7E00  -Tdata 0x18000 \
 		-static -nostartfiles -nodefaultlibs -nostdlib -nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
 
 kernel.map: test.elf
