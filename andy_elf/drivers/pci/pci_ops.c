@@ -26,11 +26,11 @@ uint32_t pci_config_legacy1_read_dword(uint8_t bus, uint8_t slot, uint8_t func, 
     address = (uint32_t)((lbus << 16) | (lslot << 11) | (lfunc << 8) | (offset & 0xFC) |
                 ((uint32_t) 0x80000000));
     
-    // Write the address to the address port 0xCF8
-    asm ("movl %0, %%eax\n\tmov $0xCF8, %%edx\n\toutl %%eax, %%dx\n\t" : : "m"(address) : "edx", "eax");
+    // Write the address to the address port 0xCF8. Volatile as we don't want the compiler to mess with it.
+    asm volatile ("movl %0, %%eax\n\tmov $0xCF8, %%edx\n\toutl %%eax, %%dx\n\t" : : "m"(address) : "edx", "eax");
 
     //Read in the data from the data port 0xCFC
-    asm ("movl $0xCFC, %%edx\n\tinl %%dx, %%eax\n\tmovl %%eax, %0\n\t" : "=m"(value) : : "edx", "eax");
+    asm volatile ("movl $0xCFC, %%edx\n\tinl %%dx, %%eax\n\tmovl %%eax, %0\n\t" : "=m"(value) : : "edx", "eax");
 
     return value;
 }

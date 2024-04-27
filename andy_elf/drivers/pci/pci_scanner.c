@@ -138,7 +138,6 @@ void pci_scanner_check_device(uint8_t bus, uint8_t device) {
     //get the vendor ID
     uint16_t vendor_id = pci_config_read_word(bus, device, function, 0);
     if(vendor_id == 0xFFFF) {
-        //kprintf("    DEBUG No device at 0x%x:0x%x\r\n", (uint32_t)bus, (uint32_t) device);
         return;
     }
     kprintf("    DEBUG PCI device with vendor ID 0x%x at 0x%x:0x%x\r\n", (uint32_t)vendor_id, (uint32_t)bus, (uint32_t)device);
@@ -180,6 +179,9 @@ void pci_scanner_check_function(uint8_t bus, uint8_t device, uint8_t function) {
     pci_init_device(bus, device, function, base_class, sub_class);
 }
 
+/**
+ * Decodes a "type 0" (generic device) header and calls driver initialisation if it's recognised.
+*/
 void pci_decode_type0(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_class, uint8_t sub_class, uint8_t prog_if)
 {
     uint32_t bar[6];
@@ -218,6 +220,8 @@ void pci_decode_type0(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_clas
     kprintf("      Legacy PIC interrupt line 0x%x\r\n", (uint32_t)interrupt_line);
     kprintf("      APIC interrupt pin 0x%x\r\n", (uint32_t)interrupt_pin);
 
+    // Now we know what the device slasses are, we can call initialisation functions.
+    // This will be expanded as we know about more devices!
     switch(base_class) {
         case PCI_CC_MASS_STORAGE:
             switch(sub_class) {
@@ -233,6 +237,9 @@ void pci_decode_type0(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_clas
     }
 }
 
+/**
+ * Decodes a "type 1" header (PCI-PCI Bridge)
+*/
 void pci_decode_type1(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_class, uint8_t sub_class)
 {
     uint32_t bar[2];
@@ -265,6 +272,10 @@ void pci_decode_type1(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_clas
     kprintf("    Bridge IO base 0x%x IO limit 0x%x\r\n", (uint32_t)io_base, (uint8_t)io_limit);
 
 }
+
+/**
+ * Note, we are not currently bothering with "type 2" PCI headers (PCI-Cardbus Bridge)
+*/
 
 /**
  * Initialise (well, dump data for the time being!) an IDE controller at the specified PCI address
@@ -313,5 +324,7 @@ void pci_scanner_check_bus(uint8_t bus) {
 }
 
 void pci_recursive_scan() {
+    //The scanner functions above are recursive, we start scanning on bus 0 and any further buses will be detected
+    //as bridges and re-scanned
     pci_scanner_check_bus(0);
 }
