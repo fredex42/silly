@@ -66,11 +66,11 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
 
   kputs("Setup paging....\r\n");
   setup_paging();
+  kputs("Initialising pagetables area");
+  initialise_flat_pagetables();
   map_physical_memory_map_area(physical_map_start, physical_map_pages);
   kputs("Applying memory map protections...\r\n");
   apply_memory_map_protections(ptr);
-  kputs("Initialising pagetables area");
-  initialise_flat_pagetables();
   kputs("Memory manager initialised.\r\n");
   initialise_process_table(kernel_paging_directory);
   initialise_heap(get_process(0), MIN_ZONE_SIZE_PAGES*4);
@@ -157,14 +157,15 @@ void setup_paging() {
 */
 void map_physical_memory_map_area(size_t map_start, size_t map_length_pages)
 {
-  size_t virt_map_start = PHYSICAL_MAP_VMM_LIMIT - (map_length_pages*0x1024);
+  size_t virt_map_start = PHYSICAL_MAP_VMM_LIMIT - (map_length_pages*0x1000);
   kprintf("DEBUG physical map runs from 0x%x to 0x%x\r\n", virt_map_start, PHYSICAL_MAP_VMM_LIMIT);
 
   kputs("Bringing physical map into kernel-space...\r\n");
   for(size_t i=0; i<map_length_pages; i++) {
     void *phys_page = (void *)(map_start + i*0x1000);
     void *virt_page = (void *)(virt_map_start + i*0x1000);
-    k_map_page_bytes(NULL, phys_page, virt_page, MP_PRESENT|MP_READWRITE|MP_PCD);
+    kprintf("  DEBUG Mapping 0x%x to 0x%x...\r\n", phys_page, virt_page);
+    k_map_page_bytes(kernel_paging_directory, phys_page, virt_page, MP_PRESENT|MP_READWRITE|MP_PCD);
   }
   physical_memory_map = (struct PhysMapEntry *)virt_map_start;
   kputs("Done.\r\n");
@@ -294,7 +295,7 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
   }
 
   //temporary check while we are porting this over
-  if((vaddr)app_paging_dir < 0xC0000000) {
+  if( ((vaddr)app_paging_dir < 0xC0000000) && ((vaddr)app_paging_dir != kernel_paging_directory)) {
     kprintf("ERROR k_map_page called with app_paging_dir value 0x%x, this is probably a bug\r\n", app_paging_dir);
     k_panic("ERROR Possible unsafe map request");
   }
@@ -756,6 +757,7 @@ void apply_memory_map_protections(struct BiosMemoryMap *ptr)
 
 /**
  * allocates the memory for the physical RAM map area.
+ * crucially, we are NOT in paged mode yet - so physical pointers === virtual pointers
  * Returns the byte address of the start of the physical RAM area AND the length of the map area in pages.
  * You must pass in pointers to size_t to obtain these values.
 */
@@ -767,13 +769,13 @@ void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, si
 
   size_t highest_value = 0;
   size_t highest_available = 0;
-  //kprintf("DEBUG allocate_physical_map ptr is 0x%x, entry count is %d\r\n", ptr, entry_count);
 
   for(i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
     //if(e->type==MMAP_TYPE_RESERVED) continue; //ignore reserved regions for this calculation
     size_t entry_limit = (size_t) e->base_addr + (size_t)e->length;
-    if(entry_limit>highest_available && e->type==MMAP_TYPE_USABLE) highest_value = entry_limit;
+    if(entry_limit>highest_available && e->type==MMAP_TYPE_USABLE) highest_available = entry_limit;
+
     highest_value += (size_t)e->length;
   }
 
