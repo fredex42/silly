@@ -20,6 +20,7 @@ global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 ;assuming that DH is still the cursor row and DL is still the cursor position
 
 _start:
+cli             ;ensure that interrupts are disabled
 ;Now we need to re-set up the selectors as what we got from the bootloader was fairly minimal.
 mov ax, 0x10
 mov ds, ax

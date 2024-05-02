@@ -88,18 +88,18 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
   }
 
   //Check LBAmid and LBAhi ports. If they are not 0 then this is not an ATA drive and we should stop.
-  st = inb(ATA_LBA_MID(base_addr));
-  if(st!=0) {
-    kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
-    master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
-    return NULL;
-  }
-  st = inb(ATA_LBA_HI(base_addr));
-  if(st!=0) {
-    kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
-    master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
-    return NULL;
-  }
+  // st = inb(ATA_LBA_MID(base_addr));
+  // if(st!=0) {
+  //   kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
+  //   master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
+  //   return NULL;
+  // }
+  // st = inb(ATA_LBA_HI(base_addr));
+  // if(st!=0) {
+  //   kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
+  //   master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
+  //   return NULL;
+  // }
 
   //Still here? Good. We've got a drive, now poll for success or failure.
 
