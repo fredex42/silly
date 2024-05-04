@@ -271,16 +271,16 @@ uint64_t ata_lba48_sector_limit(uint8_t drive_nr)
 
 void print_drive_info(uint8_t drive_nr)
 {
-  kprintf("Drive %d max UDMA %d current UDMA %d. LBA28 sector limit is %l, LBA48 sector limit low dword is %l.  ",
+  kprintf("INFO Drive %d max UDMA %d current UDMA %d.\r\nINFO\tLBA28 sector limit is %l, LBA48 sector limit low dword is %l.\r\n",
    (uint16_t)drive_nr,
     (uint16_t)ata_current_udma_mode(drive_nr),
     (uint16_t)ata_max_udma_mode(drive_nr),
     (uint32_t)ata_lba28_sector_limit(drive_nr),
     (uint32_t)ata_lba48_sector_limit(drive_nr));
   if(ata_drive_supports_lba48(drive_nr)) {
-    kputs("LBA48 mode supported.\r\n");
+    kputs("INFO\tLBA48 mode supported.\r\n");
   } else {
-    kputs("LBA48 mode not supported.\r\n");
+    kputs("INFO\tLBA48 mode not supported.\r\n");
   }
 }
 
