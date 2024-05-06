@@ -201,6 +201,7 @@ size_t map_physical_memory_map_area(size_t map_start, size_t map_length_pages)
   Pages 0x80->0xff(0x80000 -> 0x100000) are reserved for bios
   */
   physical_memory_map[0].in_use=1;                        //always protect first page, reserved for SMM
+  physical_memory_map[0].in_use=1;                        //we keep our IDT and GDT here
   size_t dir_page = ROOT_PAGE_DIR_LOCATION >> 12;
   physical_memory_map[dir_page].in_use=1;
   dir_page = FIRST_PAGEDIR_ENTRY_LOCATION >> 12;
@@ -424,6 +425,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //uint32_t *pagedir_entries = (uint32_t *)PAGEDIR_ENTRIES_LOCATION;
   size_t continuous_page_count = 0;
   uint32_t *pagedir_entry_phys, *pagedir_entry_vptr = NULL;
+  size_t base_vpage;
 
   if(pages==0) return NULL; //don't try and map no Memory
 
@@ -442,6 +444,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
       if(continuous_page_count>=pages) break;
     }
   }
+  base_vpage = i;
 
   if(continuous_page_count<pages) {
     kprintf("    ERROR Found %l pages but need %l\r\n", continuous_page_count, pages);
@@ -449,8 +452,20 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
     return NULL;
   }
 
+  //mark the pages as "in-use" (if we enter through directly mapping memory-mapped hardware we need this here)
+  for(i=0;i<pages;i++) {
+    size_t page_index = ((vaddr)(phys_addr[i]) >> 12);
+    kprintf("DEBUG vm_map_next_unallocated_pages index for 0x%x is 0x%x\r\n", (vaddr)phys_addr[i], page_index);
+    kprintf("DEBUG physical_memory_map ptr 0x%x\r\n", &physical_memory_map[page_index]);
+    if(page_index<physical_page_count) {
+      physical_memory_map[page_index].in_use = 1;
+    } else {
+      kprintf("WARN mapping page beyond physical RAM limit of 0x%x pages\r\n", physical_page_count);
+    }
+  }
+  
   //now map the pages
-  uint32_t *pagedir_ptr =&flat_pagetables_ptr[i];
+  uint32_t *pagedir_ptr =&flat_pagetables_ptr[base_vpage];
   #ifdef MMGR_VERBOSE
   kprintf("DEBUG vm_map_next_unallocated_pages starting allocation from 0x%x\r\n", pagedir_ptr);
   #endif
@@ -460,7 +475,7 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   }
 
   //now calculate the virtual pointer
-  void *ptr = (void *)(i << 12);
+  void *ptr = (void *)(base_vpage << 12);
   release_spinlock(&memlock);
 
   //we can't zero the memory here because ptr might be in a different paging directory.
@@ -634,9 +649,9 @@ void k_unmap_page_ptr(uint32_t *root_page_dir, void *vptr)
 {
   size_t idx = ADDR_TO_PAGEDIR_IDX(vptr);
   size_t off = ADDR_TO_PAGEDIR_OFFSET(vptr);
-  #ifdef MMGR_VERBOSE
+  //#ifdef MMGR_VERBOSE
   kprintf("DEBUG k_unmap_page_ptr 0x%x corresponds to index %l, offset %l\r\n", vptr, idx, off);
-  #endif
+  //#endif
   k_unmap_page(root_page_dir, idx, off);
 }
 
@@ -846,7 +861,7 @@ void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, si
   kprintf("DEBUG %d map entries per 4k page\r\n", entries_per_page);
   kprintf("Allocating %d pages to physical ram map\r\n", pages_to_allocate);
   *map_length_in_pages_out = pages_to_allocate;
-  size_t physical_map_start = highest_available - (pages_to_allocate * 0x1000);
+  size_t physical_map_start = highest_available - ((pages_to_allocate+1) * 0x1000);
   kprintf("Physical memory map runs from 0x%x to 0x%x\r\n", physical_map_start, highest_available);
   *area_start_out = physical_map_start;
 
