@@ -455,8 +455,8 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   //mark the pages as "in-use" (if we enter through directly mapping memory-mapped hardware we need this here)
   for(i=0;i<pages;i++) {
     size_t page_index = ((vaddr)(phys_addr[i]) >> 12);
-    kprintf("DEBUG vm_map_next_unallocated_pages index for 0x%x is 0x%x\r\n", (vaddr)phys_addr[i], page_index);
-    kprintf("DEBUG physical_memory_map ptr 0x%x\r\n", &physical_memory_map[page_index]);
+    //kprintf("DEBUG vm_map_next_unallocated_pages index for 0x%x is 0x%x\r\n", (vaddr)phys_addr[i], page_index);
+    //kprintf("DEBUG physical_memory_map ptr 0x%x\r\n", &physical_memory_map[page_index]);
     if(page_index<physical_page_count) {
       physical_memory_map[page_index].in_use = 1;
     } else {
@@ -1092,17 +1092,20 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
   acquire_spinlock(&memlock);
   for(register size_t i=0; i<1024; i++) {
     vaddr dir = kernel_paging_directory[i];
+    kprintf("0x%x: 0x%x\r\n", i, dir);
     if(dir & MP_PRESENT) { //if we were to hit the page content directly, it could trigger a page-fault which would result in allocation. We don't want that.
       for(register size_t j=0; j<1024; j++) {
-        size_t index = (i<<12) + j;
+        size_t index = (i<<10) + j; //<<10 because this is in dwords not bytes
+        kprintf("0x%x/0x%x: 0x%x ", i, j, index);
         vaddr page = flat_pagetables_ptr[index];
+        kprintf("0x%x\r\n", page);
         if(page & MP_PRESENT) {
           vaddr page_phys = page & MP_ADDRESS_MASK;
-          size_t phys_index = page_phys / PAGE_SIZE;
+          size_t phys_index = page_phys >> 12;
           if(!physical_memory_map[phys_index].in_use) {
             vaddr virt = (vaddr)(i<<22) | (vaddr)(j<<12);
+            kprintf("WARN page %d/%d (0x%x) references physical address 0x%x\r\n",i, j, virt, page_phys);
             if(should_panic) {
-              kprintf("ERROR page %d/%d (0x%x) references physical address 0x%x\r\n",i, j, virt, page_phys);
               kprintf("ERROR physical 0x%x is index %d which is freed!\r\n", page_phys, phys_index);
               k_panic("Attempt to free physical RAM that is still mapped\r\n");
             } else {
