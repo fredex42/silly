@@ -660,9 +660,9 @@ void k_unmap_page_ptr(uint32_t *root_page_dir, void *vptr)
 {
   size_t idx = ADDR_TO_PAGEDIR_IDX(vptr);
   size_t off = ADDR_TO_PAGEDIR_OFFSET(vptr);
-  //#ifdef MMGR_VERBOSE
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_unmap_page_ptr 0x%x corresponds to index %l, offset %l\r\n", vptr, idx, off);
-  //#endif
+  #endif
   k_unmap_page(root_page_dir, idx, off);
 }
 
@@ -842,7 +842,6 @@ void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, si
 
   for(i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
-    //if(e->type==MMAP_TYPE_RESERVED) continue; //ignore reserved regions for this calculation
     size_t entry_limit = (size_t) e->base_addr + (size_t)e->length;
     if(entry_limit>highest_available && e->type==MMAP_TYPE_USABLE) highest_available = entry_limit;
 
@@ -1090,20 +1089,19 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
   acquire_spinlock(&memlock);
   for(register size_t i=0; i<1024; i++) {
     vaddr dir = kernel_paging_directory[i];
-    // kprintf("0x%x: 0x%x\r\n", i, dir);
     if(dir & MP_PRESENT) { //if we were to hit the page content directly, it could trigger a page-fault which would result in allocation. We don't want that.
       for(register size_t j=0; j<1024; j++) {
         size_t index = (i<<10) + j; //<<10 because the index is in dwords not bytes
-        // kprintf("0x%x/0x%x: 0x%x ", i, j, index);
         vaddr page = flat_pagetables_ptr[index];
-        // kprintf("0x%x\r\n", page);
         if(page & MP_PRESENT) {
           vaddr page_phys = page & MP_ADDRESS_MASK;
           size_t phys_index = page_phys >> 12;
           acquire_spinlock(&physlock);
           if(!physical_memory_map[phys_index].in_use) {
             vaddr virt = (vaddr)(i<<22) | (vaddr)(j<<12);
+            #ifdef MMGR_VERBOSE
             kprintf("WARN page %d/%d (0x%x) references physical address 0x%x\r\n",i, j, virt, page_phys);
+            #endif
             if(should_panic) {
               kprintf("ERROR physical 0x%x is index %d which is freed!\r\n", page_phys, phys_index);
               k_panic("Attempt to free physical RAM that is still mapped\r\n");
