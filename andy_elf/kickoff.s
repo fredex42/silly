@@ -285,6 +285,13 @@ call init_native_api
 extern mount_root_device
 call mount_root_device
 
+;make sure that there are no left-over memory allocations
+extern validate_kernel_memory_allocations
+xor eax,eax
+push ax
+call validate_kernel_memory_allocations
+pop ax
+
 extern scheduler_tick
 extern enter_next_process
 
