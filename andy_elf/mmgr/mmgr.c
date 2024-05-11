@@ -29,6 +29,7 @@ static uint32_t *kernel_paging_directory;  //root paging directory on page 0
 static uint32_t *first_pagedir_entry;    //first directory entry on page 1
 
 static spinlock_t memlock = 0;
+static spinlock_t physlock = 0;
 
 //all of the page tables in the root directory get mapped into this area.
 //We initialise it by configuring a page directory to cover the whole area and set up the first entry to the first_pagedir_entry value
@@ -210,8 +211,16 @@ size_t map_physical_memory_map_area(size_t map_start, size_t map_length_pages)
   for(size_t i=7;i<=0x15;i++) physical_memory_map[i].in_use=1;    //kernel memory, incl. initial paging directories
   for(size_t i=0x60;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
   for(size_t i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
-  size_t physical_map_start = map_start >> 12;
-  for(size_t i=physical_map_start;i<map_length_pages;i++) physical_memory_map[i].in_use=1; //physical memory map itself
+  size_t physical_map_start = directory_phys_base >> 12;
+  #ifdef MMGR_VERBOSE
+  kprintf("DEBUG physical_map_start 0x%x map_length_pages 0x%x directories_needed 0x%x\r\n", physical_map_start, map_length_pages, directories_needed);
+  #endif
+  for(size_t i=0;i<map_length_pages+directories_needed;i++) {
+    #ifdef MMGR_VERBOSE
+    kprintf("DEBUG phys page 0x%x is in PMM\r\n", i+physical_map_start);
+    #endif
+    physical_memory_map[i+physical_map_start].in_use=1; //physical memory map itself
+  }
 
   return directories_needed;
 }
@@ -257,20 +266,21 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks)
 {
   uint32_t current_entry;
   uint32_t * current_page;
-  uint8_t temp = 0;
   uint32_t found_pages = 0;
+  acquire_spinlock(&physlock);
 
   for(register size_t i=0x30;i<physical_page_count;i++) {
     if(physical_memory_map[i].in_use==0) {
-      if(temp<5) {
-        temp++;
-      }
       physical_memory_map[i].in_use=1;
       blocks[found_pages] = (void *)(i*PAGE_SIZE);
       found_pages+=1;
-      if(found_pages==page_count) return page_count;  //we found enough pages
+      if(found_pages==page_count) {
+        release_spinlock(&physlock);
+        return page_count;  //we found enough pages
+      }
     }
   }
+  release_spinlock(&physlock);
   return found_pages; //we ran out of memory. Return the number of pages that we managed to get.
 }
 
@@ -285,7 +295,7 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
 {
   vaddr phys_addr;
 
-  //FIXME: should assert spinlock
+  acquire_spinlock(&physlock);
   for(register size_t i=0;i<page_count;i++) {
     phys_addr = (vaddr)blocks[i];
     size_t page_idx = phys_addr / PAGE_SIZE;
@@ -297,6 +307,7 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
     #endif
     physical_memory_map[page_idx].in_use=0;
   }
+  release_spinlock(&physlock);
 }
 
 /**
@@ -847,17 +858,8 @@ void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, si
   size_t entries_per_page = PAGE_SIZE / (size_t) sizeof(struct PhysMapEntry);
   size_t pages_to_allocate = physical_page_count / entries_per_page + 1;
 
-  //since we don't have a physical map yet, we are going to have to rely on some
-  //intuition and prerequisites here.....
-  //1. We assume that the whole first Mb is identity-mapped
-  //2. We assume that the kernel itself (code and static data) fits within 16 pages (64k)
-  //3. We assume a standard memory layout, i.e. the kernel is loaded from 0x7e00 (page 0x07)
-  //and that there is a memory hole at 0x80000 (page 0x80=128)
-  //Therefore, we can start out pseudo-allocation from page 25 (=0x19) but can't go beyond 0x80 - limit of 0x5b = 91 pages
-  //Given each page takes up 1 byte each page should be able to take 4096 of them
-
-  //FIXME - these assumptions are getting shonky. We need to improve the overall structure here, by allocating
-  //some RAM far enough out of the way we don't crash into things or stomp the kernel's static data
+  //The physical RAM map is allocated at the end of physical RAM (wherever that is)
+  //and then gets mapped towards the end of VRAM
   kprintf("DEBUG %d map entries per 4k page\r\n", entries_per_page);
   kprintf("Allocating %d pages to physical ram map\r\n", pages_to_allocate);
   *map_length_in_pages_out = pages_to_allocate;
@@ -865,10 +867,6 @@ void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, si
   kprintf("Physical memory map runs from 0x%x to 0x%x\r\n", physical_map_start, highest_available);
   *area_start_out = physical_map_start;
 
-  // if(pages_to_allocate>91) {
-  //   kprintf("Needed to allocate %d pages for physical memory map but have a limit of 92\r\n");
-  //   k_panic("Unable to allocate physical memory map\r\n");
-  // }
 }
 
 /*
@@ -1092,16 +1090,17 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
   acquire_spinlock(&memlock);
   for(register size_t i=0; i<1024; i++) {
     vaddr dir = kernel_paging_directory[i];
-    kprintf("0x%x: 0x%x\r\n", i, dir);
+    // kprintf("0x%x: 0x%x\r\n", i, dir);
     if(dir & MP_PRESENT) { //if we were to hit the page content directly, it could trigger a page-fault which would result in allocation. We don't want that.
       for(register size_t j=0; j<1024; j++) {
-        size_t index = (i<<10) + j; //<<10 because this is in dwords not bytes
-        kprintf("0x%x/0x%x: 0x%x ", i, j, index);
+        size_t index = (i<<10) + j; //<<10 because the index is in dwords not bytes
+        // kprintf("0x%x/0x%x: 0x%x ", i, j, index);
         vaddr page = flat_pagetables_ptr[index];
-        kprintf("0x%x\r\n", page);
+        // kprintf("0x%x\r\n", page);
         if(page & MP_PRESENT) {
           vaddr page_phys = page & MP_ADDRESS_MASK;
           size_t phys_index = page_phys >> 12;
+          acquire_spinlock(&physlock);
           if(!physical_memory_map[phys_index].in_use) {
             vaddr virt = (vaddr)(i<<22) | (vaddr)(j<<12);
             kprintf("WARN page %d/%d (0x%x) references physical address 0x%x\r\n",i, j, virt, page_phys);
@@ -1118,6 +1117,7 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
             kprintf("ERROR physical 0x%x is index %d which is not present!\r\n", page_phys, phys_index);
             k_panic("Attempt to use physical RAM that is not present\r\n");
           }
+          release_spinlock(&physlock);
         }
       }
     }
