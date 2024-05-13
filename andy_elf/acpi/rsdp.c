@@ -3,6 +3,8 @@
 #include <acpi/fadt.h>
 #include <stdio.h>
 #include <sys/mmgr.h>
+#include <memops.h>
+#include <string.h>
 #include "search_mem.h"
 
 static struct AcpiTableShortcut *acpi_shortcuts;
@@ -31,7 +33,7 @@ struct FADT* acpi_get_fadt()
 {
   struct AcpiTableShortcut *sc = acpi_shortcut_find(acpi_shortcuts, "FACP");  //yes, the signature for the FADT is "FACP". Go figure.
   if(!sc) {
-    kprintf("WARNING There is no ACPI FADT present. Either the BIOS is very old or this has been called before ACPI initialisation\r\n");
+    kprintf("WARNING There is no ACPI FADT present.\r\nWARNING Either the BIOS is very old or this has been called before ACPI initialisation\r\n");
     return 0;
   }
   struct FADT *fadt = (struct FADT *)sc->ptr;
@@ -54,6 +56,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
   memset(id_str, 0, 8);
   strncpy(id_str, rsdt->h.OEMID, 7);
   kprintf("DEBUG RSDT oemid '%s'\r\n", id_str);
+  int entries = (rsdt->h.Length - sizeof(struct ACPISDTHeader)) / 4;
 
   for(register int i=0; i<entries; i++) {
     kprintf("DEBUG RSDT entry %d at 0x%x\r\n", i, rsdt->PointerToOtherSDT[i]);
@@ -125,7 +128,7 @@ void load_acpi_data() {
     kprintf("ACPI OEM is %s\r\n", rsdp->OEMID);
     
     kputs("INFO Validating ACPI descriptor table...");
-    if(!validate_rsdp_checksum(rsdp)) {
+    if(!validate_rsdp_checksum(rsdp, sizeof(struct RSDPDescriptor))) {
       kputs("ERROR ACPI checksum did not validate\r\n");
       return;
     }

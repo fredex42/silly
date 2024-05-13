@@ -136,7 +136,10 @@ void ps2_initialise()
     kprintf("INFO PS2 %d channel controller initialised\r\n", PS2_INIT_CHANNEL_COUNT(init_code));
 
     //Step three - allocate memory
-    driver_state = (struct PS2DriverState *)vm_alloc_lowmem(NULL, 1, MP_READWRITE);
+    //FIXME - TEMPORARY - the pointer needs to be present in app PD as well, lowmem currently the best way to do this
+    //driver_state = (struct PS2DriverState *)vm_alloc_lowmem(NULL, 1, MP_READWRITE);
+    driver_state = (struct PS2DriverState *)vm_alloc_pages(NULL, 1, MP_READWRITE|MP_GLOBAL);
+
     if(!driver_state) {
         k_panic("ERROR Unable to initialise memory for keyboard buffer!\r\n");
     } else {

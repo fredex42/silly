@@ -61,6 +61,12 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
   if(flags & CPUID_FEAT_EDX_PAE) {
     kputs("CPU supports physical address extension.\r\n");
   }
+  #ifdef MMGR_VERBOSE
+  kprintf("DEBUG initialise_mmgr memlock 0x%x physlock 0x%x\r\n", memlock, physlock);
+  #endif
+  memlock = 0;
+  physlock = 0;
+  
   parse_memory_map(ptr);
   kputs("Allocating physical map space...\r\n");
   size_t physical_map_start=0, physical_map_pages=0;
@@ -212,7 +218,7 @@ size_t map_physical_memory_map_area(size_t map_start, size_t map_length_pages)
   dir_page = FIRST_PAGEDIR_ENTRY_LOCATION >> 12;
   physical_memory_map[dir_page].in_use=1;
 
-  for(size_t i=7;i<=0x15;i++) physical_memory_map[i].in_use=1;    //kernel memory, incl. initial paging directories
+  for(size_t i=7;i<=0x30;i++) physical_memory_map[i].in_use=1;    //kernel memory, incl. initial paging directories
   for(size_t i=0x60;i<0x80;i++) physical_memory_map[i].in_use=1;  //kernel stack
   for(size_t i=0x80;i<=0xFF;i++) physical_memory_map[i].in_use=1; //standard BIOS / hw area
   size_t physical_map_start = directory_phys_base >> 12;
@@ -347,7 +353,7 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
   uint32_t *pagetables;
   if((vaddr)app_paging_dir==NULL || (vaddr)app_paging_dir==_mmgr_get_pd()) {
     #ifdef MMGR_VERBOSE
-    kprintf("DEBUG k_map_page for kernel usage");
+    kprintf("DEBUG k_map_page for kernel usage\r\n");
     #endif
     pagetables = flat_pagetables_ptr;
   } else {
@@ -730,7 +736,6 @@ void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
 */
 void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t flags)
 {
-  acquire_spinlock(&memlock);
   if(root_page_dir==NULL) root_page_dir = kernel_paging_directory;
   void *phys_ptr = 0xdeadbeef;
   uint32_t allocd = allocate_free_physical_pages(1, &phys_ptr);
@@ -739,8 +744,6 @@ void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t 
     release_spinlock(&memlock);
     return NULL;
   }
-
-  release_spinlock(&memlock); //k_map_page_bytes also requires this spinlock so we must release it here
 
   k_map_page_bytes(root_page_dir, phys_ptr, dest_vaddr, flags);
   if(root_page_dir!=kernel_paging_directory) {
@@ -831,7 +834,7 @@ sets the "readonly" and "dirty" flag on the protected memory regions
 void apply_memory_map_protections(struct BiosMemoryMap *ptr)
 {
   uint8_t entry_count = ptr->entries;
-  //kputs("Applying memory protections\r\n");
+  kputs("Applying memory protections\r\n");
 
   for(register int i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];

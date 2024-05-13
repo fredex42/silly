@@ -16,6 +16,9 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
 {
   kprintf("INFO Initialising process table\r\n");
 
+  kprintf("DEBUG process_table_lock 0x%x\r\n", process_table_lock);
+  process_table_lock = 0;
+  
   size_t pages_required = (sizeof(struct ProcessTableEntry) * PID_MAX) / PAGE_SIZE;
 
   acquire_spinlock(&process_table_lock);

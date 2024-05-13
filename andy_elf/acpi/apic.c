@@ -85,13 +85,14 @@ int16_t enable_plapic(vaddr apic_base, uint8_t apic_id, uint16_t interrupt_base)
 */
 uint8_t apic_enable_modern_style()
 {
-  struct AcpiMADT* madt = (struct AcpiMADT*) acpi_get_madt();
-  if(!madt) {
-    kputs("ERROR No ACPI description for multi-processor APICs, will have to use legacy mode\r\n");
-    return 1;
-  }
-  read_madt_info((char *)madt);
-  return 0;
+  kputs("ERROR apic_enable_modern_style not implemented\r\n");
+  // struct AcpiMADT* madt = (struct AcpiMADT*) acpi_get_madt();
+  // if(!madt) {
+  //   kputs("ERROR No ACPI description for multi-processor APICs, will have to use legacy mode\r\n");
+  //   return 1;
+  // }
+  // read_madt_info((char *)madt);
+  // return 0;
 }
 
 /*
