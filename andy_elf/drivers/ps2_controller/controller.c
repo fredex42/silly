@@ -4,9 +4,11 @@
 #include <acpi/fadt.h>
 #include <panic.h>
 #include <memops.h>
+#include <spinlock.h>
 #include "controller.h"
 
 struct PS2DriverState *driver_state;
+spinlock_t kbd_lock = 0;
 
 /**
  * reads from the ps2 input port into the given buffer until either there are no bytes left or the buffer runs out of space.
@@ -33,12 +35,14 @@ void init_device(uint8_t ch)
 {
     uint8_t rv = 0, id_buffer[8];
     size_t count = 0;
-
+    
+    acquire_spinlock(&kbd_lock);
     ps2_disable_scanning(ch);
     rv = ps2_reset(ch);
     if(rv != PS2_RESPONSE_ACK) kprintf("WARNING PS2 channel %d failed to reset\r\n", ch);
     if(rv==0) {
         kprintf("INFO PS2 channel %d is not connected\r\n", ch);
+        release_spinlock(&kbd_lock);
         return;
     }
 
@@ -77,6 +81,7 @@ void init_device(uint8_t ch)
     }
     rv = ps2_enable_scanning(ch);
     if(rv != PS2_RESPONSE_ACK) kprintf("WARNING PS2 channel %d failed to re-enable\r\n", ch);
+    release_spinlock(&kbd_lock);
 }
 
 /**
@@ -89,11 +94,12 @@ void ps2_initialise()
     uint8_t ch2_avail = 0;
     uint8_t channel_count = 0;
 
+    kbd_lock = 0;
     cli();
     //Step one - check if we even have a PS2 controller. First stop is ACPI
     struct FADT *fadt = acpi_get_fadt();
-    kprintf("INFO PS2 Fixed ACPI Description Table revision is 0x%x\r\n", fadt->h.Revision);
-    if(fadt->h.Revision>=2) {
+    if(fadt != NULL) kprintf("INFO PS2 Fixed ACPI Description Table revision is 0x%x\r\n", fadt->h.Revision);
+    if(fadt != NULL && fadt->h.Revision>=2) {
         kprintf("INFO ACPI FADT should have the boot descriptor flags\r\n");
         if(!(fadt->iaPCBootArch & BA_8042_PRESENT)) {
             kputs("ERROR ACPI indicates that PS2 controller is not present, will not initialise.\r\n");
@@ -163,4 +169,37 @@ void ps2_initialise()
 
     ps2_enable_interrupts();
     sti();
+}
+
+void ps2_put_buffer(uint8_t scancode)
+{
+    acquire_spinlock(&kbd_lock);
+
+    kprintf("DEBUG ps2_put_buffer 0x%x\r\n", (size_t)scancode);
+    
+    driver_state->buffer.content[driver_state->buffer.write_ptr] = scancode;
+    driver_state->buffer.write_ptr++;
+    if(driver_state->buffer.write_ptr>=driver_state->buffer.buffer_size) driver_state->buffer.write_ptr = 0;
+
+    release_spinlock(&kbd_lock);
+}
+
+char ps2_get_buffer()
+{
+    acquire_spinlock(&kbd_lock);
+
+    if(driver_state->buffer.read_ptr == driver_state->buffer.write_ptr) {
+        kprintf("DEBUG ps2_get_buffer kbd buffer is empty\r\n");
+        return 0;
+    }
+
+    char ch = driver_state->buffer.content[driver_state->buffer.read_ptr];
+    driver_state->buffer.read_ptr++;
+    if(driver_state->buffer.read_ptr>=driver_state->buffer.buffer_size) driver_state->buffer.read_ptr = 0;
+    release_spinlock(&kbd_lock);
+}
+
+size_t ps2_get_buffer_size()
+{
+    //hmmmm, need to think a bit about how to implement this. Simple write_ptr - read_ptr won't work when the buffer wraps around.
 }

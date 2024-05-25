@@ -3,7 +3,7 @@
 import json
 from argparse import ArgumentParser
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 class Mapping(object):
     scancode:int
@@ -52,7 +52,7 @@ class Mapping(object):
         # return bytes([norm_bytes, shifted_bytes])
         return bytes([self.ascii, self.shifted_ascii])
     
-def load_json(path:str) -> tuple[dict, int]:
+def load_json(path:str) -> Tuple[dict, int]:
     with open(path, "r") as f:
         content = json.loads(f.read())
 

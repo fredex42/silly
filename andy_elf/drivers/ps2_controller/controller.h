@@ -27,4 +27,8 @@ struct PS2DriverState {
 
 extern struct PS2DriverState *ps2DriverState;   //this is a global, initialised in ps2_initialise
 
+void ps2_put_buffer(uint8_t scancode);
+char ps2_get_buffer();
+size_t ps2_get_buffer_size();
+
 #endif

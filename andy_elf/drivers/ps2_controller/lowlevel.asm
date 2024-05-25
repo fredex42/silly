@@ -3,6 +3,7 @@
 ;function imports
 extern pic_send_eoi
 extern PMPrintChar  ;temporary
+extern ps2_put_buffer
 
 ;function exports
 global ps2_lowlevel_init
@@ -292,11 +293,16 @@ ps2_send:
     ret
 
 IKeyboard:	;keyboard interrupt handler
-	pushf
 	push ax
     push bx
+
+    xor ax, ax
     in al, PS2_DATA ;get the current character from the buffer. If the buffer is not flushed then no more interrupts occur.
 
+    push ax
+    call ps2_put_buffer
+    pop ax
+    
 	xor bx, bx
 	mov bl, '.'
 	call PMPrintChar
@@ -308,5 +314,4 @@ IKeyboard:	;keyboard interrupt handler
 
 	pop bx
     pop ax
-	popf
 	iret
