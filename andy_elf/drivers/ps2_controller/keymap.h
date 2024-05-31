@@ -1,3 +1,6 @@
+#ifndef __KEYMAP_H
+#define __KEYMAP_H
+
 // Shiftmask definitions
 #define SHIFTMASK_SHIFT     1<<0
 #define SHIFTMASK_ALT       1<<1
@@ -23,3 +26,8 @@
 #define SC_CAPS_BRK         0xba
 
 
+char lookup_scancode(char scancode, struct PS2KeyboardState* kbd_state);
+void set_builtin_keymap();
+void set_active_keymap(char *keymap, size_t len);
+
+#endif

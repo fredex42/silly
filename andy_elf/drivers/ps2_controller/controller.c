@@ -6,6 +6,7 @@
 #include <memops.h>
 #include <spinlock.h>
 #include "controller.h"
+#include "keymap.h"
 
 struct PS2DriverState *driver_state;
 spinlock_t kbd_lock = 0;
@@ -173,9 +174,28 @@ void ps2_initialise()
 
 void ps2_put_buffer(uint8_t scancode)
 {
-    acquire_spinlock(&kbd_lock);
+    switch(scancode){
+        case SC_LSHIFT_MAKE:
+            driver_state->kbd.shift_state = 1;
+            return;
+        case SC_LSHIFT_BRK:
+            driver_state->kbd.shift_state = 0;
+            return;
+        case SC_CAPS_MAKE:
+            driver_state->kbd.caps_lock = 1;
+            return;
+        case SC_CAPS_BRK:
+            driver_state->kbd.caps_lock = 0;
+            return;
+    }
 
-    kprintf("DEBUG ps2_put_buffer 0x%x\r\n", (size_t)scancode);
+    uint8_t ascii = lookup_scancode(scancode, &driver_state->kbd);
+
+    kprintf("DEBUG ps2_put_buffer 0x%x -> 0x%x\r\n", (size_t)scancode, (size_t)ascii);
+
+    if(ascii==0) return;
+
+    acquire_spinlock(&kbd_lock);
     
     driver_state->buffer.content[driver_state->buffer.write_ptr] = scancode;
     driver_state->buffer.write_ptr++;

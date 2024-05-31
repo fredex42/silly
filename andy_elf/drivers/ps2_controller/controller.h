@@ -7,6 +7,7 @@ struct PS2KeyboardState {
     uint8_t scroll_lock : 1;
     uint8_t num_lock : 1;
     uint8_t shift_state : 1;
+    uint8_t expecting_extended : 1;
 };
 
 struct KeyboardBufferHeader {
