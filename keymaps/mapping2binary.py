@@ -22,6 +22,8 @@ class Mapping(object):
             return 0x08
         elif c=="TAB":
             return 0x09
+        elif c=="ENTER":
+            return 0x0d
         else:
             return None
         
@@ -86,7 +88,7 @@ print("Total number of scancodes is {}".format(len(mappings)))
 # therafter, even bytes are for the 'normal' key and odd for the 'shifted' key.
 # So, the conversion for scancode 0x2 is normal 0x02 and shifted 0x03, 0x3 is normal 0x04 shifted 0x05, etc.
 with open(args.output, "wb") as f:
-    f.write(bytes(len(mappings).to_bytes(2, byteorder='little')))
+    f.write(bytes(highest_mapping.to_bytes(2, byteorder='little')))
 
     for i in range(1, highest_mapping):
         if i in mappings:
