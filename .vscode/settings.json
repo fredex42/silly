@@ -6,6 +6,7 @@
         "functional": "c",
         "mmgr.h": "c",
         "pci_categorisation.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "panic.h": "c"
     }
 }

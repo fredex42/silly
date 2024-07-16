@@ -3,15 +3,15 @@
  
  
 00007e00 .text
-000136a0 .rodata
-000182d4 .eh_frame
+000136c0 .rodata
+00018330 .eh_frame
 0001a000 .data
 0001a380 .bss
 00000000 .comment
 00000000 kickoff.s
 00007f75 _idt_reserv_loop
 00007fad _idt_reserv_loop_two
-000136a0 HelloString
+000136c0 HelloString
 00000000 exceptions.s
 00008179 FatalMsg
 00008291 IPageFault.recovered
@@ -51,8 +51,8 @@
 000084e5 div_loop
 00008503 store_loop
 0000850f longToStringEnd
-000136b0 numerals
-000136c0 overflow
+000136d0 numerals
+000136e0 overflow
 00000000 stdio_funcs.c
 00000000 c_exceptions.c
 00000000 panic.c
@@ -68,7 +68,7 @@
 00000000 cpuid.asm
 00000000 fs.c
 0001a380 device_fs_map
-00013a74 ata_driver
+00013a94 ata_driver
 00000000 mmgr.c
 0001a3c4 kernel_paging_directory
 0001a3c8 first_pagedir_entry
@@ -110,7 +110,7 @@
 00000000 sdt_header.c
 00000000 detect.c
 0001a4d0 ata_pio_driver
-00015a50 ports.1891
+00015a70 ports.1891
 00000000 readwrite.c
 00000000 interrupt.c
 00000000 scheduler.c
@@ -216,7 +216,7 @@
 0001a504 driver_state
 000103aa vfat_read_async
 0000db38 ata_pio_start_write
-00012d07 pci_scanner_check_function
+00012d39 pci_scanner_check_function
 00011099 delete_loaded_segments
 0000bd9f process_initial_stack
 00010bfa vfat_read_dir_next
@@ -260,7 +260,7 @@
 00008525 find_next_token
 0000a535 initialise_app_pagingdir
 00008150 CreateIA32IDTEntry
-0001316a pci_decode_type1
+0001319c pci_decode_type1
 00011d41 acquire_spinlock
 000110f4 delete_elf_parsed_data
 00011490 elf_get_section_header_by_index
@@ -307,7 +307,7 @@
 00008bb4 inw
 0000a964 _mmgr_set_pd
 0001228d rtc_get_epoch_time
-00013332 pci_init_device
+00013364 pci_init_device
 0000c0d0 configure_pic_interrupts
 00011ca7 schedule_cleanup_task
 0000ffd0 _vfat_next_block_read
@@ -358,7 +358,7 @@
 0000e577 new_scheduler_task_buffer
 0000d0c8 initialise_ata_driver
 0000d6a4 test_read_cb
-000135a2 pci_recursive_scan
+000135d4 pci_recursive_scan
 00008b40 memcmp
 00008e09 _fs_shell_app_loaded
 0000819a IDebug
@@ -384,14 +384,14 @@
 0000b569 get_process
 0000f613 console_write
 0000dfee ata_complete_write_lowerhalf
-00013546 pci_scanner_check_bus
+00013578 pci_scanner_check_bus
 0000d396 ata_max_udma_mode
 0000891d simple_alloc_fill_dealloc
 00012469 ICmosRTC
 0000813e idle_loop
 00008b7c get_current_paging_directory
-000135bc pci_ide_init
-00012bc2 pci_scanner_check_device
+000135ee pci_ide_init
+00012bf4 pci_scanner_check_device
 0001117d _elf_next_segment_loaded
 0000b216 heap_free
 00008c16 io_wait
@@ -465,7 +465,7 @@
 00008744 strlen
 0000b19f _zone_for_ptr
 0000f06b set_active_keymap
-00012e89 pci_decode_type0
+00012ebb pci_decode_type0
 0000ad58 validate_zone
 000081f5 IOpcodeInval
 00012312 cmos_read
@@ -489,6 +489,6 @@
 0001a3c0 physical_memory_map
 00010b46 vfat_get_printable_filename
 0000b3f7 free
-0001294b pci_description_string
-0001294b pci_description_string
-0001294b pci_description_string
+0001297d pci_description_string
+0001297d pci_description_string
+0001297d pci_description_string

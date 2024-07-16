@@ -49,6 +49,27 @@ init_native_api:
   pop ebp
   ret
 
+; native_api_landing_pad_v2:
+;   call enter_kernel_context
+;   mov esi, .napi_jump_table
+;   add esi, eax
+;   cmp esi, .napi_jump_table_end
+;   jg .napi_nf
+;   call esi
+;   jmp .napi_rtn_to_kern
+
+; .napi_jump_table:
+;   dd api_terminate_current_process
+;   dd api_sleep_current_process
+;   dd api_create_process
+;   dd api_close
+;   dd api_open
+;   dd api_read
+;   dd api_write
+;   dd api_get_time
+; .napi_jump_table_end:
+;   nop
+
 ;this interrupt handler is called for every native API call. Its job is to dispatch
 ;the call into the necessary handler (usually a C function)
 native_api_landing_pad:
