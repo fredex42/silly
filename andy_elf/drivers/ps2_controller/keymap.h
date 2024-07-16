@@ -24,7 +24,8 @@
 #define SC_RSHIFT_BRK       0xb6
 #define SC_CAPS_MAKE        0x3a
 #define SC_CAPS_BRK         0xba
-
+#define SC_NUMLK_MAKE       0x45
+#define SC_NUMLK_BRK        0xc5
 
 char lookup_scancode(char scancode, struct PS2KeyboardState* kbd_state);
 void set_builtin_keymap();

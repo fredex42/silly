@@ -21,10 +21,14 @@ uint8_t ps2_enable_interrupts();
 //PS2 device responses
 #define PS2_RESPONSE_ACK        0xFA //Generic "success" response
 #define PS2_RESPONSE_NACK       0xFC //Generic "failure" response
+#define PS2_RESPONSE_RESEND     0xFE
 
 #define PS2_RESET_SUCCESS       0xFA
 #define PS2_RESET_FAILURE       0xFC 
 #define PS2_RESET_NOT_PRESENT   0x00 
+
+//PS2 keyboard commands
+#define PS2_KBD_SET_LIGHTS      0xED
 
 //destructuring macros for ps2_lowlevel_init return value
 #define PS2_INIT_CHANNEL_COUNT(rc)  (uint8_t)(rc & 0xFF)
@@ -37,5 +41,10 @@ uint8_t ps2_enable_interrupts();
 #define ps2_disable_scanning(channel) ps2_send(channel, PS2_DISABLE_SCANNING);
 #define ps2_enable_scanning(channel) ps2_send(channel, PS2_ENABLE_SCANNING);
 #define ps2_identify(channel) ps2_send(channel, PS2_IDENTIFY);
+
+//Keyboard lights mask
+#define PS2_KBD_SCRL_LOCK       1<<0
+#define PS2_KBD_NUM_LOCK        1<<1
+#define PS2_KBD_CAPS_LOCK       1<<2
 
 #endif

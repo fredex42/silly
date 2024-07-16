@@ -172,21 +172,50 @@ void ps2_initialise()
     sti();
 }
 
+void ps2_set_kbd_leds()
+{
+    uint8_t rv;
+    uint8_t new_state = 0;
+    if(driver_state->kbd.caps_lock) new_state |= PS2_KBD_CAPS_LOCK;
+    if(driver_state->kbd.num_lock) new_state |= PS2_KBD_NUM_LOCK;
+    if(driver_state->kbd.scroll_lock) new_state |= PS2_KBD_SCRL_LOCK;
+
+    do {
+        rv = ps2_send(1, PS2_KBD_SET_LIGHTS);
+    } while(rv==PS2_RESPONSE_RESEND);
+
+    if(rv==PS2_RESPONSE_ACK) {
+        do {
+            rv = ps2_send(1, new_state);
+        } while(rv==PS2_RESPONSE_RESEND);
+    }
+}
+
 void ps2_put_buffer(uint8_t scancode)
 {
     switch(scancode){
         case SC_LSHIFT_MAKE:
+        case SC_RSHIFT_MAKE:
             driver_state->kbd.shift_state = 1;
             return;
         case SC_LSHIFT_BRK:
+        case SC_RSHIFT_BRK:
             driver_state->kbd.shift_state = 0;
             return;
         case SC_CAPS_MAKE:
-            driver_state->kbd.caps_lock = 1;
+            driver_state->kbd.caps_lock = ~driver_state->kbd.caps_lock;
+            ps2_set_kbd_leds();
             return;
         case SC_CAPS_BRK:
-            driver_state->kbd.caps_lock = 0;
             return;
+        case SC_NUMLK_MAKE:
+            driver_state->kbd.num_lock = ~driver_state->kbd.num_lock;
+            ps2_set_kbd_leds();
+            return;
+        case SC_NUMLK_BRK:
+            return;
+        default:
+            break;
     }
 
     uint8_t ascii = lookup_scancode(scancode, &driver_state->kbd);
