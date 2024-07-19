@@ -1,4 +1,5 @@
 #include <types.h>
+#include <utils/ringbuffer.h>
 
 #ifndef __PROCESS_H
 #define __PROCESS_H
@@ -10,9 +11,18 @@
 #define FP_TYPE_CONSOLE 1
 #define FP_TYPE_VFAT    2
 
-struct FilePointer {
-  uint8_t type;
-  void *content;  //the type of this pointer depends on the `type` field.
+#define FP_STATUS_READY   0   //Data is ready
+#define FP_STATUS_WAIT    1   //Waiting for data, either in or out
+#define FP_STATUS_ERROR   2   //An error occurred
+
+struct FilePointer {  
+  uint8_t type;         //An FP_TYPE value
+  uint8_t status;
+  RingBuffer *read_buffer;         //pointer to internal buffer, can be none
+  RingBuffer *write_buffer;        //pointer to internal buffer, can be none
+  union {
+    void *content;  //the type of this pointer depends on the `type` field.
+  };
 } __attribute__((packed));
 
 #define PROCESS_NONE        0

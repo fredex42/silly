@@ -148,6 +148,7 @@ struct ProcessTableEntry* new_process()
   kputs("INFO process info now set up\r\n");
   //finally setup stin, stdout, stderr
   e->files[0].type = FP_TYPE_CONSOLE;
+  e->files[0].read_buffer = ring_buffer_new(8);
   e->files[1].type = FP_TYPE_CONSOLE;
   e->files[2].type = FP_TYPE_CONSOLE;
 

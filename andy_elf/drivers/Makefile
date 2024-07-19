@@ -1,6 +1,6 @@
-.PHONY: ata_pio early_serial cmos pci ps2_controller
+.PHONY: ata_pio early_serial cmos pci ps2_controller kb
 
-all: ata_pio early_serial cmos pci ps2_controller
+all: ata_pio early_serial cmos pci ps2_controller kb
 
 
 ata_pio:
@@ -14,6 +14,9 @@ cmos:
 ps2_controller:
 	make -C ps2_controller
 
+kb:
+	make -C kb
+
 pci:
 	make -C pci
 
@@ -23,3 +26,4 @@ clean:
 	make -C cmos clean
 	make -C pci clean
 	make -C ps2_controller clean
+	make -C kb clean

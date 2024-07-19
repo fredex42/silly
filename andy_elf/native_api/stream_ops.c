@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <native_api/errors.h>
 #include <fs/fat_fileops.h>
+#include <drivers/kb_buffer.h>
 #include "stream_ops.h"
 #include "console.h"
 
@@ -24,9 +25,13 @@ void _api_process_read_completed(VFatOpenFile *fp, uint8_t status, size_t bytes_
 
 size_t api_read(uint32_t fd, char *buf, size_t len)
 {
-  if(fd > FILE_MAX) return API_ERR_NOTSUPP;
+  char ch;
+
   pid_t current_pid = get_active_pid();
-  kprintf("DEBUG api_read current PID is 0x%d\r\n", current_pid);
+  kprintf("\r\nDEBUG api_read on file 0x%x current PID is 0x%d\r\n", fd, current_pid);
+  
+  if(fd > FILE_MAX) return API_ERR_NOTSUPP;
+
   if(current_pid==0) {
     return API_ERR_NOTSUPP;
   }
@@ -45,8 +50,7 @@ size_t api_read(uint32_t fd, char *buf, size_t len)
     case FP_TYPE_NONE:
       return API_ERR_NOTSUPP;
     case FP_TYPE_CONSOLE:
-      //FIXME: needs implementing!
-      return API_ERR_NOTSUPP;
+      return kb_read_to_file(process, fp);
     case FP_TYPE_VFAT:
       //FIXME: callbacks will be run in kernel context, so we need to translate the buffer into kernel space first.
       vfat_read_async((VFatOpenFile *)fp->content, buf, len, (void *)process, &_api_process_read_completed);

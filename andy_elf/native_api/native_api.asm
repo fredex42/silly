@@ -103,7 +103,14 @@ native_api_landing_pad:
 .napi_6:
   cmp eax, API_READ
   jnz .napi_7
+  push ecx        ;length
+  push esi        ;pointer
+  and ebx, 0xFFFF
+  push ebx        ;file descriptor
   call api_read
+  add esp, 12
+  test ax,ax
+  jz .napi_rtn_to_kern
   jmp .napi_rtn_direct
 .napi_7:
   cmp eax, API_WRITE

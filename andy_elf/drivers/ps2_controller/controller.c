@@ -238,6 +238,7 @@ char ps2_get_buffer()
     acquire_spinlock(&kbd_lock);
 
     if(driver_state->buffer.read_ptr == driver_state->buffer.write_ptr) {
+        release_spinlock(&kbd_lock);
         kprintf("DEBUG ps2_get_buffer kbd buffer is empty\r\n");
         return 0;
     }
