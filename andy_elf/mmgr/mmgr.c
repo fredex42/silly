@@ -492,9 +492,16 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   #endif
 
   for(p=0;p<pages;p++) {
+    #ifdef MMGR_VERBOSE
+    kprintf("DEBUG mapping page 0x%x\r\n", p);
+    #endif
     pagedir_ptr[p] = ((vaddr)phys_addr[p] & MP_ADDRESS_MASK) | MP_PRESENT | flags;
+    #ifdef MMGR_VERBOSE
+    kprintf("DEBUG raw page value for 0x%x is 0x%x\r\n", p, pagedir_ptr[p]);
+    #endif
   }
 
+  mb();
   //now calculate the virtual pointer
   void *ptr = (void *)(base_vpage << 12);
   release_spinlock(&memlock);
@@ -1075,6 +1082,7 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     kprintf("DEBUG page now mapped at base 0x%x, zeroing\r\n", pageaddr_nowmapped);
     #endif
     memset_dw((void *)pageaddr_nowmapped, 0, PAGE_SIZE_DWORDS);
+    mb();
     #ifdef MMGR_VERBOSE
     kprintf("DEBUG done.\r\n");
     #endif
