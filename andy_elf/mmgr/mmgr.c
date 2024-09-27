@@ -492,13 +492,13 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
   #endif
 
   for(p=0;p<pages;p++) {
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG mapping page 0x%x\r\n", p);
-    #endif
+    // #ifdef MMGR_VERBOSE
+    // kprintf("DEBUG mapping page 0x%x\r\n", p);
+    // #endif
     pagedir_ptr[p] = ((vaddr)phys_addr[p] & MP_ADDRESS_MASK) | MP_PRESENT | flags;
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG raw page value for 0x%x is 0x%x\r\n", p, pagedir_ptr[p]);
-    #endif
+    // #ifdef MMGR_VERBOSE
+    // kprintf("DEBUG raw page value for 0x%x is 0x%x\r\n", p, pagedir_ptr[p]);
+    // #endif
   }
 
   mb();
@@ -989,6 +989,9 @@ vaddr _mmgr_get_pd();
 uint32_t page_value_for_vaddr(vaddr pf_load_addr) {
   size_t pf_load_dir = ADDR_TO_PAGEDIR_IDX(pf_load_addr);
   size_t pf_load_pg  = ADDR_TO_PAGEDIR_OFFSET(pf_load_addr);
+  #ifdef MMGR_VERBOSE
+  kprintf("DEBUG page_value_for_vaddr looking up 0x%x-0x%x for 0x%x\r\n", pf_load_dir, pf_load_pg, pf_load_addr);
+  #endif
   vaddr ptr = (vaddr)flat_pagetables_ptr + ((vaddr)pf_load_dir << 12) + ((vaddr)pf_load_pg * sizeof(uint32_t));
   return *(uint32_t *)ptr;
 }
@@ -1077,7 +1080,7 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     kprintf("DEBUG pagetables address of pagetables is 0x%x\r\n", pagetables_entry);
     #endif
 
-    vaddr pageaddr_nowmapped = pf_load_addr & 0xFFFFFC00; //base of the page we just mapped
+    vaddr pageaddr_nowmapped = pf_load_addr & 0xFFFFF000; //base of the page we just mapped
     #ifdef MMGR_VERBOSE
     kprintf("DEBUG page now mapped at base 0x%x, zeroing\r\n", pageaddr_nowmapped);
     #endif

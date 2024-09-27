@@ -64,6 +64,14 @@ struct PointerHeader* _last_pointer_of_zone(struct HeapZoneStart* zone)
 
 uint8_t validate_pointer(void *ptr, uint8_t panic)
 {
+  kprintf("DEBUG validate_pointer checking 0x%x\r\n", ptr);
+  if(ptr==NULL) {
+    if(panic) {
+      k_panic("Attempt to check a null pointer from the heap");
+    } else {
+      return 0;
+    }
+  }
   struct PointerHeader *hdr = ptr - sizeof(struct PointerHeader);
   if(hdr->magic != HEAP_PTR_SIG) {
     kprintf("ERROR pointer 0x%x is not valid, magicnumber not present\r\n", ptr);
