@@ -7,6 +7,8 @@ char ps2_get_buffer();  //gets the next char in the keyboard buffer, or NULL if 
 
 //kb/keyboard.c
 uint8_t kb_read_to_file(struct ProcessTableEntry *process, struct FilePointer *fp);
+void init_keyboard();
+
 /**
  * Called by the low-level driver to notify us of activity (possibly in an interrupt context, careful)
  */

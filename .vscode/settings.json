@@ -8,6 +8,7 @@
         "pci_categorisation.h": "c",
         "stdio.h": "c",
         "panic.h": "c",
-        "ringbuffer.h": "c"
+        "ringbuffer.h": "c",
+        "memops.h": "c"
     }
 }

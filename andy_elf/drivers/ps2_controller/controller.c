@@ -37,6 +37,8 @@ void init_device(uint8_t ch)
     uint8_t rv = 0, id_buffer[8];
     size_t count = 0;
     
+    kprintf("DEBUG kbd_lock spinlock at 0x%x\r\n", &kbd_lock);
+
     acquire_spinlock(&kbd_lock);
     ps2_disable_scanning(ch);
     rv = ps2_reset(ch);
@@ -47,6 +49,8 @@ void init_device(uint8_t ch)
         return;
     }
 
+    init_keyboard();
+    
     //if the reset command was ACK'd then there is usually another byte coming, a teest result which should be 0xAA
     count = read_multiple_bytes(id_buffer, 8);
     kprintf("DEBUG PS2 %d extra bytes after reset on channel %d: 0x%x\r\n", count, (uint32_t)ch, id_buffer[0]);
@@ -223,30 +227,23 @@ void ps2_put_buffer(uint8_t scancode)
     kprintf("DEBUG ps2_put_buffer 0x%x -> 0x%x '%c'\r\n", (size_t)scancode, (size_t)ascii, ascii);
 
     if(ascii==0) return;
-
-    acquire_spinlock(&kbd_lock);
     
     driver_state->buffer.content[driver_state->buffer.write_ptr] = scancode;
     driver_state->buffer.write_ptr++;
     if(driver_state->buffer.write_ptr>=driver_state->buffer.buffer_size) driver_state->buffer.write_ptr = 0;
 
-    release_spinlock(&kbd_lock);
+    kb_notify_activity();
 }
 
 char ps2_get_buffer()
 {
     acquire_spinlock(&kbd_lock);
 
-    if(driver_state->buffer.read_ptr == driver_state->buffer.write_ptr) {
-        release_spinlock(&kbd_lock);
-        kprintf("DEBUG ps2_get_buffer kbd buffer is empty\r\n");
-        return 0;
-    }
-
     char ch = driver_state->buffer.content[driver_state->buffer.read_ptr];
     driver_state->buffer.read_ptr++;
     if(driver_state->buffer.read_ptr>=driver_state->buffer.buffer_size) driver_state->buffer.read_ptr = 0;
     release_spinlock(&kbd_lock);
+    return ch;
 }
 
 size_t ps2_get_buffer_size()

@@ -110,8 +110,9 @@ native_api_landing_pad:
   call api_read
   add esp, 12
   test ax,ax
-  jz .napi_rtn_to_kern
-  jmp .napi_rtn_direct
+  jnz .napi_rtn_direct
+  call enter_kernel_context
+  jmp .napi_rtn_to_kern
 .napi_7:
   cmp eax, API_WRITE
   jnz .napi_8

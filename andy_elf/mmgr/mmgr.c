@@ -30,6 +30,7 @@ static uint32_t *first_pagedir_entry;    //first directory entry on page 1
 
 static spinlock_t memlock = 0;
 static spinlock_t physlock = 0;
+static size_t pagefault_depth_ctr = 0;
 
 //all of the page tables in the root directory get mapped into this area.
 //We initialise it by configuring a page directory to cover the whole area and set up the first entry to the first_pagedir_entry value
@@ -66,7 +67,11 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
   #endif
   memlock = 0;
   physlock = 0;
-  
+  pagefault_depth_ctr = 0;
+
+  kprintf("DEBUG memlock at 0x%x\r\n", &memlock);
+  kprintf("DEBUG physlock at 0x%x\r\n", &physlock);
+
   parse_memory_map(ptr);
   kputs("Allocating physical map space...\r\n");
   size_t physical_map_start=0, physical_map_pages=0;
@@ -277,9 +282,12 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks)
   uint32_t current_entry;
   uint32_t * current_page;
   uint32_t found_pages = 0;
+  kputs("DEBUG allocate_free_physical_pages acquiring lock...\r\n");
+  kprintf("DEBUG allocate_free_physical_pages physical memory map is at 0x%x\r\n", &physical_memory_map);
   acquire_spinlock(&physlock);
 
   for(register size_t i=0x30;i<physical_page_count;i++) {
+    //kprintf("DEBUG allocate_free_physical_pages checking %d 0x%x\r\n", i, &physical_memory_map[i]);
     if(physical_memory_map[i].in_use==0) {
       physical_memory_map[i].in_use=1;
       blocks[found_pages] = (void *)(i*PAGE_SIZE);
@@ -927,57 +935,83 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
 
   vaddr temp_ptr;
   void *root_dir_phys = phys_ptr_list[0];
-  void *page_one_phys = phys_ptr_list[1];
   void *stack_paging_table = phys_ptr_list[2];
   void *stack_initial_page = phys_ptr_list[3];
 
+  //New approach. We must map the entire kernel into process space, so start by duplicating the root paging dir.
+  //Then we can add in the app's stack
   temp_ptr = (vaddr)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, phys_ptr_list, phys_ptr_count);
   if(!temp_ptr) {
     kputs("ERROR Not enough memory to map in initial app setup!\r\n");
     return NULL;
   }
-
   uint32_t *root_dir_virt = (uint32_t *) (temp_ptr + 0); 
-  uint32_t *page_one_virt = (uint32_t *) (temp_ptr + PAGE_SIZE); 
   uint32_t *stack_paging_table_virt = (uint32_t *) (temp_ptr + (2*PAGE_SIZE));  
-  uint32_t *stack_initial_page_virt = (uint32_t *) (temp_ptr + (3*PAGE_SIZE));  
-
-  #ifdef MMGR_VERBOSE
-  kprintf("DEBUG root_dir_virt=0x%x\r\n", root_dir_virt);
-  kprintf("DEBUG page_one_virt=0x%x\r\n", page_one_virt);
-  kprintf("DEBUG stack_paging_table_virt=0x%x\r\n", stack_paging_table_virt);
-  #endif
-
-  memset(stack_paging_table_virt, 0, PAGE_SIZE);
-  memset(stack_initial_page_virt, 0, PAGE_SIZE);
-  stack_paging_table_virt[0x3FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
-
-  memset_dw(root_dir_virt, MPC_PAGINGDIR, PAGE_SIZE_DWORDS);
-
-  root_dir_virt[0] = (vaddr)page_one_phys | MP_PRESENT | MP_GLOBAL | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
-
-  //copy over the content of the first page of the kernel paging directory to the application paging directory
-  memcpy_dw(page_one_virt, (void *)FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE_DWORDS);
-
-  //this page contains the IDT
-  page_one_virt[1] = (1 << 12) | MP_PRESENT | MP_GLOBAL | MP_USER;       //user-mode needs readonly in order to access IDT
+  uint32_t *stack_initial_page_virt = (uint32_t *) (temp_ptr + (3*PAGE_SIZE)); 
+  memcpy_dw(root_dir_virt, kernel_paging_directory, PAGE_SIZE_DWORDS);
 
   //That's the system area taken care of. Now we need the app stack.  This will get extended by a fault handler.
+  memset_dw(stack_paging_table_virt, 0, PAGE_SIZE_DWORDS);
+  memset_dw(stack_initial_page_virt, 0, PAGE_SIZE_DWORDS);
+  stack_paging_table_virt[0x3FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
   root_dir_virt[0x3FF] = (vaddr)stack_paging_table | MP_PRESENT | MP_READWRITE | MP_USER;
 
   //Finally we need the (sparsely-mapped) paging directory area. This will enable JIT allocation of memory pages
-  //to the process through the same mechanism as used in the kernel.  The process does not need access to this area.
   root_dir_virt[0x3C0] = (vaddr) root_dir_phys | MP_PRESENT | MP_READWRITE;
+  
+  // void *page_one_phys = phys_ptr_list[1];
+  // void *stack_paging_table = phys_ptr_list[2];
+  // void *stack_initial_page = phys_ptr_list[3];
 
+  // temp_ptr = (vaddr)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, phys_ptr_list, phys_ptr_count);
+  // if(!temp_ptr) {
+  //   kputs("ERROR Not enough memory to map in initial app setup!\r\n");
+  //   return NULL;
+  // }
+
+  // uint32_t *root_dir_virt = (uint32_t *) (temp_ptr + 0); 
+  // uint32_t *page_one_virt = (uint32_t *) (temp_ptr + PAGE_SIZE); 
+  // uint32_t *stack_paging_table_virt = (uint32_t *) (temp_ptr + (2*PAGE_SIZE));  
+  // uint32_t *stack_initial_page_virt = (uint32_t *) (temp_ptr + (3*PAGE_SIZE));  
+
+  // #ifdef MMGR_VERBOSE
+  // kprintf("DEBUG root_dir_virt=0x%x\r\n", root_dir_virt);
+  // kprintf("DEBUG page_one_virt=0x%x\r\n", page_one_virt);
+  // kprintf("DEBUG stack_paging_table_virt=0x%x\r\n", stack_paging_table_virt);
+  // #endif
+
+  // memset(stack_paging_table_virt, 0, PAGE_SIZE);
+  // memset(stack_initial_page_virt, 0, PAGE_SIZE);
+  // stack_paging_table_virt[0x3FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
+
+  // memset_dw(root_dir_virt, MPC_PAGINGDIR, PAGE_SIZE_DWORDS);
+
+  // root_dir_virt[0] = (vaddr)page_one_phys | MP_PRESENT | MP_GLOBAL | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
+
+  // //copy over the content of the first page of the kernel paging directory to the application paging directory
+  // memcpy_dw(page_one_virt, (void *)FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE_DWORDS);
+
+  // //this page contains the IDT
+  // page_one_virt[1] = (1 << 12) | MP_PRESENT | MP_GLOBAL | MP_USER;       //user-mode needs readonly in order to access IDT
+
+  // //That's the system area taken care of. Now we need the app stack.  This will get extended by a fault handler.
+  // root_dir_virt[0x3FF] = (vaddr)stack_paging_table | MP_PRESENT | MP_READWRITE | MP_USER;
+
+  // //Finally we need the (sparsely-mapped) paging directory area. This will enable JIT allocation of memory pages
+  // //to the process through the same mechanism as used in the kernel.  The process does not need access to this area.
+  // root_dir_virt[0x3C0] = (vaddr) root_dir_phys | MP_PRESENT | MP_READWRITE;
+
+  // //FIXME - also need to map the physical memory map!!!
+  
   k_unmap_page_ptr(NULL, stack_initial_page_virt);
   k_unmap_page_ptr(NULL, stack_paging_table_virt);
-  k_unmap_page_ptr(NULL, page_one_virt);
-  k_unmap_page_ptr(NULL, root_dir_virt);
+  //k_unmap_page_ptr(NULL, page_one_virt);
+  // k_unmap_page_ptr(NULL, root_dir_virt);
 
   mb();
   __invalidate_vptr(stack_initial_page_virt);
   __invalidate_vptr(stack_paging_table_virt);
-  __invalidate_vptr(page_one_virt);
+  //__invalidate_vptr(page_one_virt);
   __invalidate_vptr(root_dir_virt);
   __asm__ volatile ("wbinvd" : : : ); //write back everything in the CPU cache and invalidate
 
@@ -996,7 +1030,6 @@ uint32_t page_value_for_vaddr(vaddr pf_load_addr) {
   return *(uint32_t *)ptr;
 }
 
-static size_t pagefault_depth_ctr = 0;
 
 /**
  * This is called from the pagefault handler and it will allocate extra paging directories as required, provided that the fault occurred from

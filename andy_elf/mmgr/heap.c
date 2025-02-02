@@ -363,6 +363,8 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
 
 void* malloc_for_process(uint16_t pid, size_t bytes)
 {
+  kprintf("DEBUG malloc_for_process 0x%x 0x%x\r\n", (uint32_t)pid, (uint32_t)bytes);
+  
   struct ProcessTableEntry *process = get_process(pid);
   if(!process) return NULL;
   if(process->status==PROCESS_NONE) return NULL;  //don't alloc a non-existent process
