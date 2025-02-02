@@ -598,11 +598,11 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
   uint32_t *paging_dir_root = (uint32_t *)((vaddr)mapped_pd + 0x03c0000); //the root directory is mapped at the end of the 
 
   for(size_t i=0; i<1024;i++) {
-    if( (paging_dir_root[i] & MP_PRESENT) && ! (paging_dir_root[i] & MP_GLOBAL)) {
+    if( (paging_dir_root[i] & MP_PRESENT) && ! (paging_dir_root[i] & MP_GLOBAL) && (paging_dir_root[i] & MP_USER)) {
       //first, unmap every page that is in the directory
       uint32_t *paging_dir_ent = (uint32_t *)((vaddr)mapped_pd + i*PAGE_SIZE);
       for(size_t j=0; j<1024; j++) {
-        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_ent[j] & MP_GLOBAL)) {
+        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_ent[j] & MP_GLOBAL) && (paging_dir_root[i] & MP_USER)) {
           ++unmap_counter;
           #ifdef MMGR_VERBOSE
           kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) | (j<<12));
@@ -620,7 +620,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
       //now, unmap the directory itself
       ++unmap_counter;
       vaddr pg_addr = paging_dir_root[i] & MP_ADDRESS_MASK;
-      if(pg_addr) {
+      if(pg_addr && ! (paging_dir_root[i] & MP_GLOBAL) && (paging_dir_root[i] & MP_USER)) {
         #ifdef MMGR_VERBOSE
         kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", pg_addr);
         #endif
@@ -958,7 +958,7 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
 
   //Finally we need the (sparsely-mapped) paging directory area. This will enable JIT allocation of memory pages
   root_dir_virt[0x3C0] = (vaddr) root_dir_phys | MP_PRESENT | MP_READWRITE;
-  
+
   // void *page_one_phys = phys_ptr_list[1];
   // void *stack_paging_table = phys_ptr_list[2];
   // void *stack_initial_page = phys_ptr_list[3];
