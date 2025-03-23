@@ -1,7 +1,7 @@
 CFLAGS=-fno-pie -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables 
 LDFLAGS=-Ttext 0x7E00 -static -z nostartfiles -z nodefaultlib -nostdlib -z nolibc -m elf_i386 --oformat elf32-i386
 
-all: andy.sys
+all: andy.sys kernel.map
 
 clean:
 	rm -f andy.sys *.o
@@ -24,3 +24,6 @@ main.o: main.c
 
 andy.sys: cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptions.o stdio_funcs.o
 	ld  ${LDFLAGS} -b elf32-i386 main.o cfuncs.o cpuid.o exceptions.o basic_console.o stdio_funcs.o c_exceptions.o  -o andy.sys
+
+kernel.map: andy.sys
+	./gen_bochs_map.sh
