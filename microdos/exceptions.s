@@ -35,30 +35,6 @@ extern c_except_gpf
 extern c_except_invalidop
 extern c_except_pagefault
 
-;Create an IDT (Interrupt Descriptor Table) entry
-;The entry is created at ds:esi. esi is incremented to point to the next entry
-;destroys values in bl, cx, edi
-;edi: offset of handler
-;es : GDT selector containing the code
-;bl : gate type. 0x05 32-bit task gate, 0x0E 32-bit interrupt gate, 0x0F 32-bit trap gate
-;cl : ring level required to call. Only 2 bits are used.
-CreateIA32IDTEntry:
-	;sub edi, 0x7E00		;the passed pointer is the absolute memory address but we need the segment-relative address
-	mov word [ds:esi], di	;lower 4 bytes of offset
-	mov word [ds:esi+2], es	;selector
-	mov byte [ds:esi+4], 0x00	;reserved
-	;next byte is (LSB to MSB) gate type x3, reserved 0 x1, DPL x2, present 1 x1
-	or bl, 0x80	;set present bit
-	clc
-	xor ch, ch
-	shl cx, 5	;DPL value, shift this to the right position then add it on
-	or bl, cl
-	mov byte [ds:esi+5], bl
-	shr edi, 16
-	mov word [ds:esi+6], di
-	add esi,8
-	ret
-
 ;output the given message and hang.
 ;expects the message pointer in the string table in eax, it applies the string table offset itself. Does not return.
 FatalMsg:

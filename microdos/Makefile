@@ -18,12 +18,14 @@ c_exceptions.o: c_exceptions.c
 	gcc -c ${CFLAGS} c_exceptions.c
 stdio_funcs.o: stdio_funcs.c include/cfuncs.h
 	gcc -c ${CFLAGS} stdio_funcs.c
+memops.o: memops.asm include/memops.h
+	nasm -f elf32 memops.asm
 
-main.o: main.c
+main.o: main.c include/sys/idt.h
 	gcc -c ${CFLAGS} main.c
 
-andy.sys: cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptions.o stdio_funcs.o
-	ld  ${LDFLAGS} -b elf32-i386 main.o cfuncs.o cpuid.o exceptions.o basic_console.o stdio_funcs.o c_exceptions.o  -o andy.sys
+andy.sys: cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptions.o stdio_funcs.o memops.o
+	ld  ${LDFLAGS} -b elf32-i386 main.o memops.o cfuncs.o cpuid.o exceptions.o basic_console.o stdio_funcs.o c_exceptions.o  -o andy.sys
 
 kernel.map: andy.sys
 	./gen_bochs_map.sh
