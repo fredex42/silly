@@ -25,6 +25,16 @@ kputs:
 	pop esi
 
 	pop ds
+	
+	; This is an inline delay loop, used to slow text on real hardware in order to make it readable.
+	; push ecx
+	; mov ecx, 0xffffff
+	; .kp_delay_temp:
+	; dec ecx
+	; test ecx, ecx
+	; jnz .kp_delay_temp
+	; pop ecx
+	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -42,6 +52,13 @@ kputlen:
 					;so we resolve it relative to DS which starts at 0
 	mov ecx, dword [ss:ebp+12]	;get the length value from the next argument
 	call PMPrintStringLen
+
+	; This is an inline delay loop, used to slow text on real hardware in order to make it readable.
+	; mov ecx, 0xffffff
+	; .kpl_delay_temp:
+	; dec ecx
+	; test ecx, ecx
+	; jnz .kpl_delay_temp
 
 	pop ecx
 	pop esi

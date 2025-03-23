@@ -13,7 +13,7 @@ typedef struct AcpiMADT {
 
     uint32_t local_apic_address;  //byte 0x24
     uint32_t local_apic_flags;
-} AcpiMADT;
+}  __attribute__ ((packed)) AcpiMADT;
 
 //Values for local_apic_flags
 #define MADT_LOCAL_FLAGS_DUAL8259 1<<0  //if this is set you should mask the 8259 PIC's interrupts
@@ -24,7 +24,7 @@ typedef struct AcpiMADTProcessorLocalAPIC {
   uint8_t processor_id;
   uint8_t apic_id;
   uint32_t flags;
-} AcpiMADTProcessorLocalAPIC;
+}  __attribute__ ((packed)) AcpiMADTProcessorLocalAPIC;
 
 //Values for AcpiMADTProcessorLocalAPIC flags
 #define MADT_PROCESSOR_ENABLED        1<<0  //if this is 1 then enabled already
@@ -37,5 +37,5 @@ typedef struct AcpiMADTIOAPIC {
   uint8_t reserved;
   uint32_t ioapic_address;
   uint32_t global_system_interrupt_base; //The global system interrupt base is the first interrupt number that this I/O APIC handles.
-} AcpiMADTIOAPIC;
+}  __attribute__ ((packed)) AcpiMADTIOAPIC;
 #endif

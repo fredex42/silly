@@ -5,6 +5,13 @@
  * Atomically acquire the given lock if it's free, or loop until it is available
 */
 void acquire_spinlock(spinlock_t *lock) {
+    #ifdef SPINLOCK_DEBUG
+    kprintf("DEBUG acquiring spinlock 0x%x\r\n", lock);
+    #endif
+
+    if(*lock != 0) {
+        kprintf("WARNING attempting to acquire spinlock 0x%x that is already asserted\r\n", lock);
+    }
     asm(
         ".acquire%=:\n\t"
         "lock bts $0, (%0)\n\t"        //bts is "bit switch". This will set bit 0 to 1 and return the previous value in the "carry" flag
@@ -19,6 +26,9 @@ void acquire_spinlock(spinlock_t *lock) {
 }
 
 void release_spinlock(spinlock_t *lock) {
+    #ifdef SPINLOCK_DEBUG
+    kprintf("DEBUG acquiring spinlock 0x%x\r\n", lock);
+    #endif
     asm(
         "lock btc $0, (%0)\n\t" : : "r"(lock) : "memory"
     );

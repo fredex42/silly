@@ -163,7 +163,9 @@ void enter_next_process()
   //Right, we have something.  We must switch process.
   last_run_pid = temp;
   active_process = temp;
+  kprintf("DEBUG process saved esp 0x%x\r\n", process->saved_regs.esp);
   kprintf("DEBUG Exiting into process 0x%x\r\n", process);
+
   exit_to_process(process);
 }
 

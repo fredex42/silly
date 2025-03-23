@@ -47,7 +47,7 @@ struct FADT
     uint8_t  Century;
 
     // reserved in ACPI 1.0; used since ACPI 2.0+
-    uint16_t BootArchitectureFlags;
+    uint16_t iaPCBootArch;  //see IAPC_BOOT_ARCH in documentation e.g. https://uefi.org/sites/default/files/resources/ACPI_Spec_6_3_A_Oct_6_2020.pdf
 
     uint8_t  Reserved2;
     uint32_t Flags;
@@ -70,6 +70,17 @@ struct FADT
     GenericAddressStructure X_PMTimerBlock;
     GenericAddressStructure X_GPE0Block;
     GenericAddressStructure X_GPE1Block;
-};
+} __attribute__((packed));
 
+//iaPCBootArch flags for x86 (not ARM) - see https://uefi.org/sites/default/files/resources/ACPI_Spec_6_3_A_Oct_6_2020.pdf p. 156
+#define BA_LEGACY_DEVICES       1<<0    // If set, indicates that the motherboard supports user-visible devices on the LPC or ISA bus. If clear, the OS may assume that all devices
+                                    //in the system can be detected exclusively via indus-try standard device enumeration mechanisms
+#define BA_8042_PRESENT         1<<1    // Indicates the presence of a PS/2 keyboard/mouse controller
+#define BA_VGA_NOT_PRESENT      1<<2    // If set, do not probe the VGA hardware
+#define BA_MSI_NOT_SUPPORTED    1<<3    //do not enable message-signalled interrupts
+#define BA_PCIE_ASPM            1<<4    //do not enable OSPM / ASPM control
+#define CMOS_RTC_NOT_PRESENT    1<<5    //if set, there is no CMOS RTC on legacy addresses, must use ACPI instead
+//other bits are reserved and must be 0.
+
+struct FADT* acpi_get_fadt();
 #endif

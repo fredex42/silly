@@ -64,6 +64,14 @@ struct PointerHeader* _last_pointer_of_zone(struct HeapZoneStart* zone)
 
 uint8_t validate_pointer(void *ptr, uint8_t panic)
 {
+  kprintf("DEBUG validate_pointer checking 0x%x\r\n", ptr);
+  if(ptr==NULL) {
+    if(panic) {
+      k_panic("Attempt to check a null pointer from the heap");
+    } else {
+      return 0;
+    }
+  }
   struct PointerHeader *hdr = ptr - sizeof(struct PointerHeader);
   if(hdr->magic != HEAP_PTR_SIG) {
     kprintf("ERROR pointer 0x%x is not valid, magicnumber not present\r\n", ptr);
@@ -355,6 +363,8 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
 
 void* malloc_for_process(uint16_t pid, size_t bytes)
 {
+  kprintf("DEBUG malloc_for_process 0x%x 0x%x\r\n", (uint32_t)pid, (uint32_t)bytes);
+  
   struct ProcessTableEntry *process = get_process(pid);
   if(!process) return NULL;
   if(process->status==PROCESS_NONE) return NULL;  //don't alloc a non-existent process

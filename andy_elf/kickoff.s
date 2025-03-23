@@ -276,6 +276,9 @@ sti
 extern cmos_init_rtc_interrupt
 call cmos_init_rtc_interrupt
 
+extern ps2_initialise
+call ps2_initialise
+
 extern initialise_ata_driver
 call initialise_ata_driver
 

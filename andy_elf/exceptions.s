@@ -169,9 +169,38 @@ IGPF:		;leaves error code
 	call FatalMsg
 
 IPageFault:	;leaves error code
+	;We shouldn't mess with the stack, because c_except_pagefault is relying on the contents.
+	;But, we must ensure that we restore registers.... how to fix????
+	;Thought - best to duplicate up the stack frame
+	push ebp
+	mov ebp, esp		;save start of stack frame as we came in (+4 bytes)
+
+	push eax			;Any of these _could_ be messed around by the C code
+	push ebx
+	push ecx
+	push edx
+	push esi
+	push edi
+	push ds
+	push es
+	push fs
+	push gs
+
 	mov ax, 0x10
 	mov ds, ax
-	mov eax, cr2
+
+	;When we entered, our stack frame looked like this: uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags
+	;we need to add the faulting address
+	;but since we have messed with the stack already we must recover the previous values and copy them to the top of the stack
+	mov eax, dword [ebp+16]	;eflags
+	push eax
+	mov eax, dword [ebp+12]	;faulting_codeseg
+	push eax
+	mov eax, dword [ebp+8]	;faulting_addr
+	push eax
+	mov eax, dword [ebp+4]	;error_code
+	push eax
+	mov eax, cr2				;pf_load_addr
 	push eax
 	call c_except_pagefault
 	cmp eax, 0
@@ -180,7 +209,21 @@ IPageFault:	;leaves error code
 	mov eax, PageFaultMsg
 	call FatalMsg
 	.recovered:
-	add esp, 8
+	add esp, 20					;reset stack-frame to before the C call
+	
+	;now restore registers
+	pop gs
+	pop fs
+	pop es
+	pop ds
+	pop edi
+	pop esi
+	pop edx
+	pop ecx
+	pop ebx
+	pop eax
+	pop ebp
+	add esp, 4					;the topmost value coming in was the error_code, we must drop this so iret has a valid stack-frame to return
 	iret
 	
 IFloatingPointExcept:

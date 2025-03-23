@@ -157,5 +157,9 @@ void pci_init(void *mcfg_table)
         }
     } else {
         kputs("INFO pci_init ACPI informs us that PCI-Express is available\r\n");
+        kputs("INFO Not yet implemented, falling back to PCI 2.x access\r\n");
+        mode = LEGACY1;
+        kputs("PCI scanning devices...\r\n");
+        pci_recursive_scan();
     }
 }

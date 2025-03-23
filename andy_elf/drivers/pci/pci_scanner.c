@@ -163,10 +163,12 @@ void pci_scanner_check_device(uint8_t bus, uint8_t device) {
  * that the bridge points to.
 */
 void pci_scanner_check_function(uint8_t bus, uint8_t device, uint8_t function) {
-    uint16_t class_values = pci_config_read_word(bus, device, function, 0x0A);
-    uint8_t base_class = (uint8_t)(class_values >> 8);
-    uint8_t sub_class  = (uint8_t)(class_values & 0xFF);
-    kprintf("    DEBUG 0x%x:0x%x:0x%x is class 0x%x:0x%x\r\n", (uint32_t)bus, (uint32_t)device, (uint32_t)function, (uint32_t)base_class, (uint32_t)sub_class);
+    uint32_t class_progif_revision = pci_config_read_dword(bus, device, function, 0x08);
+    uint8_t base_class = (uint8_t)(class_progif_revision >> 0x18);
+    uint8_t sub_class = (uint8_t)(class_progif_revision >> 0x10);
+    uint8_t prog_if = (uint8_t)(class_progif_revision >> 0x08);
+
+    kprintf("    DEBUG 0x%x:0x%x:0x%x is class 0x%x:0x%x progif 0x%x\r\n", (uint32_t)bus, (uint32_t)device, (uint32_t)function, (uint32_t)base_class, (uint32_t)sub_class, (uint32_t)prog_if);
     kprintf("    DEBUG Found '%s'\r\n", pci_description_string(base_class, sub_class));
     if(base_class==PCI_CC_BRIDGE && sub_class==PCI_SUBC_BRIDGE_PCI) {
         uint16_t bus_values = pci_config_read_word(bus, device, function, 0x18);    //Primary & secondary bus values

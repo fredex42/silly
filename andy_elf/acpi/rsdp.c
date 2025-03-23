@@ -1,26 +1,44 @@
 #include <acpi/rsdp.h>
 #include <acpi/rsdt.h>
+#include <acpi/fadt.h>
 #include <stdio.h>
 #include <sys/mmgr.h>
+#include <memops.h>
+#include <string.h>
 #include "search_mem.h"
 
-static struct AcpiTableShortcut acpi_shortcuts[128];
+static struct AcpiTableShortcut *acpi_shortcuts;
 static uint8_t ShortcutTableLength=0;
 
 /**
 Validate that the bits of an RSDPDescriptor struct
 checksum correctly. See https://wiki.osdev.org/RSDP.
 */
-int8_t validate_rsdp_checksum(const struct RSDPDescriptor* rsdp)
+int8_t validate_rsdp_checksum(void *table, size_t len)
 {
-  char *buf = (char *)rsdp; //cast the descriptor into an array of bytes
+  char *buf = (char *)table; //cast the descriptor into an array of bytes
   int32_t sum = 0;
 
-  for(int16_t i=0; i<sizeof(struct RSDPDescriptor);i++) {
+  for(register size_t i=0; i<len;i++) {
     sum += buf[i];
   }
   if((char)sum==0) return 1;
   return 0;
+}
+
+/**
+ * Returns a READ-ONLY pointer to the Fixed Acpi Description Table. See the BA_* constants in fadt.h to interpret the result
+*/
+struct FADT* acpi_get_fadt()
+{
+  struct AcpiTableShortcut *sc = acpi_shortcut_find(acpi_shortcuts, "FACP");  //yes, the signature for the FADT is "FACP". Go figure.
+  if(!sc) {
+    kprintf("WARNING There is no ACPI FADT present.\r\nWARNING Either the BIOS is very old or this has been called before ACPI initialisation\r\n");
+    return 0;
+  }
+  struct FADT *fadt = (struct FADT *)sc->ptr;
+  kprintf("DEBUG FADT is at memory address 0x%x\r\n", fadt);
+  return fadt;
 }
 
 void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
@@ -38,17 +56,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
   memset(id_str, 0, 8);
   strncpy(id_str, rsdt->h.OEMID, 7);
   kprintf("DEBUG RSDT oemid '%s'\r\n", id_str);
-
   int entries = (rsdt->h.Length - sizeof(struct ACPISDTHeader)) / 4;
-  kprintf("RSDT has %d entries with total length of %d bytes.\r\n", entries, rsdt->h.Length);
-  ShortcutTableLength = (uint8_t) entries;
-
-  acpi_shortcuts[0].sig[0] = 'R';
-  acpi_shortcuts[0].sig[1] = 'S';
-  acpi_shortcuts[0].sig[2] = 'D';
-  acpi_shortcuts[0].sig[3] = 'T';
-
-  acpi_shortcuts[0].ptr = rsdt;
 
   for(register int i=0; i<entries; i++) {
     kprintf("DEBUG RSDT entry %d at 0x%x\r\n", i, rsdt->PointerToOtherSDT[i]);
@@ -79,6 +87,9 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
     } else {
       kprintf("WARNING unable to access entry %d as it is on another RAM page\r\n", i);
     }
+    // if(h->Signature[0]=='A' && h->Signature[1]=='P' && h->Signature[2]=='I' && h->Signature[3]=='C') {
+    //   read_madt_info((char *)h);
+    // }
     if(i>10) break;
   }
 
@@ -117,7 +128,7 @@ void load_acpi_data() {
     kprintf("ACPI OEM is %s\r\n", rsdp->OEMID);
     
     kputs("INFO Validating ACPI descriptor table...");
-    if(!validate_rsdp_checksum(rsdp)) {
+    if(!validate_rsdp_checksum(rsdp, sizeof(struct RSDPDescriptor))) {
       kputs("ERROR ACPI checksum did not validate\r\n");
       return;
     }

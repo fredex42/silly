@@ -14,6 +14,7 @@
 */
 void delete_loaded_segments(ElfLoadedSegment *ptr)
 {
+  kprintf("DEBUG delete_loaded_segments 0x%x\r\n", ptr);
   if(!ptr) return;
   ElfLoadedSegment *next = ptr->next;
   //header is a weak ref which does not need freeing.
@@ -25,11 +26,18 @@ void delete_loaded_segments(ElfLoadedSegment *ptr)
 
 void delete_elf_parsed_data(struct elf_parsed_data *t)
 {
+  kprintf("DEBUG delete_elf_parsed_data: 0x%x\r\n", t);
+  kputs("DEBUG file headers...\r\n");
   if(t->file_header) free(t->file_header);
+  kputs("DEBUG program headers...\r\n");
   if(t->program_headers) free(t->program_headers);
+  kputs("DEBUG section headers...\r\n");
   if(t->section_headers_buffer) free(t->section_headers_buffer);
+  kputs("DEBUG loaded segments...\r\n");
   if(t->loaded_segments_list) delete_loaded_segments(t->loaded_segments_list);
+  kputs("DEBUG struct itself...\r\n");
   free(t);
+  kputs("DEBUG Done!\r\n");
 }
 
 void _elf_next_segment_loaded(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)

@@ -5,6 +5,7 @@ global memset
 global memset_dw
 global memcpy
 global memcpy_dw
+global memcmp
 global mb       ;memory barrier
 global get_current_paging_directory
 global switch_paging_directory_if_required
@@ -135,6 +136,57 @@ pop esi
 pop edi
 pop ebp
 ret
+
+;Purpose - compares two memory ranges byte-by-byte
+; Arguments:
+;  1. Memory range A pointer
+;  2. Memory range B pointer
+;  3. Length of memory range to compare
+; Returns 0 if they are equal, 1 if B is greater and -1 if B is less
+memcmp:
+  push ebp
+  mov ebp, esp
+
+  push edi
+  push esi
+  push ebx
+  push ecx
+
+  mov edi, dword [ebp+8]    ;Argument 1 - memory range A
+  mov esi, dword [ebp+12]   ;Argument 2 - memory range B
+  mov ecx, dword [ebp+16]   ;Argument 3 - length
+
+  .memcmp_next:
+  mov al, byte [edi]
+  mov bl, byte [esi]
+  cmp al, bl
+  jg .memcmp_greater_than
+  jl .memcmp_less_than
+  dec ecx
+  test ecx, ecx
+  jz .memcmp_zero
+  inc edi
+  inc esi
+  jmp .memcmp_next
+
+  .memcmp_greater_than:
+  mov eax, 1
+  jmp .memcmp_done
+
+  .memcmp_less_than:
+  mov eax, 0xFFFFFFFF
+  jmp .memcmp_done
+
+  .memcmp_zero:
+  mov eax, 0
+
+  .memcmp_done:
+  pop ecx
+  pop ebx
+  pop esi
+  pop edi
+  pop ebp
+  ret
 
 ;Purpose: returns the current paging directory pointer. This should be stored in CR3.
 get_current_paging_directory:

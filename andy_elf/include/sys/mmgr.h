@@ -75,6 +75,14 @@ allocates the given number of pages of physical RAM and maps them into the memor
 */
 void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags);
 /**
+ * allocates the given number of pages of "low" (<1Mb) memory and identity-maps them
+ * "low" memory is special as it is "global" across all paging directories.
+ * Pages allocated in this way have MP_PRESENT and MP_GLOBAL set. Other flags can be specified through the `flags` parameter.
+ * As with the other allocation routines it's crucial that this is not interrupted, ensure that it's run in a cli'd block
+*/
+void *vm_alloc_lowmem(uint32_t *root_page_dir, size_t page_count, uint32_t flags);
+
+/**
 unmaps the physical ram pages pointed to but the vmem_ptr and marks them as "free" in the physical
 ram map
 */
@@ -91,6 +99,13 @@ void* k_map_if_required(uint32_t *base_directory, void *phys_addr, uint32_t flag
 directly map a physical page into the memory space of the given page directory
 */
 void * k_map_page(uint32_t *root_page_dir, void * phys_addr, uint16_t pagedir_idx, uint16_t pageent_idx, uint32_t flags);
+
+/**
+ * identity-map a page of physical memory. this is useful for e.g. ACPI tables which are in reserved RAM ranges
+ * and it makes sense to keep them there
+*/
+void * k_map_page_identity(uint32_t *root_page_dir, void *phys_addr, uint32_t flags);
+
 /*
 remove the given page mapping
 */

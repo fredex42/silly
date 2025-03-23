@@ -1,4 +1,4 @@
-CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables
+CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables -DDEBUG_SPINLOCK
 
 all: libutils.a
 
@@ -14,5 +14,8 @@ string.o: string.asm
 spinlock.o: spinlock.c ../include/spinlock.h
 	gcc -c ${CFLAGS} spinlock.c
 
-libutils.a: ucs_conv.o string.o spinlock.o
-	ar rcs libutils.a ucs_conv.o string.o spinlock.o
+ringbuffer.o: ringbuffer.c ../include/utils/ringbuffer.h
+	gcc -c ${CFLAGS} ringbuffer.c
+
+libutils.a: ucs_conv.o string.o spinlock.o ringbuffer.o
+	ar rcs libutils.a ucs_conv.o string.o spinlock.o ringbuffer.o

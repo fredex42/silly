@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <panic.h>
 #include "cluster_map.h"
-
+#include "../mmgr/heap.h"
 /**
 Cluster 2 in the directory tables and FAT actually refers to the start of the data area.
 This means that we must apply a sector offset in order to translate it to an actual location
@@ -55,6 +55,7 @@ VFatOpenFile* vfat_open_by_location(FATFS *fs_ptr, size_t cluster_location_start
 
 VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
 {
+  kputs("DEBUG vfat_open\r\n");
   validate_pointer(fs_ptr->bpb, 1);
   size_t cluster_number = entry_to_open->low_cluster_num;
   if(fs_ptr->f32bpb) cluster_number += ((uint32_t)entry_to_open->f32_high_cluster_num << 16);
@@ -66,6 +67,7 @@ VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
 
 void vfat_close(VFatOpenFile *fp)
 {
+  kprintf("DEBUG vfat_close\r\n");
   fp->parent_fs->open_file_count--;
   free(fp);
 }
@@ -82,6 +84,8 @@ struct vfat_read_transient_data {
 
 void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
 {
+  kputs("DEBUG entered _vfat_next_block_read %x 0x%x 0x%x\r\n", (uint32_t)status, buffer, extradata);
+
   struct vfat_read_transient_data* t = (struct vfat_read_transient_data *)extradata;
 
   if(status!=0) {
@@ -142,7 +146,6 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
       t->fp->busy = 0;
       t->callback(t->fp, status, t->buffer_write_offset, t->real_buffer, t->cb_extradata);
       free(t);
-      validate_pointer(t->fp->parent_fs->bpb, 1);
       return;
     } else {
       fp->byte_offset_in_sector = 0;

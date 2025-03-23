@@ -40,6 +40,7 @@ void kprintf(const char *fmt, ...)
     } else {
       int32_t value;
       int16_t svalue;
+      char cvalue;
       kputlen(&fmt[current_position], next_position-current_position+1);
 
       char format_specifier = fmt[next_position+1]; //the format should be the character after the %
@@ -48,30 +49,29 @@ void kprintf(const char *fmt, ...)
           svalue = (int16_t)va_arg(ap, int);  //varargs are upcast to `int` from `short`, according to gcc
           longToString((int32_t)svalue, buf, 10);
           kputs(buf);
-          current_position = next_position + 2;
-          ++arg_ctr;
           break;
         case 'x':
           value = (int32_t)va_arg(ap, int32_t);
           longToString(value, buf, 16);
           kputs(buf);
-          current_position = next_position + 2;
-          ++arg_ctr;
           break;
         case 'l':
           value = (int32_t)va_arg(ap, int32_t);
           longToString(value, buf, 10);
           kputs(buf);
-          current_position = next_position + 2;
-          ++arg_ctr;
           break;
         case 's':
           kputs((const char *)va_arg(ap, char *));
+          break;
+        case 'c':
+          cvalue = (char)va_arg(ap, int);
+          kputlen(&cvalue, 2);
+          break;
         default:
-          current_position = next_position + 2;
-          ++arg_ctr;
           break;
       }
+      current_position = next_position + 2;
+      ++arg_ctr;
     }
   } while(1);
 
