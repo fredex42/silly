@@ -1,6 +1,19 @@
 #include <sys/idt.h>
 #include <memops.h>
 
+void _start() {
+    kputs("Hello world!\r\n");
+
+    //First things first.... let's set up our interrupt table
+    setup_interrupts();
+
+    v86_call_interrupt(0, NULL);
+    
+    while(1) {
+        __asm__ volatile("nop");
+    }
+}
+
 static struct IDTR32 idtr;
 static struct InterruptDescriptor32 idt[IDT_LIMIT];
 
@@ -45,16 +58,4 @@ void setup_interrupts() {
     asm __volatile__(
         "lidt %0" : : "m"(idtr)
     );
-}
-
-void _start() {
-    kputs("Hello world!\r\n");
-
-    //First things first.... let's set up our interrupt table
-    setup_interrupts();
-
-
-    while(1) {
-        __asm__ volatile("nop");
-    }
 }
