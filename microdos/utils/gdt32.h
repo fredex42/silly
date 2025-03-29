@@ -15,7 +15,7 @@ struct GDTEntry32 {
 } __attribute__((packed));
 
 #define GDT_BASE_ADDRESS 0x500  //this is a small memory area on the first page, below the bootloader etc. Perfect place for this to exist.
-#define GDT_ENTRY_COUNT 0x4
+#define GDT_ENTRY_COUNT 0x6
 
 #define GDT_ACC_PRESENT 1<<7
 #define GDT_ACC_DPL(lvl) lvl<<5

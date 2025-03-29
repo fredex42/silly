@@ -1,6 +1,7 @@
 #include <sys/idt.h>
 #include <memops.h>
 #include "utils/gdt32.h"
+#include "utils/tss32.h"
 
 extern int_ff_trapvec();
 
@@ -8,10 +9,13 @@ void _start() {
     kputs("Hello world!\r\n");
 
     //First things first.... let's set up our interrupt table & GDT
+    setup_tss();
     setup_gdt();
     setup_interrupts();
 
     v86_call_interrupt(0, NULL);
+    
+    kputs("Made it back from v86 mode!\r\n");
     
     while(1) {
         __asm__ volatile("nop");
