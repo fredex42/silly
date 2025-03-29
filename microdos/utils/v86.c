@@ -5,7 +5,7 @@
 
 struct RealModeInterrupt *realModeIVT;  //due to bootloader limitations, hard-setting the value at the top will not work
 
-uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 regs) {
+uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 *regs, struct RegState32 *outregs, uint32_t *outflags) {
     activate_v86_tss();
 
     realModeIVT = (struct RealModeInterrupt*)0; //real mode IVT starts at offset 0
@@ -78,21 +78,44 @@ uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 regs) {
         "push %%eax\n"
         "mov %2, %%eax\n"       //entry point address
         "push %%eax\n"
+        :
+        : "m"(v86_tss), "m"(vector.segment),"m"(vector.offset)
+        : "eax", "edi"
+    );
 
+    uint32_t tempax,tempbx,tempcx,tempdx,tempsi,tempdi,tempflags;
+
+    asm __volatile__(
         //load up the registers we were given
-        "mov %3,%%eax\n"
-        "mov %4,%%ebx\n"
-        "mov %5,%%ecx\n"
-        "mov %6,%%edx\n"
-        "mov %7,%%esi\n"
-        "mov %8, %%edi\n"
+        "mov %0,%%eax\n"
+        "mov %1,%%ebx\n"
+        "mov %2,%%ecx\n"
+        "mov %3,%%edx\n"
+        "mov %4,%%esi\n"
+        "mov %5, %%edi\n"
         "iret\n"
 
         ".v86_call_rtn:\n"  //note we are actually STILL in v86 mode when we get here
         "int $0xff\n"       //cause a trap
-        :
-        : "m"(v86_tss), "m"(vector.segment),"m"(vector.offset),"m"(regs.eax),"m"(regs.ebx),"m"(regs.ecx),"m"(regs.edx),"m"(regs.esi),"m"(regs.edi)
+        "mov %%eax, %0\n"                  //the trap returns here and we have left v86 mode, but registers should still be the same
+        "mov %%ebx, %1\n"
+        "mov %%ecx, %2\n"
+        "mov %%edx, %3\n"
+        "mov %%esi, %4\n"
+        "mov %%edi, %5\n"
+        "pushf\n"
+        "pop %%eax\n"
+        "mov %%eax, %6\n"
+        : "=m"(tempax),"=m"(tempbx),"=m"(tempcx),"=m"(tempdx),"=m"(tempsi), "=m"(tempdi), "=m"(tempflags)
+        : "m"(regs->eax),"m"(regs->ebx),"m"(regs->ecx),"m"(regs->edx),"m"(regs->esi),"m"(regs->edi)
     );
+    outregs->eax = tempax;
+    outregs->ebx = tempbx;
+    outregs->ecx = tempcx;
+    outregs->edx = tempdx;
+    outregs->edi = tempdi;
+    outregs->esi = tempsi;
+    *outflags = tempflags;
 }
 
 void int_ff_trapvec() {
@@ -105,6 +128,12 @@ void int_ff_trapvec() {
         "mov $0x10, %%eax\n"
         "mov %%ax, %%es\n"
         "mov %%ax, %%ds\n"
+        //restore the IO permission level
+        "pushf\n"
+        "pop %%eax\n"
+        "and $0xFFFFCFFF, %%eax\n"  //clear IOPL bits
+        "push %%eax\n"
+        "popf\n"
         "pop %%eax\n" : :
     );
 }

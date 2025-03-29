@@ -14,9 +14,6 @@ struct GDTEntry32 {
     uint8_t base_hi;
 } __attribute__((packed));
 
-#define GDT_BASE_ADDRESS 0x500  //this is a small memory area on the first page, below the bootloader etc. Perfect place for this to exist.
-#define GDT_ENTRY_COUNT 0x6
-
 #define GDT_ACC_PRESENT 1<<7
 #define GDT_ACC_DPL(lvl) lvl<<5
 #define GDT_ACC_NOTTSS 1<<4 //0 for TSS, 1 for normal segment

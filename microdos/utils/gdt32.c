@@ -1,6 +1,7 @@
 #include <types.h>
 #include "gdt32.h"
 #include "tss32.h"
+#include "memlayout.h"
 
 struct GDTEntry32 *gdt;
 
@@ -37,7 +38,7 @@ void setup_gdt() {
     //display memory
     configure_gdt_entry(3, 0xBFFFF, 0xA0000, GDT_ACC_PRESENT|GDT_ACC_DPL(0)|GDT_ACC_NOTTSS|GDT_ACC_READWR, GDT_FLAG_32BIT);
     //v86 mode TSS
-    configure_gdt_entry(4, sizeof(struct TSS32), (uint32_t)&v86_tss, 0x89, 0x40);
+    configure_gdt_entry(4, sizeof(struct TSS32)+V86_IO_PORT_MAP_SIZE, (uint32_t)&v86_tss, 0x89, 0x40);
     //ring3 mode TSS
     configure_gdt_entry(5, sizeof(struct TSS32), (uint32_t)&ring3_tss, 0x89, 0x40);
 

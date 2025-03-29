@@ -40,3 +40,5 @@ extern struct TSS32 ring3_tss;
 
 void setup_tss();
 void activate_v86_tss();
+
+#define V86_IO_PORT_MAP_SIZE 128    //allow access to the first 0x400 ports

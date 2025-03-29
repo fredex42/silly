@@ -2,6 +2,7 @@
 #include <memops.h>
 #include "utils/gdt32.h"
 #include "utils/tss32.h"
+#include "mmgr/mmgr.h"
 
 extern int_ff_trapvec();
 
@@ -12,11 +13,8 @@ void _start() {
     setup_tss();
     setup_gdt();
     setup_interrupts();
+    initialise_mmgr();
 
-    v86_call_interrupt(0, NULL);
-    
-    kputs("Made it back from v86 mode!\r\n");
-    
     while(1) {
         __asm__ volatile("nop");
     }

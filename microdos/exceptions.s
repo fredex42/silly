@@ -140,6 +140,10 @@ IStackSegFault: ;leaves error code
 IGPF:		;leaves error code
 	mov ax, 0x10
 	mov ds, ax
+	mov es, ax
+	mov ax, 0x18
+	mov fs, ax
+	mov gs, ax
 	call c_except_gpf
 	mov eax, GPFMsg
 	call FatalMsg
