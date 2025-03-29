@@ -13,22 +13,46 @@ uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 regs) {
     kprintf("v86_call_interrupt: int 0x%x -> 0x%x:0x%x\r\n", (uint32_t)intnum, (uint32_t)vector.segment, (uint32_t)vector.offset);
 
     asm __volatile__(
-        //first set up a stack frame to return to the v86_call_rtn label
-        "pushf\n"
-        "xor %%eax, %%eax\n"
-        "mov %%cs, %%ax\n"
-        "push %%eax\n"
-        "mov .v86_call_rtn,%%eax\n"
-        "push %%eax\n"
+        //before everything, ensure we have a 'fake' interrupt set up to trap us back to protected mode
+        "mov $0x3f8, %%edi\n"
+        "mov $0x0008, (%%edi)\n"
+        "lea int_ff_trapvec, %%eax\n"
+        "mov %%eax, 4(%%edi)\n"
+        
+        //first set up a new stack in conventional RAM
+        "mov $0x7fffe, %%edi\n" //top of the new stack 
+        "mov $0x10, %%eax\n"
+        "mov %%ax, %%es\n"
+        "std\n"                 //build downwards, i.e. decrement after stosd
 
-        //now set up a stack frame to drop into v86 mode
-        "pushf\n"
+        //now a stack frame on the new stack to return to the v86_call_rtn label, at our target stack
+        "xor %%eax, %%eax\n"    //current stack segment
+        "mov %%ss, %%ax\n"
+        "stosl\n"
+        "mov %%esp, %%eax\n"    //old stack pointer, plus 4 (the value we just pushed)
+        "sub $0x04, %%eax\n"
+        "stosl\n"
+        "pushf\n"               //eflags
+        "pop %%eax\n"
+        "stosl\n"
+        "xor %%eax, %%eax\n"
+        "mov %%cs, %%ax\n"      //current code segment
+        "stosl\n"
+        "lea .v86_call_rtn,%%eax\n" //exit point address
+        "stosl\n"
+
+        //now set up a stack frame on the existing stack to drop into v86 mode
+        "mov $0x7000, %%eax\n"  //new stack segment
+        "push %%eax\n"
+        "mov $0xffee, %%eax\n"  //new stack pointer (bottom of the stack we just set up)
+        "push %%eax\n"
+        "pushf\n"               
         "pop %%eax\n"
         "or $0x00023000, %%eax\n" //set V86 mode, IOPL=3 in eflags
+        "push %%eax\n"          //eflags
+        "mov %0, %%eax\n"       //new code segment
         "push %%eax\n"
-        "mov %0, %%eax\n"
-        "push %%eax\n"
-        "mov %1, %%eax\n"
+        "mov %1, %%eax\n"       //entry point address
         "push %%eax\n"
 
         //load up the registers we were given
@@ -36,12 +60,17 @@ uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 regs) {
         "mov %3,%%ebx\n"
         "mov %4,%%ecx\n"
         "mov %5,%%edx\n"
-        "mov %6,%%edi\n"
+        "mov %6,%%esi\n"
         "mov %7, %%edi\n"
         "iret\n"
-        ".v86_call_rtn:\n"
 
+        ".v86_call_rtn:\n"  //note we are actually STILL in v86 mode when we get here
+        "int $0xff\n"       //cause a trap
         :
         : "m"(vector.segment),"m"(vector.offset),"m"(regs.eax),"m"(regs.ebx),"m"(regs.ecx),"m"(regs.edx),"m"(regs.esi),"m"(regs.edi)
     );
+}
+
+void int_ff_trapvec() {
+
 }

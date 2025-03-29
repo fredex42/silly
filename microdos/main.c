@@ -1,10 +1,14 @@
 #include <sys/idt.h>
 #include <memops.h>
+#include "utils/gdt32.h"
+
+extern int_ff_trapvec();
 
 void _start() {
     kputs("Hello world!\r\n");
 
-    //First things first.... let's set up our interrupt table
+    //First things first.... let's set up our interrupt table & GDT
+    setup_gdt();
     setup_interrupts();
 
     v86_call_interrupt(0, NULL);
@@ -52,6 +56,12 @@ void setup_interrupts() {
     }
     configure_interrupt(0x1e, ISecurityExcept, IDT_ATTR_INT_32);
     configure_interrupt(0x1f, IReserved, IDT_ATTR_INT_32);
+
+    //set up special return-from-v86 trap
+    idt[0xff].offset_lo = (uint16_t) ((uint32_t)int_ff_trapvec & 0xFFFF);
+    idt[0xff].selector = 0x08;   //kernel CS
+    idt[0xff].attributes = IDT_ATTR_TRAP_32 | IDT_ATTR_PRESENT | IDT_ATTR_DPL(3);
+    idt[0xff].offset_hi = (uint16_t) ((uint32_t)int_ff_trapvec >> 16);
 
     idtr.size = IDT_LIMIT*2*sizeof(uint32_t);
     idtr.offset = (uint32_t) &idt;
