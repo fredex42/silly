@@ -5,6 +5,18 @@
 
 struct RealModeInterrupt *realModeIVT;  //due to bootloader limitations, hard-setting the value at the top will not work
 
+/**
+ * Retrieve the segment/offset for a real mode interrupt from the 16-bit IVT
+ */
+void get_realmode_interrupt(uint16_t intnum, uint16_t *segment, uint16_t *offset)
+{
+    realModeIVT = (struct RealModeInterrupt*)0; //real mode IVT starts at offset 0
+    struct RealModeInterrupt vector = realModeIVT[intnum];
+    kprintf("get_realmode_interrupt: int 0x%x -> 0x%x:0x%x\r\n", (uint32_t)intnum, (uint32_t)vector.segment, (uint32_t)vector.offset);
+    *segment = vector.segment;
+    *offset = vector.offset;
+}
+
 uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 *regs, struct RegState32 *outregs, uint32_t *outflags) {
     activate_v86_tss();
 
@@ -15,75 +27,18 @@ uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 *regs, struct Reg
 
     kprintf("v86_call_interrupt: int 0x%x -> 0x%x:0x%x\r\n", (uint32_t)intnum, (uint32_t)vector.segment, (uint32_t)vector.offset);
 
-    asm __volatile__(
-        //before everything, ensure we have a 'fake' interrupt set up to trap us back to protected mode
-        "mov $0x3f8, %%edi\n"
-        "mov $0x0008, (%%edi)\n"
-        "lea int_ff_trapvec, %%eax\n"
-        "mov %%eax, 4(%%edi)\n"
-        
-        //first set up a new stack in conventional RAM
-        "mov $0x7fffe, %%edi\n" //top of the new stack 
-        "mov $0x10, %%eax\n"
-        "mov %%ax, %%es\n"
-        "std\n"                 //build downwards, i.e. decrement after stosd
-
-        //now a stack frame on the new stack to return to the v86_call_rtn label, at our target stack
-        "xor %%eax, %%eax\n"    //current stack segment
-        "mov %%ss, %%ax\n"
-        "stosl\n"
-        "mov %%esp, %%eax\n"    //old stack pointer, plus 4 (the value we just pushed)
-        "sub $0x04, %%eax\n"
-        "stosl\n"
-        "pushf\n"               //eflags
-        "pop %%eax\n"
-        "stosl\n"
-        "xor %%eax, %%eax\n"
-        "mov %%cs, %%ax\n"      //current code segment
-        "stosl\n"
-        "lea .v86_call_rtn,%%eax\n" //exit point address
-        "stosl\n"
-
-        //next set up the TSS so the interrupt-to-exit call will work
-        "lea v86_tss, %%edi\n"
-        //save all segment registers
-        "xor %%eax, %%eax\n"
-        "mov %%gs, %%ax\n"
-        "mov %%eax, 0x5C(%%edi)\n"
-        "mov %%fs, %%ax\n"
-        "mov %%eax, 0x58(%%edi)\n"
-        "mov %%ds, %%ax\n"
-        "mov %%eax, 0x54(%%edi)\n"
-        "mov %%ss, %%ax\n"
-        "mov %%eax, 0x50(%%edi)\n"  // offset 0x50 is SS
-        "mov %%eax, 8(%%edi)\n"   //offset 0x08 is SS0
-        "mov %%cs, %%ax\n"
-        "mov %%eax, 0x4C(%%edi)\n"
-        "mov %%es, %%ax\n"
-        "mov %%eax, 0x48\n"
-        //now save the stack pointer
-        "mov %%esp, %%eax\n"
-        "mov %%eax, 4(%%edi)\n"   //offset 0x04 is ESP0
-
-        //now set up a stack frame on the existing stack to drop into v86 mode
-        "mov $0x7000, %%eax\n"  //new stack segment
-        "push %%eax\n"
-        "mov $0xffee, %%eax\n"  //new stack pointer (bottom of the stack we just set up)
-        "push %%eax\n"
-        "pushf\n"               
-        "pop %%eax\n"
-        "or $0x00023000, %%eax\n" //set V86 mode, IOPL=3 in eflags
-        "push %%eax\n"          //eflags
-        "mov %1, %%eax\n"       //new code segment
-        "push %%eax\n"
-        "mov %2, %%eax\n"       //entry point address
-        "push %%eax\n"
-        :
-        : "m"(v86_tss), "m"(vector.segment),"m"(vector.offset)
-        : "eax", "edi"
-    );
+    uint32_t tempinax = regs->eax;
+    kprintf("tempinax = 0x%x\r\n", tempinax);
+    uint32_t tempinbx = regs->ebx;
+    uint32_t tempincx = regs->ecx;
+    uint32_t tempindx = regs->edx;
+    kprintf("tempindx = 0x%x\r\n", tempindx);
+    uint32_t tempinsi = regs->esi;
+    uint32_t tempindi = regs->edi;
 
     uint32_t tempax,tempbx,tempcx,tempdx,tempsi,tempdi,tempflags;
+
+    prepare_v86_call(vector.segment, vector.offset, "lea .v86_call_rtn,%%eax\n");
 
     asm __volatile__(
         //load up the registers we were given
@@ -107,7 +62,8 @@ uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 *regs, struct Reg
         "pop %%eax\n"
         "mov %%eax, %6\n"
         : "=m"(tempax),"=m"(tempbx),"=m"(tempcx),"=m"(tempdx),"=m"(tempsi), "=m"(tempdi), "=m"(tempflags)
-        : "m"(regs->eax),"m"(regs->ebx),"m"(regs->ecx),"m"(regs->edx),"m"(regs->esi),"m"(regs->edi)
+        : "m"(tempinax),"m"(tempinbx),"m"(tempincx),"m"(tempindx),"m"(tempinsi),"m"(tempindi)
+        : "eax","ebx","ecx","edx","esi","edi"
     );
     outregs->eax = tempax;
     outregs->ebx = tempbx;
@@ -136,4 +92,6 @@ void int_ff_trapvec() {
         "popf\n"
         "pop %%eax\n" : :
     );
+    //When this function returns, it does so on the stack that `prepare_v86_call` set up and will therefore go back
+    //to the operation after the int 0xff call but in full protected mode.
 }
