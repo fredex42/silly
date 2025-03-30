@@ -8,7 +8,6 @@
 %define FullGDTPtr   0xe00
 %define FullTSS      0x1e40
 
-%define TSS_Selector 0x20	;TSS starts at offset 0 in this selector
 %define CursorRowPtr 0xd08	;where we store screen cursor row in kernel data segment
 %define CursorColPtr 0xd09	;where we store cursor col in kernel data segment
 %define DisplayMemorySeg 0x18	;segment identifier for mapped video RAM
@@ -17,15 +16,3 @@
 
 %define CurrentProcessRegisterScratch     0x1A000 ;temporary storage location for process's register state when context-switching
 %define CurrentProcessRegisterScratchSize 0x90    ;this region follows the format of SavedRegisterStates32 in process.h
-
-;real-mode segment pointers for place to store bios ram information
-%define TemporaryMemInfoBufferSeg 0x250
-%define TemporaryMemInfoBufferOffset 0x0
-;protected-mode pointer to the same thing
-%define TemporaryMemInfoLocation 0x2500
-
-;real-mode segment pointers for place to store PCI entrypoint
-%define TemporaryPciInfoBufferSeg 0x300
-%define TemporaryPciInfoBufferOffset 0x0
-;protected-mode pointer to the same thing
-%define TemporaryPciInfoLocation 0x3000
