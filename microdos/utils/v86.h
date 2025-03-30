@@ -15,6 +15,7 @@ Macro description:
 //first set up a new stack in conventional RAM
 // 0x7fffe top of the new stack 
 // std sets direction flag to build downwards
+//set gs,fs,ds and es to 0 in that order
 // .v86_call_rtn is the out-point
 
     //next set up the TSS so the interrupt-to-exit call will work
@@ -75,6 +76,11 @@ Macro description:
     "mov %%eax, 0x48\n" \
     "mov %%esp, %%eax\n" \
     "mov %%eax, 4(%%edi)\n"   \
+    "xor %%eax,%%eax\n" \
+    "push %%eax\n" \
+    "push %%eax\n" \
+    "push %%eax\n" \
+    "push %%eax\n" \
     "mov $0x7000, %%eax\n"  \
     "push %%eax\n" \
     "mov $0xffee, %%eax\n"  \
