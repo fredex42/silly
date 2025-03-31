@@ -166,7 +166,7 @@ void allocate_paging_directories(size_t highest_value, size_t physical_map_start
   kprintf("DEBUG %d level one entries from 0x%x\r\n", level_one_table_count, (uint32_t)level_one_tables);
   //identity map the entire RAM space
   for(register size_t i=0; i<=level_one_table_count; i++) {
-    level_one_tables[i] = (i*PAGE_SIZE) | MP_PRESENT | MP_READWRITE;
+    level_one_tables[i] = (i*PAGE_SIZE) | MP_PRESENT | MP_READWRITE | MP_USER;
   }
 
   //in classic paging, level two dirs must fit on a single page
@@ -174,7 +174,7 @@ void allocate_paging_directories(size_t highest_value, size_t physical_map_start
   kprintf("DEBUG %d level two entries from 0x%x\r\n", level_two_dir_count, (uint32_t) level_two_dirs);
   for(register size_t i=0; i<=level_two_dir_count; i++) {
     uint32_t *lvl_one_ptr = &level_one_tables[i*1024];
-    level_two_dirs[i] = (uint32_t)lvl_one_ptr | MP_PRESENT | MP_READWRITE;
+    level_two_dirs[i] = (uint32_t)lvl_one_ptr | MP_PRESENT | MP_READWRITE | MP_USER;
   }
   *root_paging_dir_out = level_two_dirs;
 }
