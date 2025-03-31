@@ -96,7 +96,7 @@ void dump_memory_map() {
 void initialise_mmgr() {
   size_t physical_map_start = 0;
   size_t physical_map_length_in_pages = 0;
-  size_t root_paging_dir = 0;
+  uint32_t *root_paging_dir = 0;
   size_t pages_used_for_paging = 0;
 
   kputs("Initialising memory manager...\r\n");
@@ -108,6 +108,8 @@ void initialise_mmgr() {
   allocate_paging_directories(highest_value, physical_map_start, &root_paging_dir, &pages_used_for_paging);
   kprintf("Used %d pages for paging\r\n", pages_used_for_paging);
   kprintf("Root paging directory is at 0x%x\r\n", root_paging_dir);
+  activate_paging(root_paging_dir);
+  kputs("Activated paging\r\n");
 }
 
 /**
@@ -149,11 +151,11 @@ void allocate_physical_map(size_t highest_value, size_t *area_start_out, size_t 
   *area_start_out = physical_map_start;
 }
 
-void allocate_paging_directories(size_t highest_value, size_t physical_map_start, size_t *root_paging_dir_out, size_t *pages_used_out)
+void allocate_paging_directories(size_t highest_value, size_t physical_map_start, uint32_t **root_paging_dir_out, size_t *pages_used_out)
 {
   physical_page_count = highest_value / PAGE_SIZE;
 
-  size_t level_one_table_count = physical_page_count;  //1024 pages per level one dir, IF we are in classic paging
+  size_t level_one_table_count = physical_page_count;  //limit of 1024*1024 pages, IF we are in classic paging
   size_t level_two_dir_count = level_one_table_count / 1024;  //1024 level one dirs per level two, IF we are in classic paging
   *pages_used_out = level_two_dir_count + 1;  //extra +1 is the root directory
 
@@ -163,16 +165,31 @@ void allocate_paging_directories(size_t highest_value, size_t physical_map_start
   
   kprintf("DEBUG %d level one entries from 0x%x\r\n", level_one_table_count, (uint32_t)level_one_tables);
   //identity map the entire RAM space
-  for(register size_t i=0; i<level_one_table_count; i++) {
+  for(register size_t i=0; i<=level_one_table_count; i++) {
     level_one_tables[i] = (i*PAGE_SIZE) | MP_PRESENT | MP_READWRITE;
   }
 
   //in classic paging, level two dirs must fit on a single page
   uint32_t *level_two_dirs = (uint32_t *)(((size_t)level_one_tables - (level_two_dir_count*4)) & MP_ADDRESS_MASK);  //4 bytes per level one table entry
   kprintf("DEBUG %d level two entries from 0x%x\r\n", level_two_dir_count, (uint32_t) level_two_dirs);
-  for(register size_t i=0; i<level_two_dir_count; i++) {
+  for(register size_t i=0; i<=level_two_dir_count; i++) {
     uint32_t *lvl_one_ptr = &level_one_tables[i*1024];
     level_two_dirs[i] = (uint32_t)lvl_one_ptr | MP_PRESENT | MP_READWRITE;
   }
-  *root_paging_dir_out = (size_t)level_two_dirs;
+  *root_paging_dir_out = level_two_dirs;
+}
+
+void activate_paging(uint32_t *root_paging_dir)
+{
+  asm __volatile__(
+    "mov %0, %%eax\n"
+    "mov %%eax, %%cr3\n"
+    "mov %%cr0, %%eax\n"
+    "and $0x9FFEFFFF, %%eax\n"  //turn off bits 30 (cache disable), 29 (not write-through), 16 (write protect)
+    "or $0x80000000, %%eax\n" //turn on bit 31 (paging)
+    "mov %%eax, %%cr0\n"      //activate
+    :
+    : "rm"(root_paging_dir)
+    : "eax"
+  );
 }

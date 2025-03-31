@@ -1,4 +1,4 @@
-CFLAGS=-fno-pie -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables 
+CFLAGS=-fPIC -fno-stack-protector -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables 
 LDFLAGS=-Ttext 0x7E00 -static -z nostartfiles -z nodefaultlib -nostdlib -z nolibc -m elf_i386 --oformat elf32-i386
 
 .PHONY: mmgr utils

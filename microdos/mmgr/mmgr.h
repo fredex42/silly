@@ -43,6 +43,7 @@ struct PhysMapEntry {
 #define PAGE_SIZE_DWORDS  0x400
 
 void initialise_mmgr();
-void allocate_paging_directories(size_t highest_value, size_t physical_map_start, size_t *root_paging_dir_out, size_t *pages_used_out);
+void allocate_paging_directories(size_t highest_value, size_t physical_map_start, uint32_t **root_paging_dir_out, size_t *pages_used_out);
 void allocate_physical_map(size_t highest_value, size_t *area_start_out, size_t *map_length_in_pages_out);
 size_t highest_free_memory();
+void activate_paging(uint32_t *root_paging_dir);

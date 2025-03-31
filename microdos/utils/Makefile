@@ -1,4 +1,4 @@
-CFLAGS=-fno-pie -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables 
+CFLAGS=-fPIC -fno-stack-protector -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables 
 
 all: libutils.a
 
