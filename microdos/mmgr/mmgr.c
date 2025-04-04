@@ -7,7 +7,8 @@
 #include "../utils/memlayout.h"
 #include "../utils/regstate.h"
 
-static struct MemoryMapEntry *memoryMap;
+static struct MemoryMapEntry *memoryMap;  //the BIOS memory map returned by int 15
+static struct PhysMapEntry *physicalMap;  //the physical memory map that we maintain
 static uint32_t memory_map_entry_count;
 static size_t physical_page_count;
 
@@ -105,11 +106,16 @@ void initialise_mmgr() {
   size_t highest_value = highest_free_memory();
   kputs("Allocating physical map space...\r\n");
   allocate_physical_map(highest_value, &physical_map_start, &physical_map_length_in_pages);
+  physicalMap = (struct PhysMapEntry *)physical_map_start;
+
   allocate_paging_directories(highest_value, physical_map_start, &root_paging_dir, &pages_used_for_paging);
   kprintf("Used %d pages for paging\r\n", pages_used_for_paging);
   kprintf("Root paging directory is at 0x%x\r\n", root_paging_dir);
+  setup_physical_map(CLASSIC_PAGE_INDEX(root_paging_dir), pages_used_for_paging);
   activate_paging(root_paging_dir);
   kputs("Activated paging\r\n");
+
+  debug_dump_used_memory();
 }
 
 /**
@@ -149,6 +155,142 @@ void allocate_physical_map(size_t highest_value, size_t *area_start_out, size_t 
   size_t physical_map_start = highest_value - ((pages_to_allocate+1) * 0x1000);
   kprintf("Physical memory map runs from 0x%x to 0x%x\r\n", physical_map_start, highest_value);
   *area_start_out = physical_map_start;
+}
+
+void debug_dump_used_memory() 
+{
+  uint8_t in_use=1; //we know that page 0 is in use
+  uint32_t region_start = 0;
+  uint32_t ctr = 0;
+
+  for(register uint32_t i=0; i<=physical_page_count; i++) {
+    if(!physicalMap[i].in_use) {
+      if(in_use || i>=physical_page_count) {
+        //we just toggled
+        uint32_t start_addr = CLASSIC_ADDRESS_FROM_INDEX(region_start);
+        uint32_t end_addr = CLASSIC_ADDRESS_FROM_INDEX(i);
+        kprintf("Region %d: 0x%x -> 0x%x\r\n", ctr, start_addr, end_addr);
+        in_use = 0;
+        region_start = 0;
+        ++ctr;
+      }
+    } else if(!in_use) {
+      region_start = i;
+      in_use = 1;
+    }
+  } 
+
+  if(region_start!=0) {
+    kprintf("Region %d: 0x%x -> 0x%x\r\n", ctr, CLASSIC_ADDRESS_FROM_INDEX(region_start), CLASSIC_ADDRESS_FROM_INDEX(physical_page_count));
+  }
+}
+
+/**
+ * Initialise the physical memory map, by reading the BIOS provided information and marking only 'free'
+ * areas as both present and available.
+ */
+void setup_physical_map(uint32_t first_page_of_pagetables, size_t pages_used_for_paging)
+{
+  uint32_t bios_map_idx = 0;
+
+  for(register uint32_t i=0; i<=physical_page_count; i++) {
+    if(CLASSIC_ADDRESS_FROM_INDEX(i) < memoryMap[bios_map_idx].base_addr) {
+      //if we have a hole in the memory, mark it as not present
+      physicalMap[i].present = 0;
+    } else {
+      physicalMap[i].present = 1;
+      //mark any bad, reserved or ACPI ranges as in-use.  ACPI ranges can be freed later.
+      if(memoryMap[bios_map_idx].type!=MMAP_TYPE_USABLE) {
+        physicalMap[i].in_use = 1;
+      }
+    }
+
+    if(CLASSIC_ADDRESS_FROM_INDEX(i)>(memoryMap[bios_map_idx].base_addr+memoryMap[bios_map_idx].length)) {
+      ++bios_map_idx;
+    }
+    if(bios_map_idx > memory_map_entry_count) {
+      kprintf("WARNING: 0x%x > 0x%x\r\n", bios_map_idx, memory_map_entry_count);
+      break;
+    }
+  }
+
+  //also, we need to mark the pages we already have for the kernel. We reserve pages 7 -> 7F
+  for(register uint32_t i=7; i<0x80; i++) {
+    physicalMap[i].in_use = 1;
+  }
+  //and page 0 which has BIOS stuff on it
+  physicalMap[0].in_use = 1;
+
+  //and the physical map itself....
+  uint32_t phys_map_len = ((physical_page_count * sizeof(struct PhysMapEntry)) / PAGE_SIZE) + 1;  //extra page to allow for over-runs
+  kprintf("Physical map length is 0x%x pages\r\n", phys_map_len);
+  for(register uint32_t i=physical_page_count-1; i<=(physical_page_count - phys_map_len); i--) {
+    physicalMap[i].in_use = 1;
+  }
+  
+  //and the paging directories...
+  for(register uint32_t i=0; i<=pages_used_for_paging; i++) {
+    physicalMap[i+first_page_of_pagetables].in_use = 1;
+  }
+}
+
+/**
+ * Relocates the kernel code from conventional memory to the requested base address
+ * Returns the number of extra pages used for the paging directories.
+ * 
+ */
+uint32_t relocate_kernel(uint32_t new_base_addr, uint32_t *base_paging_dir) {
+  //assume kernel is on memory pages 0x07-0x7F
+  uint32_t base_pagetable = CLASSIC_PAGETABLE(new_base_addr);
+  uint32_t base_pagedir = CLASSIC_PAGEDIR(new_base_addr);
+
+  uint32_t used_pages = 0;
+
+  if(base_paging_dir[base_pagedir] & MP_PRESENT) {
+    //we do not have a paging directory present, let's add one.
+    ++used_pages;
+
+  }
+}
+
+/**
+ * Scans the physical memory map to try to find a block of pages that are free
+ * @params:
+ *  optional_start_addr - start scanning from this address. Default to 0, meaning start from the beginning of the map
+ * optional_end_addr - end scanning at this address. Default to 0, meaning end at the end of the map
+ */
+err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_addr, uint32_t page_count, uint8_t should_reverse, uint32_t *out_block_start)
+{
+  uint32_t start_index = CLASSIC_PAGE_INDEX(optional_start_addr);
+  uint32_t end_index = end_index>0 ? CLASSIC_PAGE_INDEX(optional_end_addr) : physical_page_count;
+
+  register uint32_t i = should_reverse ? end_index : start_index;
+  register uint32_t found_pages = 0;
+  uint32_t starting_page = 0;
+
+  while(i>=end_index && i<=start_index) {
+    if(physicalMap[i].in_use && found_pages>0) {
+      //if this page is in use and we are already tracking pages, then there are not enough
+      found_pages = 0;
+      starting_page = 0;
+    }
+    if(!physicalMap[i].in_use) {
+      ++found_pages;
+      if(starting_page==0) starting_page = i;
+    }
+    if(found_pages==page_count) {
+      //we found enough pages to return
+      //Mark pages as in-use
+      for(uint32_t j=starting_page; j<=i; j++) {
+        physicalMap[j].in_use = 1;
+      }
+      
+      *out_block_start = CLASSIC_ADDRESS_FROM_INDEX(starting_page);
+      return ERR_NONE;
+    }
+  }
+  //we ran out of memory
+  return ERR_NOMEM;
 }
 
 void allocate_paging_directories(size_t highest_value, size_t physical_map_start, uint32_t **root_paging_dir_out, size_t *pages_used_out)

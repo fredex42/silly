@@ -1,4 +1,5 @@
 #include <types.h>
+#include <errors.h>
 
 //system memory map structure, from https://www.ctyme.com/intr/rb-1741.htm
 struct MemoryMapEntry {
@@ -47,3 +48,17 @@ void allocate_paging_directories(size_t highest_value, size_t physical_map_start
 void allocate_physical_map(size_t highest_value, size_t *area_start_out, size_t *map_length_in_pages_out);
 size_t highest_free_memory();
 void activate_paging(uint32_t *root_paging_dir);
+void debug_dump_used_memory();
+void setup_physical_map(uint32_t first_page_of_pagetables, size_t pages_used_for_paging);
+uint32_t relocate_kernel(uint32_t new_base_addr, uint32_t *base_paging_dir);
+err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_addr, uint32_t page_count, uint8_t should_reverse, uint32_t *out_block_start);
+
+//return the classic paging directory for a 32-bit address
+#define CLASSIC_PAGEDIR(addr) (uint32_t)addr >> 22
+//return the classic paging table for a 32-bit address
+#define CLASSIC_PAGETABLE(addr) ((uint32_t)addr >> 12) & 0x3FF
+//turn a page and table into a 32-bit address
+#define CLASSIC_ADDRESS(page, table) (void*)((page << 22) & (table << 12))
+//get the full index of a page from its address
+#define CLASSIC_PAGE_INDEX(addr) (uint32_t)addr >> 12
+#define CLASSIC_ADDRESS_FROM_INDEX(idx) (uint32_t)idx << 12
