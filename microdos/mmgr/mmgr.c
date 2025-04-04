@@ -239,18 +239,43 @@ void setup_physical_map(uint32_t first_page_of_pagetables, size_t pages_used_for
  * Returns the number of extra pages used for the paging directories.
  * 
  */
-uint32_t relocate_kernel(uint32_t new_base_addr, uint32_t *base_paging_dir) {
+err_t relocate_kernel(uint32_t new_base_addr) {
+  kprintf("Relocating kernel to 0x%x\r\n", new_base_addr);
   //assume kernel is on memory pages 0x07-0x7F
   uint32_t base_pagetable = CLASSIC_PAGETABLE(new_base_addr);
   uint32_t base_pagedir = CLASSIC_PAGEDIR(new_base_addr);
 
+  uint32_t *new_pagedir;
+  uint32_t *base_paging_dir = 0x0;
+
+  //get the current paging dir
+  asm (
+    "mov %%cr3, %0"
+    : "rm+"(base_paging_dir)
+    : "rm"(base_paging_dir)
+  );
+  kprintf("DEBUG base_paging_dir is 0x%x\r\n", base_paging_dir);
+
   uint32_t used_pages = 0;
 
   if(base_paging_dir[base_pagedir] & MP_PRESENT) {
+    //we do have a paging directory present, use that
+    new_pagedir = (uint32_t *)(base_paging_dir[base_pagedir] & MP_ADDRESS_MASK);
+  } else {
     //we do not have a paging directory present, let's add one.
     ++used_pages;
-
+    err_t e = find_next_free_pages(0x10000, base_paging_dir, 1, 1, &new_pagedir);
+    if(e!=ERR_NONE) {
+      kprintf("ERROR Unable to find a free page: 0x%x\r\n", e);
+      return e;
+    }
+    base_paging_dir[base_pagedir] = (uint32_t)new_pagedir | MP_PRESENT | MP_GLOBAL | MP_READWRITE;
   }
+  for(register uint32_t i=0; i<0x78; i++) {
+    uint32_t new_addr = (uint32_t) CLASSIC_ADDRESS(0, i+7);
+    new_pagedir[i] = new_addr | MP_PRESENT | MP_GLOBAL;
+  }
+  return ERR_NONE;
 }
 
 /**
@@ -268,7 +293,7 @@ err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_a
   register uint32_t found_pages = 0;
   uint32_t starting_page = 0;
 
-  while(i>=end_index && i<=start_index) {
+  while(i<=end_index && i>=start_index) {
     if(physicalMap[i].in_use && found_pages>0) {
       //if this page is in use and we are already tracking pages, then there are not enough
       found_pages = 0;
@@ -287,6 +312,11 @@ err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_a
       
       *out_block_start = CLASSIC_ADDRESS_FROM_INDEX(starting_page);
       return ERR_NONE;
+    }
+    if(should_reverse) {
+      i--;
+    } else {
+      i++;
     }
   }
   //we ran out of memory

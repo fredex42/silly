@@ -1,5 +1,6 @@
 #include <sys/idt.h>
 #include <memops.h>
+#include <errors.h>
 #include "utils/gdt32.h"
 #include "utils/tss32.h"
 #include "mmgr/mmgr.h"
@@ -7,6 +8,7 @@
 extern int_ff_trapvec();
 
 void _start() {
+    err_t e;
     kputs("Hello world!\r\n");
 
     //First things first.... let's set up our interrupt table & GDT
@@ -15,6 +17,28 @@ void _start() {
     setup_interrupts();
     initialise_mmgr();
 
+    e = relocate_kernel(0xff000000);
+    if(e!=ERR_NONE) {
+        kprintf("ERROR Cannot relocate kernel, error 0x%x\r\n", e);
+        while (1)
+        {
+            __asm__ volatile("nop");
+        }
+    }
+    
+    //now enter the relocated kernel
+    asm __volatile__ (
+        ".temp_relocate_jump:\n"
+        "lea .relocate_exit, %%esi\n"
+        "add %0, %%esi\n"
+        "push %%esi\n"
+        "ret\n"
+        ".relocate_exit:\n"
+        : 
+        : "r"(0xFEFF9000)   //0xff000000 - 0x7000, the address offset for the relocated code
+        : "esi"
+    );
+    
     while(1) {
         __asm__ volatile("nop");
     }
