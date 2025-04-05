@@ -87,3 +87,31 @@ size_t strlen(const char *str)
   while(str[i]!=0) i++;
   return i;
 }
+
+void longToString(uint32_t value, char *buf, uint32_t base)
+{
+  char *numerals = "0123456789abcdef";
+  char temp_buf[99];
+  memset(temp_buf, 0, 99);
+
+  uint32_t idx = 0;
+
+  if(base==0) {
+    //can't divide by 0!
+    return;
+  }
+
+  uint32_t current_value = value;
+  while(current_value>base) {
+    int32_t quotient = current_value / base;
+    int32_t remainder = current_value % base;
+    temp_buf[idx] = numerals[remainder];
+    current_value = quotient;
+    ++idx;
+  }
+  temp_buf[idx] = numerals[current_value];
+  for(uint32_t j=0; j<=idx; j++) {
+    buf[j] = temp_buf[idx-j];
+  }
+  buf[idx+1] = 0;
+}

@@ -2,6 +2,7 @@
 #include "regstate.h"
 #include "v86.h"
 #include "tss32.h"
+#include "idt32.h"  //for prototype of int_ff_trapvec
 
 struct RealModeInterrupt *realModeIVT;  //due to bootloader limitations, hard-setting the value at the top will not work
 

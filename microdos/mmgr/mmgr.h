@@ -52,6 +52,7 @@ void debug_dump_used_memory();
 void setup_physical_map(uint32_t first_page_of_pagetables, size_t pages_used_for_paging);
 err_t relocate_kernel(uint32_t new_base_addr);
 err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_addr, uint32_t page_count, uint8_t should_reverse, uint32_t *out_block_start);
+void unmap_kernel_boot_space();
 
 //return the classic paging directory for a 32-bit address
 #define CLASSIC_PAGEDIR(addr) (uint32_t)addr >> 22

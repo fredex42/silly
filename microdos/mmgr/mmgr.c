@@ -59,7 +59,7 @@ uint16_t retrieve_memory_map()
             kprintf("WARNING Unable to retrieve memory-map, BIOS error was 0x%x\r\n", returned_ax);
             return ERR_UNKNOWN;
         }
-        kprintf("returned from v86, eax=0x%x, ebx=0x%x flags=0x%x\r\n", returned_ax, returned_bx, returned_flags);
+        //kprintf("returned from v86, eax=0x%x, ebx=0x%x flags=0x%x\r\n", returned_ax, returned_bx, returned_flags);
         memory_map_entry_count += 1;
     } while(!(returned_flags&0x3) || returned_bx!=0);
     return ERR_NONE;
@@ -271,13 +271,30 @@ err_t relocate_kernel(uint32_t new_base_addr) {
     }
     base_paging_dir[base_pagedir] = (uint32_t)new_pagedir | MP_PRESENT | MP_GLOBAL | MP_READWRITE;
   }
-  for(register uint32_t i=0; i<0x78; i++) {
-    uint32_t new_addr = (uint32_t) CLASSIC_ADDRESS(0, i+7);
+  for(register uint32_t i=7; i<0x7F; i++) {
+    uint32_t new_addr = (uint32_t) CLASSIC_ADDRESS(0, i);
     new_pagedir[i] = new_addr | MP_PRESENT | MP_GLOBAL;
   }
   return ERR_NONE;
 }
 
+void unmap_kernel_boot_space()
+{
+  uint32_t *new_pagedir;
+  uint32_t *base_paging_dir = 0x0;
+
+  //get the current paging dir
+  asm (
+    "mov %%cr3, %0"
+    : "rm+"(base_paging_dir)
+    : "rm"(base_paging_dir)
+  );
+  kprintf("DEBUG base_paging_dir is 0x%x\r\n", base_paging_dir);
+  uint32_t *pagetable_zero = (uint32_t *)(base_paging_dir[0] & MP_ADDRESS_MASK);
+  for(register uint32_t i=7; i<0x7F; i++) {
+    pagetable_zero[i] &= ~MP_PRESENT;  //remove the MP_PRESENT flag so the pages go
+  }
+}
 /**
  * Scans the physical memory map to try to find a block of pages that are free
  * @params:

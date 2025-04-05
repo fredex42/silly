@@ -1,11 +1,10 @@
-#include <sys/idt.h>
 #include <memops.h>
 #include <errors.h>
 #include "utils/gdt32.h"
 #include "utils/tss32.h"
 #include "mmgr/mmgr.h"
-
-extern int_ff_trapvec();
+#include "utils/memlayout.h"
+#include "utils/idt32.h"
 
 void _start() {
     err_t e;
@@ -14,10 +13,11 @@ void _start() {
     //First things first.... let's set up our interrupt table & GDT
     setup_tss();
     setup_gdt();
-    setup_interrupts();
+    setup_interrupts(0);
+    //we need to have int 0xff before we can intialise mmgr as it relies on v86 mode :(
     initialise_mmgr();
 
-    e = relocate_kernel(0xff000000);
+    e = relocate_kernel(KERNEL_RELOCATION_BASE);
     if(e!=ERR_NONE) {
         kprintf("ERROR Cannot relocate kernel, error 0x%x\r\n", e);
         while (1)
@@ -35,63 +35,21 @@ void _start() {
         "ret\n"
         ".relocate_exit:\n"
         : 
-        : "r"(0xFEFF9000)   //0xff000000 - 0x7000, the address offset for the relocated code
+        : "r"(KERNEL_RELOCATION_BASE)
         : "esi"
     );
-    
+    setup_interrupts(1);
+    unmap_kernel_boot_space();
+    test_exception();
     while(1) {
         __asm__ volatile("nop");
     }
 }
 
-static struct IDTR32 idtr;
-static struct InterruptDescriptor32 idt[IDT_LIMIT];
-
-void configure_interrupt(uint8_t idx, void *ptr, uint8_t type) {
-    idt[idx].offset_lo = (uint16_t) ((uint32_t)ptr & 0xFFFF);
-    idt[idx].selector = 0x08;   //kernel CS
-    idt[idx].attributes = type | IDT_ATTR_PRESENT | IDT_ATTR_DPL(0);
-    idt[idx].offset_hi = (uint16_t) ((uint32_t)ptr >> 16);
+void test_exception() {
+    uint32_t x = 1 / 0;
 }
 
-void setup_interrupts() {
-    memset_dw(&idt, 0, IDT_LIMIT*2);
-    configure_interrupt(0, IDivZero, IDT_ATTR_TRAP_32);
-    configure_interrupt(1, IDebug, IDT_ATTR_TRAP_32);
-    configure_interrupt(2, INMI, IDT_ATTR_INT_32);
-    configure_interrupt(3, IBreakPoint, IDT_ATTR_TRAP_32);
-    configure_interrupt(4, IOverflow, IDT_ATTR_TRAP_32);
-    configure_interrupt(5, IBoundRange, IDT_ATTR_INT_32);
-    configure_interrupt(6, IOpcodeInval, IDT_ATTR_INT_32);
-    configure_interrupt(7, IDevNotAvail, IDT_ATTR_INT_32);
-    configure_interrupt(8, IDoubleFault, IDT_ATTR_TRAP_32);
-    configure_interrupt(9, IReserved, IDT_ATTR_INT_32); //deprecated coprocessor segment overrun
-    configure_interrupt(0x0a, IBoundRange, IDT_ATTR_INT_32);
-    configure_interrupt(0x0b, ISegNotPresent, IDT_ATTR_INT_32);
-    configure_interrupt(0x0c, IStackSegFault, IDT_ATTR_INT_32);
-    configure_interrupt(0x0d, IGPF, IDT_ATTR_INT_32);
-    configure_interrupt(0x0e, IPageFault, IDT_ATTR_INT_32);
-    configure_interrupt(0x0f, IReserved, IDT_ATTR_INT_32);
-    configure_interrupt(0x10, IFloatingPointExcept, IDT_ATTR_INT_32);
-    configure_interrupt(0x11, IAlignmentCheck, IDT_ATTR_INT_32);
-    configure_interrupt(0x12, IMachineCheck, IDT_ATTR_TRAP_32);
-    configure_interrupt(0x13, ISIMDFPExcept, IDT_ATTR_INT_32);
-    configure_interrupt(0x14, IVirtExcept, IDT_ATTR_INT_32);
-    for(register int i=0x15; i<=0x1D; i++) {
-        configure_interrupt(i, IReserved, IDT_ATTR_INT_32);
-    }
-    configure_interrupt(0x1e, ISecurityExcept, IDT_ATTR_INT_32);
-    configure_interrupt(0x1f, IReserved, IDT_ATTR_INT_32);
-
-    //set up special return-from-v86 trap
-    idt[0xff].offset_lo = (uint16_t) ((uint32_t)int_ff_trapvec & 0xFFFF);
-    idt[0xff].selector = 0x08;   //kernel CS
-    idt[0xff].attributes = IDT_ATTR_TRAP_32 | IDT_ATTR_PRESENT | IDT_ATTR_DPL(3);
-    idt[0xff].offset_hi = (uint16_t) ((uint32_t)int_ff_trapvec >> 16);
-
-    idtr.size = IDT_LIMIT*2*sizeof(uint32_t);
-    idtr.offset = (uint32_t) &idt;
-    asm __volatile__(
-        "lidt %0" : : "m"(idtr)
-    );
+void __stack_chk_fail() {
+    kputs("PANIC - kernel stack overflow detected\r\n");
 }

@@ -9,6 +9,8 @@
         "utility": "c",
         "istream": "c",
         "ostream": "c",
-        "cstdint": "c"
+        "cstdint": "c",
+        "idt32.h": "c",
+        "memlayout.h": "c"
     }
 }
