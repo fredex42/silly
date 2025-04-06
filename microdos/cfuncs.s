@@ -6,8 +6,6 @@ section .text
 ;so the stack frame will be: [sp..sp+4] saved bp value [sp+4..sp+8] return addr [sp+8..sp+12] arg1 [sp+12..sp+16] arg2 .....
 global kputs
 global kputlen
-global longToString
-global __stack_chk_fail
 %include "basic_console.inc"
 
 ;Purpose: outputs a string to the console

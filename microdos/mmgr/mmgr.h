@@ -1,6 +1,9 @@
 #include <types.h>
 #include <errors.h>
 
+#ifndef __INT_MMGR_H
+#define __INT_MMGR_H
+
 //system memory map structure, from https://www.ctyme.com/intr/rb-1741.htm
 struct MemoryMapEntry {
     uint64_t base_addr;
@@ -63,3 +66,5 @@ void unmap_kernel_boot_space();
 //get the full index of a page from its address
 #define CLASSIC_PAGE_INDEX(addr) (uint32_t)addr >> 12
 #define CLASSIC_ADDRESS_FROM_INDEX(idx) (uint32_t)idx << 12
+
+#endif

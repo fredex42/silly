@@ -1,20 +1,23 @@
 #include <types.h>
 #include <memops.h>
 #include <errors.h>
+#include <panic.h>
 #include "mmgr.h"
 #include "../utils/v86.h"
 #include "../utils/tss32.h"
 #include "../utils/memlayout.h"
 #include "../utils/regstate.h"
 
-static struct MemoryMapEntry *memoryMap;  //the BIOS memory map returned by int 15
-static struct PhysMapEntry *physicalMap;  //the physical memory map that we maintain
-static uint32_t memory_map_entry_count;
-static size_t physical_page_count;
+struct MemoryMapEntry *memoryMap;  //the BIOS memory map returned by int 15
+struct PhysMapEntry *physicalMap;  //the physical memory map that we maintain
+uint32_t memory_map_entry_count;
+size_t physical_page_count;
+uint32_t *level_one_tables;
 
 uint16_t retrieve_memory_map()
 {
     memory_map_entry_count = 0;
+    level_one_tables = NULL;
     memoryMap = (struct MemoryMapEntry *) MEMORY_MAP_STATICPTR;
     memset(memoryMap, 0, MEMORY_MAP_LIMIT);
 
@@ -303,12 +306,15 @@ void unmap_kernel_boot_space()
  */
 err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_addr, uint32_t page_count, uint8_t should_reverse, uint32_t *out_block_start)
 {
+  kprintf("DEBUG find_next_free_pages start_addr=0x%x end_addr=0x%x page_count=%d\r\n", optional_start_addr, optional_end_addr, page_count);
   uint32_t start_index = CLASSIC_PAGE_INDEX(optional_start_addr);
-  uint32_t end_index = end_index>0 ? CLASSIC_PAGE_INDEX(optional_end_addr) : physical_page_count;
+  uint32_t end_index = optional_end_addr>0 ? CLASSIC_PAGE_INDEX(optional_end_addr) : physical_page_count;
 
   register uint32_t i = should_reverse ? end_index : start_index;
   register uint32_t found_pages = 0;
   uint32_t starting_page = 0;
+
+  kprintf("DEBUG find_next_free_pages start_index=0x%x end_index=0x%x\r\n", start_index, end_index);
 
   while(i<=end_index && i>=start_index) {
     if(physicalMap[i].in_use && found_pages>0) {
@@ -350,7 +356,7 @@ void allocate_paging_directories(size_t highest_value, size_t physical_map_start
 
   //level one tables go below the physical memory map
   //Use MP_ADDRESS_MASK to make sure that this is page-aligned.
-  uint32_t *level_one_tables = (uint32_t *)(( (physical_map_start - (physical_page_count*4)) ) & MP_ADDRESS_MASK);  //4 bytes per physical page entry
+  level_one_tables = (uint32_t *)(( (physical_map_start - (physical_page_count*4)) ) & MP_ADDRESS_MASK);  //4 bytes per physical page entry
   
   kprintf("DEBUG %d level one entries from 0x%x\r\n", level_one_table_count, (uint32_t)level_one_tables);
   //identity map the entire RAM space
@@ -381,4 +387,32 @@ void activate_paging(uint32_t *root_paging_dir)
     : "rm"(root_paging_dir)
     : "eax"
   );
+}
+
+/**
+allocates the given number of pages of physical RAM and maps them into the memory space of the given page directory.
+*/
+void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
+{
+  if(root_page_dir!=NULL) {
+    k_panic("ERROR - allocating memory to alternative root dirs is not supported\r\n");
+    return NULL;
+  }
+  uint32_t found_block_linear_start = 0;
+
+  //only allocate out from 1Mb, we have continuously mapped memory there
+  err_t e = find_next_free_pages(0x100000, 0, page_count, 0, &found_block_linear_start);
+  if(e!=ERR_NONE) {
+    kprintf("ERROR unable to allocate %l pages: 0x%x\r\n", page_count, e);
+    return NULL;
+  }
+
+  //apply the requested flags. We can do this because all page directories are linearly mapped so we don't need to 
+  //worry about switching directories.
+  uint32_t block_page_start = found_block_linear_start >> 12;
+  uint32_t block_page_end = block_page_start + page_count;
+  for(register uint32_t i=block_page_start;i<block_page_end; i++) {
+    level_one_tables[i] = (level_one_tables[i] & MP_ADDRESS_MASK) | flags | MP_PRESENT; //ensure MP_PRESENT is still thre
+  }
+  return (void *)found_block_linear_start;
 }

@@ -17,5 +17,8 @@ tss32.o: tss32.c tss32.h
 idt32.o: idt32.c idt32.h memlayout.h v86.h
 	gcc -c ${CFLAGS} idt32.c
 
-libutils.a: v86.o gdt32.o tss32.o idt32.o
-	ar rcs libutils.a v86.o gdt32.o tss32.o idt32.o
+panic.o: panic.c
+	gcc -c ${CFLAGS} panic.c
+	
+libutils.a: v86.o gdt32.o tss32.o idt32.o panic.o
+	ar rcs libutils.a v86.o gdt32.o tss32.o idt32.o panic.o
