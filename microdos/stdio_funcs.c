@@ -91,8 +91,8 @@ size_t strlen(const char *str)
 void longToString(uint32_t value, char *buf, uint32_t base)
 {
   char *numerals = "0123456789abcdef";
-  char temp_buf[99];
-  memset(temp_buf, 0, 99);
+  char temp_buf[64];
+  //memset(temp_buf, '0', 64);
 
   uint32_t idx = 0;
 
@@ -102,9 +102,9 @@ void longToString(uint32_t value, char *buf, uint32_t base)
   }
 
   uint32_t current_value = value;
-  while(current_value>base) {
-    int32_t quotient = current_value / base;
-    int32_t remainder = current_value % base;
+  while(current_value>=base) {
+    uint32_t quotient = current_value / base;
+    uint32_t remainder = current_value % base;
     temp_buf[idx] = numerals[remainder];
     current_value = quotient;
     ++idx;
