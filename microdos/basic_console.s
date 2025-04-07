@@ -10,7 +10,7 @@ global PMPrintStringLen
 extern early_serial_putchar
 
 ; remove this definition to disable serial console
-; %define SERIAL_CONSOLE 1
+%define SERIAL_CONSOLE 1
 
 %include "memlayout.asm"
 

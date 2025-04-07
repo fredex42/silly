@@ -1,5 +1,6 @@
 #include <memops.h>
 #include <errors.h>
+#include "drivers/early_serial/serial.h"
 #include "utils/gdt32.h"
 #include "utils/tss32.h"
 #include "mmgr/mmgr.h"
@@ -9,6 +10,7 @@
 
 void _start() {
     err_t e;
+    early_serial_lowlevel_init();
     kputs("Hello world!\r\n");
 
     //First things first.... let's set up our interrupt table & GDT
