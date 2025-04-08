@@ -2,6 +2,7 @@
 #include <sys/idt.h>
 #include "memlayout.h"
 #include "idt32.h"
+#include "../8259pic/interrupts.h"
 
 void configure_interrupt(struct InterruptDescriptor32 *idt, uint8_t idx, void *ptr, uint8_t type, uint8_t with_relocation) {
     idt[idx].offset_lo = (uint16_t) ((uint32_t)ptr & 0xFFFF);
@@ -61,4 +62,12 @@ void setup_interrupts(uint8_t with_relocation) {
         ".temp_configure_idtr:\n"
         "lidt (%0)\n" : : "r"(IDTR_BASE_ADDRESS): "esi"
     );
+}
+
+void configure_pic_interrupts(uint8_t starting_vector)
+{
+    struct InterruptDescriptor32 *idt = (struct InterruptDescriptor32 *)IDT_BASE_ADDRESS;
+
+	configure_interrupt(idt, starting_vector, ITimer, IDT_ATTR_INT_32, 1);
+    
 }

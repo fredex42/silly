@@ -1,5 +1,6 @@
 #include <memops.h>
 #include <errors.h>
+#include "8259pic/8259pic.h"
 #include "drivers/early_serial/serial.h"
 #include "utils/gdt32.h"
 #include "utils/tss32.h"
@@ -49,6 +50,7 @@ void _start() {
     //TODO: investigate and adjust stack/frame accordingly after the unmap op
     initialise_heap(0x100);
 
+    setup_pic();
     //test_alloc();
 
     while(1) {

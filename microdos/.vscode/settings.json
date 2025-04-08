@@ -11,6 +11,9 @@
         "ostream": "c",
         "cstdint": "c",
         "idt32.h": "c",
-        "memlayout.h": "c"
+        "memlayout.h": "c",
+        "optional": "cpp",
+        "system_error": "cpp",
+        "ioports.h": "c"
     }
 }
