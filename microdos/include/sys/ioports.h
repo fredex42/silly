@@ -3,18 +3,6 @@
 #ifndef __SYS_IOPORTS_H
 #define __SYS_IOPORTS_H
 
-// uint8_t inb(uint16_t port);
-// uint16_t inw(uint16_t port);
-// uint32_t ind(uint16_t port);
-
-// void outb(uint16_t port, uint8_t value);
-// void outw(uint16_t port, uint16_t value);
-// void outd(uint16_t port, uint32_t value);
-
-// void io_wait();
-
-// void cli();
-// void sti();
 /*Purpose: Wait a very small amount of time (1 to 4 microseconds, generally).
 ; Useful for implementing a small delay for PIC remapping on old hardware or
 ; generally as a simple but imprecise wait.
@@ -36,5 +24,10 @@
 
 //Write
 #define outb(port, value) asm __volatile__("out %%al, %%dx" : : "d"(port),"a"(value))
+#define outw(port, value) asm __volatile__("out %%ax, %%dx" : : "d"(port),"a"(value))
+#define outd(port, value) asm __volatile__("out %%eax, %%dx" : : "d"(port),"a"(value))
 
+//Interrupts
+#define cli() asm __volatile__("cli")
+#define sti() asm __volatile__("sti")
 #endif

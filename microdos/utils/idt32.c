@@ -64,10 +64,27 @@ void setup_interrupts(uint8_t with_relocation) {
     );
 }
 
+/*
+Sets up interrupt handlers for the legacy PIC (ISA style IRQs)
+*/
 void configure_pic_interrupts(uint8_t starting_vector)
 {
     struct InterruptDescriptor32 *idt = (struct InterruptDescriptor32 *)IDT_BASE_ADDRESS;
 
-	configure_interrupt(idt, starting_vector, ITimer, IDT_ATTR_INT_32, 1);
-    
+	configure_interrupt(idt, starting_vector, ITimer, IDT_ATTR_INT_32, 1);  //IRQ0 - timer
+    configure_interrupt(idt, starting_vector+1, IDummy, IDT_ATTR_INT_32, 1); //IRQ1 - keyboard
+    configure_interrupt(idt, starting_vector+2, IDummy, IDT_ATTR_INT_32, 1);    //IRQ2 - cascade, we don't see it
+    configure_interrupt(idt, starting_vector+3, ISerial2, IDT_ATTR_INT_32, 1);  //IRQ3 - serial port 2
+    configure_interrupt(idt, starting_vector+4, ISerial1, IDT_ATTR_INT_32, 1);  //IRQ4 - serial port 1
+    configure_interrupt(idt, starting_vector+5, IParallel2, IDT_ATTR_INT_32, 1);  //IRQ5 - parallel port 1
+    configure_interrupt(idt, starting_vector+6, IFloppy1, IDT_ATTR_INT_32, 1);  //IRQ6 - FDD1
+    configure_interrupt(idt, starting_vector+7, ISpurious, IDT_ATTR_INT_32, 1);  //IRQ7 - spurious irq
+    configure_interrupt(idt, starting_vector+8, IDummy, IDT_ATTR_INT_32, 1);  //IRQ8 - CMOS clock
+    configure_interrupt(idt, starting_vector+9, IRQ9, IDT_ATTR_INT_32, 1);  //IRQ9 - generic
+    configure_interrupt(idt, starting_vector+10, IRQ10, IDT_ATTR_INT_32, 1);  //IRQ10 - generic
+    configure_interrupt(idt, starting_vector+11, IRQ11, IDT_ATTR_INT_32, 1);  //IRQ11 - generic
+    configure_interrupt(idt, starting_vector+12, IMouse, IDT_ATTR_INT_32, 1);  //IRQ12 - mouse
+    configure_interrupt(idt, starting_vector+13, IFPU, IDT_ATTR_INT_32, 1);  //IRQ13 - floating-point unit
+    configure_interrupt(idt, starting_vector+14, IPrimaryATA, IDT_ATTR_INT_32, 1);  //IRQ14 - IDE1
+    configure_interrupt(idt, starting_vector+15, ISecondaryATA, IDT_ATTR_INT_32, 1);  //IRQ15 - IDE2
 }

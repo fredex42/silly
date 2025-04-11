@@ -1,107 +1,28 @@
 [BITS 32]
 
-%include "../memlayout.asm"  ;for IDTPtr
 ;function exports
 global ISpurious
 global ITimer
 global IDummy
-; global configure_pic_interrupts
+global ISerial1
+global ISerial2
+global IParallel2
+global IParallel1
+global IFloppy1
+global IRQ9
+global IRQ10
+global IRQ11
+global IMouse
+global IFPU
+global IPrimaryATA
+global ISecondaryATA
 
 ;function imports
 extern pic_send_eoi
 extern pic_get_irr
 extern pic_get_isr
 extern PMPrintChar
-extern IKeyboard
-; extern CreateIA32IDTEntry
-extern ICmosRTC
 
-; ;Registers our interrupt handlers in the IDT
-; configure_pic_interrupts:
-;   push ebp
-;   mov ebp, esp
-;   push eax
-;   push ebx
-;   push ecx
-;   push edx
-;   push esi
-;   push edi
-;   push es
-
-;   mov ax, cs
-;   mov es, ax
-
-;   ;Create an IDT (Interrupt Descriptor Table) entry
-;   ;The entry is created at ds:esi. esi is incremented to point to the next entry
-;   ;destroys values in bl, cx, edi
-;   ;edi: offset of handler
-;   ;es : GDT selector containing the code
-;   ;bl : gate type. 0x05 32-bit task gate, 0x0E 32-bit interrupt gate, 0x0F 32-bit trap gate
-;   ;cl : ring level required to call. Only 2 bits are used.
-
-;   mov esi, IDTOffset  ;location of the IDT
-;   add esi, 0x100      ;start setting interrupts at 0x20, each entry is 8 bytes long.
-
-;   xor ebx, ebx
-;   mov bl, 0x0E
-;   mov edi, ITimer
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ0
-;   mov edi, IKeyboard
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ1
-;   mov edi, IDummy
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ2 - this is the cascade and never raised, so kept as Dummy
-;   mov edi, ISerial2
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ3
-;   mov edi, ISerial1
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ4
-;   mov edi, IParallel2
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ5
-;   mov edi, IFloppy1
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ6
-;   mov edi, ISpurious
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ7
-;   mov edi, ICmosRTC
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ8
-;   mov edi, IRQ9
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ9
-;   mov edi, IRQ10
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ10
-;   mov edi, IRQ11
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ11
-;   mov edi, IMouse
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ12
-;   mov edi, IFPU
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ13
-;   mov edi, IPrimaryATA
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ14
-;   mov edi, ISecondaryATA
-;   xor ecx, ecx
-;   call CreateIA32IDTEntry ;IRQ15
-
-;   pop es
-;   pop edi
-;   pop esi
-;   pop edx
-;   pop ecx
-;   pop ebx
-;   pop eax
-;   pop ebp
-;   ret
 
 ITimer:     ;timer interrupt handler
   pushf

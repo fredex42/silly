@@ -1,5 +1,6 @@
 #include <memops.h>
 #include <errors.h>
+#include <sys/ioports.h>
 #include "8259pic/8259pic.h"
 #include "drivers/early_serial/serial.h"
 #include "utils/gdt32.h"
@@ -52,6 +53,7 @@ void _start() {
 
     setup_pic();
     //test_alloc();
+    sti();  //now we can enable interrupts
 
     while(1) {
         __asm__ volatile("nop");
