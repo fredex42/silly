@@ -54,6 +54,7 @@ _pm_start:
     ;So, what we are first going to do is to copy the entire conventional memory area into the 1Mb range. We are then going to jump ourselves into that copy
     ;of our code, parse the ELF headers, figure out which sections go where, re-write the conventional memory area and then jump back into the kernel.
 
+    ;save the cursor location that the first stage placed us in
     push dx
 
     ;Now, let's copy everything from 0x0 -> 0x7FFFF to 0x100000 -> 107FFFF (above that is reserved)
@@ -67,6 +68,11 @@ _pm_start:
     pop dx
     mov byte [CursorRowPtr], DH
     mov byte [CursorColPtr], dl
+
+    ;also save the boot device number
+    xor dx,dx
+    mov dl, byte [BiosBootDevicePtr]
+    push dx
 
     mov esi, _bl_relocation
     add esi, 0x100000
@@ -128,6 +134,8 @@ _bl_relocation:
     mov DH, byte [CursorRowPtr]
     mov dl, byte [CursorColPtr]
 
+    ;tell the kernel which device we booted from
+    pop bx
     ;now enter the kernel. Push the address and use `ret` in order to get an absolute jump.
     mov esi, dword [KERNEL_BINARY_BASE+ELF_ENTRY_POINT]
     push esi
