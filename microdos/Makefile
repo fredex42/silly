@@ -1,7 +1,7 @@
 CFLAGS=-fPIC -fno-stack-protector -m32 -Iinclude -march=i486 -fno-asynchronous-unwind-tables 
 LDFLAGS=-Ttext 0x7E00 -static -z nostartfiles -z nodefaultlib -nostdlib -z nolibc -m elf_i386 --oformat elf32-i386
 
-.PHONY: mmgr utils drivers 8259pic
+.PHONY: mmgr utils drivers 8259pic volmgr
 
 all: andy.sys kernel.map
 
@@ -11,6 +11,7 @@ clean:
 	make -C utils clean
 	make -C drivers clean
 	make -C 8259pic clean
+	make -C volmgr clean
 
 mmgr:
 	make -C mmgr
@@ -23,6 +24,9 @@ drivers:
 
 8259pic:
 	make -C 8259pic
+
+volmgr:
+	make -C volmgr
 
 init.o: init.asm
 	nasm -f elf32 init.asm
@@ -45,12 +49,13 @@ memops.o: memops.asm include/memops.h
 main.o: main.c include/sys/idt.h
 	gcc -c ${CFLAGS} main.c
 
-andy.sys: init.o cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptions.o stdio_funcs.o memops.o mmgr utils drivers 8259pic
+andy.sys: init.o cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptions.o stdio_funcs.o memops.o mmgr utils drivers 8259pic volmgr
 	ld  ${LDFLAGS} -b elf32-i386 init.o main.o memops.o cfuncs.o cpuid.o exceptions.o basic_console.o stdio_funcs.o c_exceptions.o  \
 	-Lmmgr -lmmgr \
 	-Lutils -lutils \
 	-Ldrivers/early_serial -learly_serial \
 	-L8259pic -l8259pic \
+	-Lvolmgr -lvolmgr \
 	-o andy.sys
 
 kernel.map: andy.sys

@@ -1,6 +1,7 @@
 #include <memops.h>
 #include <errors.h>
 #include <sys/ioports.h>
+#include <volmgr.h>
 #include "8259pic/8259pic.h"
 #include "drivers/early_serial/serial.h"
 #include "utils/gdt32.h"
@@ -64,6 +65,9 @@ void cmain() {
     //Configure the hardware interrupts. This also adds them to the IDT.
     setup_pic();
     sti();  //now we can enable interrupts
+
+    //test_alloc();
+    struct VolMgr *volmgr = volmgr_init(bios_boot_disk_number);
 
     //Idle loop
     while(1) {

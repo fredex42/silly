@@ -11,4 +11,4 @@
 #define MEMORY_MAP_STATICPTR 0x600  //put this above the GDT
 #define MEMORY_MAP_LIMIT     0x100
 
-#define KERNEL_HEAP_PTR     0x700   //pointer to kernel heap location (dword)
+#define KERNEL_HEAP_PTR     0x580   //pointer to kernel heap location (dword)

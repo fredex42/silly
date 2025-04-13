@@ -318,6 +318,7 @@ void* heap_alloc(size_t bytes)
 {
   struct HeapZoneStart* z = * ((struct HeapZoneStart **) KERNEL_HEAP_PTR);
 
+  //kprintf("DEBUG heap_alloc HeapZoneStart=0x%x\r\n", z);
   while(1) {
     if(z->magic!=HEAP_ZONE_SIG) k_panic("Kernel heap corrupted\r\n");
     #ifdef MMGR_VERBOSE
