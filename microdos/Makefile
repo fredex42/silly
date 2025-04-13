@@ -54,6 +54,7 @@ andy.sys: init.o cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptio
 	-Lmmgr -lmmgr \
 	-Lutils -lutils \
 	-Ldrivers/early_serial -learly_serial \
+	-Ldrivers/bios_disk -lbios_disk \
 	-L8259pic -l8259pic \
 	-Lvolmgr -lvolmgr \
 	-o andy.sys

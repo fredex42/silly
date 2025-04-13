@@ -10,6 +10,7 @@
 #include "mmgr/heap.h"
 #include "utils/memlayout.h"
 #include "utils/idt32.h"
+#include "drivers/bios_disk/bios_disk.h"
 
 void cmain() {
     //we have a little bit of assembly that ran before this function, putting the bios's
@@ -68,7 +69,8 @@ void cmain() {
 
     //test_alloc();
     struct VolMgr *volmgr = volmgr_init(bios_boot_disk_number);
-
+    biosdisk_scan(volmgr);
+    
     //Idle loop
     while(1) {
         asm __volatile__("nop\nhlt");

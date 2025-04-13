@@ -281,6 +281,33 @@ err_t relocate_kernel(uint32_t new_base_addr) {
   return ERR_NONE;
 }
 
+err_t k_map_page(void * phys_addr, void * virt_addr, uint16_t flags)
+{
+  uint32_t *base_paging_dir = 0x0;
+
+  if((size_t)phys_addr & ~MP_ADDRESS_MASK) {
+    k_panic("you must call k_map_page with the address of a page boundary (4k) to map\r\n");
+  }
+  if((size_t)virt_addr & ~MP_ADDRESS_MASK) {
+    k_panic("you must call k_map_page with the address of a page boundary (4k) to map\r\n");
+  }
+
+  //get the current paging dir
+  asm (
+    "mov %%cr3, %0"
+    : "rm+"(base_paging_dir)
+    : "rm"(base_paging_dir)
+  );
+  kprintf("DEBUG k_map_page base_paging_dir is 0x%x\r\n", base_paging_dir);
+
+  size_t offset = (size_t)virt_addr >> 12;
+  kprintf("DEBUG k_map_page offset is 0x%x\r\n", offset);
+  uint32_t *ptr = (uint32_t *)((size_t)base_paging_dir + offset + 1);
+  kprintf("DEBUG k_map_page ptr is 0x%x\r\n", ptr);
+  *ptr = (uint32_t)phys_addr | MP_PRESENT | flags;
+  asm __volatile__("wbinvd"); //ensure that main memory is synced
+}
+
 void unmap_kernel_boot_space()
 {
   uint32_t *new_pagedir;

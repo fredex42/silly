@@ -1,6 +1,7 @@
 [BITS 32]
 
 extern cmain
+global _start
 
 _start:
     ; save the boot device location (given to us by the bootloader)

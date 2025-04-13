@@ -15,6 +15,7 @@
         "optional": "cpp",
         "system_error": "cpp",
         "ioports.h": "c",
-        "serial.h": "c"
+        "serial.h": "c",
+        "bios_data_area.h": "c"
     }
 }
