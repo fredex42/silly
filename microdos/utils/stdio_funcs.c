@@ -1,5 +1,5 @@
-#include "include/stdarg.h"
-#include "include/types.h"
+#include <stdarg.h>
+#include <types.h>
 #include <cfuncs.h>
 
 void kprintf(const char *fmt, ...);
@@ -38,7 +38,7 @@ void kprintf(const char *fmt, ...)
       kputs(&fmt[current_position]);
       break;
     } else {
-      int32_t value;
+      register int32_t value;
       int16_t svalue;
       char cvalue;
       kputlen(&fmt[current_position], next_position-current_position+1);

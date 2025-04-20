@@ -20,5 +20,8 @@ idt32.o: idt32.c idt32.h memlayout.h v86.h
 panic.o: panic.c
 	gcc -c ${CFLAGS} panic.c
 	
-libutils.a: v86.o gdt32.o tss32.o idt32.o panic.o
-	ar rcs libutils.a v86.o gdt32.o tss32.o idt32.o panic.o
+stdio_funcs.o: stdio_funcs.c ../include/cfuncs.h
+	gcc -c ${CFLAGS} stdio_funcs.c
+
+libutils.a: v86.o gdt32.o tss32.o idt32.o panic.o stdio_funcs.o
+	ar rcs libutils.a v86.o gdt32.o tss32.o idt32.o panic.o stdio_funcs.o

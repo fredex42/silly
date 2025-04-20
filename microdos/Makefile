@@ -41,16 +41,15 @@ basic_console.o: basic_console.s basic_console.inc memlayout.asm
 	nasm -f elf32 basic_console.s
 c_exceptions.o: c_exceptions.c
 	gcc -c ${CFLAGS} c_exceptions.c
-stdio_funcs.o: stdio_funcs.c include/cfuncs.h
-	gcc -c ${CFLAGS} stdio_funcs.c
+
 memops.o: memops.asm include/memops.h
 	nasm -f elf32 memops.asm
 
 main.o: main.c include/sys/idt.h
 	gcc -c ${CFLAGS} main.c
 
-andy.sys: init.o cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptions.o stdio_funcs.o memops.o mmgr utils drivers 8259pic volmgr
-	ld  ${LDFLAGS} -b elf32-i386 init.o main.o memops.o cfuncs.o cpuid.o exceptions.o basic_console.o stdio_funcs.o c_exceptions.o  \
+andy.sys: init.o cfuncs.o cpuid.o exceptions.o basic_console.o main.o c_exceptions.o memops.o mmgr utils drivers 8259pic volmgr
+	ld  ${LDFLAGS} -b elf32-i386 init.o main.o memops.o cfuncs.o cpuid.o exceptions.o basic_console.o c_exceptions.o  \
 	-Lmmgr -lmmgr \
 	-Lutils -lutils \
 	-Ldrivers/early_serial -learly_serial \

@@ -48,6 +48,7 @@ void cmain() {
         "push %%esi\n"
         "ret\n"
         ".relocate_exit:\n"
+        "add %0, %%esp\n"
         : 
         : "r"(KERNEL_RELOCATION_BASE)
         : "esi"
@@ -70,7 +71,7 @@ void cmain() {
     //test_alloc();
     struct VolMgr *volmgr = volmgr_init(bios_boot_disk_number);
     biosdisk_scan(volmgr);
-    
+
     //Idle loop
     while(1) {
         asm __volatile__("nop\nhlt");

@@ -274,7 +274,7 @@ err_t relocate_kernel(uint32_t new_base_addr) {
     }
     base_paging_dir[base_pagedir] = (uint32_t)new_pagedir | MP_PRESENT | MP_GLOBAL | MP_READWRITE;
   }
-  for(register uint32_t i=7; i<0x7F; i++) {
+  for(register uint32_t i=7; i<0x80; i++) {
     uint32_t new_addr = (uint32_t) CLASSIC_ADDRESS(0, i);
     new_pagedir[i] = new_addr | MP_PRESENT | MP_GLOBAL;
   }

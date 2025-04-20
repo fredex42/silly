@@ -17,11 +17,12 @@ kputs:
 	push ds
 
 	push esi
+	push ebx
 	mov esi, dword [ss:ebp+8]	;get the pointer to the string to print (arg1 is offset 8). This will be an absolute address,
 					;so we resolve it relative to DS which starts at 0
 	call PMPrintString
+	pop ebx
 	pop esi
-
 	pop ds
 	
 	; This is an inline delay loop, used to slow text on real hardware in order to make it readable.
@@ -33,7 +34,6 @@ kputs:
 	; jnz .kp_delay_temp
 	; pop ecx
 	
-	mov esp, ebp
 	pop ebp
 	ret
 
@@ -46,6 +46,7 @@ kputlen:
 
 	push esi
 	push ecx
+	push ebx
 	mov esi, dword [ss:ebp+8] ;get the pointer to the string to print (arg1 is offset 8). This will be an absolute address,
 					;so we resolve it relative to DS which starts at 0
 	mov ecx, dword [ss:ebp+12]	;get the length value from the next argument
@@ -58,8 +59,9 @@ kputlen:
 	; test ecx, ecx
 	; jnz .kpl_delay_temp
 
+	pop ebx
 	pop ecx
 	pop esi
-	mov esp, ebp
+
 	pop ebp
 	ret

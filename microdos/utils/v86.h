@@ -41,7 +41,7 @@ Macro description:
     "mov $0x0008, (%%edi)\n" \
     "lea int_ff_trapvec, %%eax\n" \
     "mov %%eax, 4(%%edi)\n" \
-    "mov $0x7fffe, %%edi\n"  \
+    "mov $0x6fffe, %%edi\n"  \
     "mov $0x10, %%eax\n" \
     "mov %%ax, %%es\n" \
     "std\n"             \
@@ -81,7 +81,7 @@ Macro description:
     "push %%eax\n" \
     "push %%eax\n" \
     "push %%eax\n" \
-    "mov $0x7000, %%eax\n"  \
+    "mov $0x6000, %%eax\n"  \
     "push %%eax\n" \
     "mov $0xffee, %%eax\n"  \
     "push %%eax\n" \
