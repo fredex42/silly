@@ -129,24 +129,26 @@ uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 *regs, struct Reg
     *outflags = tempflags;
 }
 
-void int_ff_trapvec() {
-    //reset the segment registers to standard kernel values
-    asm __volatile__ (
-        "push %%eax\n"
-        "mov $0x18, %%eax\n"
-        "mov %%ax, %%gs\n"
-        "mov %%ax, %%es\n"
-        "mov $0x10, %%eax\n"
-        "mov %%ax, %%es\n"
-        "mov %%ax, %%ds\n"
-        //restore the IO permission level
-        "pushf\n"
-        "pop %%eax\n"
-        "and $0xFFFFCFFF, %%eax\n"  //clear IOPL bits
-        "push %%eax\n"
-        "popf\n"
-        "pop %%eax\n" : :
-    );
-    //When this function returns, it does so on the stack that `prepare_v86_call` set up and will therefore go back
-    //to the operation after the int 0xff call but in full protected mode.
-}
+//We need to declare int_ff_trapvec as a "pure assembly" function in this way; otherwise, the
+//PIC prefix will destroy the value of eax (or other registers) on the way in then we lose the value
+//of that reg when we return to protected mode code.
+asm (
+    ".globl int_ff_trapvec\n"
+    ".type int_ff_trapvec, @function\n"
+    "int_ff_trapvec:\n"
+    "push %eax\n"
+    "mov $0x18, %eax\n"
+    "mov %ax, %gs\n"
+    "mov %ax, %es\n"
+    "mov $0x10, %eax\n"
+    "mov %ax, %es\n"
+    "mov %ax, %ds\n"
+    //restore the IO permission level
+    "pushf\n"
+    "pop %eax\n"
+    "and $0xFFFFCFFF, %eax\n"  //clear IOPL bits
+    "push %eax\n"
+    "popf\n"
+    "pop %eax\n"
+    "ret"
+);
