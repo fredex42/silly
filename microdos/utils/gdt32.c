@@ -24,6 +24,15 @@ void configure_gdt_entry(uint8_t index, uint32_t limit, uint32_t base, uint8_t a
     gdt[index].flags_limit_hi = ((uint8_t)(limit >> 16) & 0xFF) | (flags << 4);
 }
 
+void setup_tss_gdt_entries(uint32_t base_addr) {
+    uint32_t v86t = (uint32_t)&v86_tss;
+    //v86 mode TSS
+    configure_gdt_entry(4, sizeof(struct TSS32)+V86_IO_PORT_MAP_SIZE, v86t + base_addr, 0x89, 0x40);
+    uint32_t r3t = (uint32_t)&ring3_tss;
+    //ring3 mode TSS
+    configure_gdt_entry(5, sizeof(struct TSS32), r3t + base_addr, 0x89, 0x40);
+}
+
 /**
  * Configure a new GDT for the kernel, so we know where we are.
  */
@@ -37,10 +46,7 @@ void setup_gdt() {
     configure_gdt_entry(2, 0xffffffff, 0x0, GDT_ACC_PRESENT|GDT_ACC_DPL(0)|GDT_ACC_NOTTSS|GDT_ACC_READWR, GDT_FLAG_32BIT|GDT_FLAG_PAGEGRAN);
     //display memory
     configure_gdt_entry(3, 0xBFFFF, 0xA0000, GDT_ACC_PRESENT|GDT_ACC_DPL(0)|GDT_ACC_NOTTSS|GDT_ACC_READWR, GDT_FLAG_32BIT);
-    //v86 mode TSS
-    configure_gdt_entry(4, sizeof(struct TSS32)+V86_IO_PORT_MAP_SIZE, (uint32_t)&v86_tss, 0x89, 0x40);
-    //ring3 mode TSS
-    configure_gdt_entry(5, sizeof(struct TSS32), (uint32_t)&ring3_tss, 0x89, 0x40);
+    setup_tss_gdt_entries(0);   //setup with 0 offset initially
 
     struct GDTR32 gdtr;
     gdtr.size = (4*16) - 1; //4 entries of 16 bytes each

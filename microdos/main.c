@@ -55,6 +55,9 @@ void cmain() {
     );
     //reconfigure the interrupts to their relocated addresses
     setup_interrupts(1);
+    //reconfigure the TSS entries to their relocated addresses
+    setup_tss_gdt_entries(KERNEL_RELOCATION_BASE);
+
     //drop the kernel out of conventional RAM to leave it free for v86
     unmap_kernel_boot_space();
     //NOTE: due to the way that data is resolved (relative to the frame pointer/segment pointer) if you try to access

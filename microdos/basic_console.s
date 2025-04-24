@@ -40,6 +40,7 @@ PMPrintString:
 	add ax, dx			;add again to double the offset
 	add edi, eax
 
+	cld
 	pm_next_char:
 	lodsb
 	test al, al
@@ -99,6 +100,7 @@ PMPrintStringLen:
 	pushf
 	push ecx	;save the length from cx as we use it in the display offset calculation
 
+	cld
 	;set up es:edi to point to where we want to write the characters
 	mov ax, DisplayMemorySeg
 	mov es, ax
@@ -223,6 +225,7 @@ PMScrollConsole:
 	mov es, ax
 	mov ds, ax
 
+	cld
 	;we want to copy all of the data _up_ one line, and fill the last with 0x20/0x00 (blank space) characters
 	;es:edi is destination and ds:esi is source
 	mov edi, TextConsoleOffset

@@ -5,6 +5,7 @@
 #include <types.h>
 #endif
 
+#include <errors.h>
 #ifndef __SYS_MMGR_H
 #define __SYS_MMGR_H
 
@@ -70,6 +71,12 @@ struct PhysMapEntry {
 allocates the given number of pages of physical RAM and maps them into the memory space of the given page directory.
 */
 void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags);
+
+err_t k_map_page(void * phys_addr, void * virt_addr, uint16_t flags);
+void k_unmap_page(void *virt_ptr);
+size_t virt_to_phys(void *virt_ptr, uint16_t *flags_out);
+
+
 // /**
 //  * allocates the given number of pages of "low" (<1Mb) memory and identity-maps them
 //  * "low" memory is special as it is "global" across all paging directories.
@@ -79,10 +86,10 @@ void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
 // void *vm_alloc_lowmem(uint32_t *root_page_dir, size_t page_count, uint32_t flags);
 
 // /**
-// unmaps the physical ram pages pointed to but the vmem_ptr and marks them as "free" in the physical
+// Marks page_count pages beginning at phys_ptr as "free" in the physical
 // ram map
 // */
-// void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *vmem_ptr, size_t page_count);
+void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *phys_ptr, size_t page_count);
 
 // /**
 // if the given physical page is not mapped, then map it into the directory and return

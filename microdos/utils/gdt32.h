@@ -27,3 +27,4 @@ struct GDTEntry32 {
 #define GDT_FLAG_LONGMODE   1<<1    //1 means that this is a 64-bit code segment
 
 void setup_gdt();
+void setup_tss_gdt_entries(uint32_t base_addr);

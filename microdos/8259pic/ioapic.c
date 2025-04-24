@@ -21,6 +21,7 @@ uint32_t read_ioapic_register(const vaddr apic_base, const uint8_t offset)
     return *(volatile uint32_t*)(apic_base + 0x10);
 }
 
+/*
 void configure_ioapic(vaddr ioapic_base)
 {
   if(ioapic_base==NULL) ioapic_base = DEFAULT_IOAPIC_BASE;
@@ -46,3 +47,4 @@ void configure_ioapic(vaddr ioapic_base)
   write_ioapic_register(ioapic_base, IOREDTBL_H(0), 0); //destination is ACPI ID 0
 
 }
+*/

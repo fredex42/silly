@@ -4,6 +4,8 @@
 #define GDT_BASE_ADDRESS 0x500  //this is a small memory area on the first page, below the bootloader etc. Perfect place for this to exist.
 #define GDT_ENTRY_COUNT 0x6
 
+#define PHYSICAL_MAP_PTR 0x580  //points to the location of the physical map
+
 #define IDTR_BASE_ADDRESS 0x700
 #define IDT_BASE_ADDRESS 0x708
 #define IDT_ENTRY_COUNT 0xFF
@@ -12,3 +14,4 @@
 #define MEMORY_MAP_LIMIT     0x100
 
 #define KERNEL_HEAP_PTR     0x580   //pointer to kernel heap location (dword)
+#define V86_EXIT_TRAMPOLINE 0x584   //points to an int 0xff instruction that can be used to safely exit v86 mode

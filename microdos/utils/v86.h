@@ -1,12 +1,22 @@
 #include <types.h>
+#include <errors.h>
 
 struct RealModeInterrupt {
     uint16_t offset;
     uint16_t segment;
 } __attribute__((packed));
 
-uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 *regs, struct RegState32 *outregs, uint32_t *outflags);
+//uint32_t v86_call_interrupt(uint16_t intnum, struct RegState32 *regs, struct RegState32 *outregs, uint32_t *outflags);
 void get_realmode_interrupt(uint16_t intnum, uint16_t *segment, uint16_t *offset);
+
+/**
+ * It is necessary to call this function before making a v86 call once the kernel is remapped.
+ * It ensures that free memory is placed into pages 0x7f and 0x6f for the v86 stacks use.
+ * 
+ * You must call unmap_v86_stackmem when done to free the pages.
+ */
+err_t map_v86_stackmem();
+void unmap_v86_stackmem();
 
 /*
 Macro description:
@@ -35,8 +45,9 @@ Macro description:
  * - segment - 16-bit CS value
  * - offset  - 16-bit IP value; with `segment` this tells the processor where to start executing from
  * - setrtn  - assembler string to set the return address. An example is "lea .v86_call_rtn,%%eax\n" 
+ * - reloc_base - base address if the kernel is relocated. Specify 0 if it isn't.
  */
-#define prepare_v86_call(segment, offset, setrtn)     asm __volatile__( \
+#define prepare_v86_call(segment, offset, setrtn, reloc_base)     asm __volatile__( \
     "mov $0x3f8, %%edi\n" \
     "mov $0x0008, (%%edi)\n" \
     "lea int_ff_trapvec, %%eax\n" \
@@ -60,6 +71,7 @@ Macro description:
     setrtn \
     "stosl\n" \
     "lea v86_tss, %%edi\n" \
+    "add %0, %%edi\n" \
     "xor %%eax, %%eax\n" \
     "mov %%gs, %%ax\n" \
     "mov %%eax, 0x5C(%%edi)\n" \
@@ -89,11 +101,11 @@ Macro description:
     "pop %%eax\n" \
     "or $0x00023000, %%eax\n" \
     "push %%eax\n" \
-    "mov %0, %%eax\n" \
+    "mov %1, %%eax\n" \
     "push %%eax\n" \
-    "mov %1, %%eax\n"  \
+    "mov %2, %%eax\n"  \
     "push %%eax\n" \
     : \
-    : "m"(segment),"m"(offset) \
+    : "r"(reloc_base),"m"(segment),"m"(offset) \
     : "eax", "edi" \
 );

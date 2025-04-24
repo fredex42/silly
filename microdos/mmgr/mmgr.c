@@ -9,7 +9,7 @@
 #include "../utils/regstate.h"
 
 struct MemoryMapEntry *memoryMap;  //the BIOS memory map returned by int 15
-struct PhysMapEntry *physicalMap;  //the physical memory map that we maintain
+//struct PhysMapEntry *physicalMap;  //the physical memory map that we maintain
 uint32_t memory_map_entry_count;
 size_t physical_page_count;
 uint32_t *level_one_tables;
@@ -27,7 +27,7 @@ uint16_t retrieve_memory_map()
     activate_v86_tss();
     do {
         get_realmode_interrupt(0x15, &intseg, &intoff);
-        prepare_v86_call(intseg, intoff, "lea .mem_call_rtn,%%eax\n");
+        prepare_v86_call(intseg, intoff, "lea .mem_call_rtn,%%eax\n", 0);
 
         asm __volatile__(
             //find the right destination pointer
@@ -98,6 +98,8 @@ void dump_memory_map() {
 }
 
 void initialise_mmgr() {
+  struct PhysMapEntry **physicalMap = (struct PhysMapEntry **)PHYSICAL_MAP_PTR;
+
   size_t physical_map_start = 0;
   size_t physical_map_length_in_pages = 0;
   uint32_t *root_paging_dir = 0;
@@ -109,7 +111,7 @@ void initialise_mmgr() {
   size_t highest_value = highest_free_memory();
   kputs("Allocating physical map space...\r\n");
   allocate_physical_map(highest_value, &physical_map_start, &physical_map_length_in_pages);
-  physicalMap = (struct PhysMapEntry *)physical_map_start;
+  *physicalMap = (struct PhysMapEntry *)physical_map_start;
 
   allocate_paging_directories(highest_value, physical_map_start, &root_paging_dir, &pages_used_for_paging);
   kprintf("Used %d pages for paging\r\n", pages_used_for_paging);
@@ -162,6 +164,9 @@ void allocate_physical_map(size_t highest_value, size_t *area_start_out, size_t 
 
 void debug_dump_used_memory() 
 {
+  struct PhysMapEntry **physicalMapPtr = (struct PhysMapEntry **)PHYSICAL_MAP_PTR;
+  struct PhysMapEntry *physicalMap = *physicalMapPtr;
+
   uint8_t in_use=1; //we know that page 0 is in use
   uint32_t region_start = 0;
   uint32_t ctr = 0;
@@ -194,6 +199,8 @@ void debug_dump_used_memory()
  */
 void setup_physical_map(uint32_t first_page_of_pagetables, size_t pages_used_for_paging)
 {
+  struct PhysMapEntry **physicalMapPtr = (struct PhysMapEntry **)PHYSICAL_MAP_PTR;
+  struct PhysMapEntry *physicalMap = *physicalMapPtr;
   uint32_t bios_map_idx = 0;
 
   for(register uint32_t i=0; i<=physical_page_count; i++) {
@@ -281,6 +288,17 @@ err_t relocate_kernel(uint32_t new_base_addr) {
   return ERR_NONE;
 }
 
+/**
+ * map a page from physical memory to virtual memory
+ * 
+ * Since most of the memory is indentity-mapped you don't need this much;
+ * it's used by v86 routines to re-arrange the conventional RAM area
+ * 
+ * params:
+ * - phys_addr - physical pointer to the memory to map
+ * - virt_addr - virtual address to map it too
+ * - flags - MP_ flags to use. MP_PRESENT is set for you.
+ */
 err_t k_map_page(void * phys_addr, void * virt_addr, uint16_t flags)
 {
   uint32_t *base_paging_dir = 0x0;
@@ -302,10 +320,66 @@ err_t k_map_page(void * phys_addr, void * virt_addr, uint16_t flags)
 
   size_t offset = (size_t)virt_addr >> 12;
   kprintf("DEBUG k_map_page offset is 0x%x\r\n", offset);
-  uint32_t *ptr = (uint32_t *)((size_t)base_paging_dir + offset + 1);
+  uint32_t *ptr = (uint32_t *)((size_t)base_paging_dir +PAGE_SIZE+ (offset*sizeof(uint32_t)));
   kprintf("DEBUG k_map_page ptr is 0x%x\r\n", ptr);
   *ptr = (uint32_t)phys_addr | MP_PRESENT | flags;
   asm __volatile__("wbinvd"); //ensure that main memory is synced
+  return ERR_NONE;
+}
+
+void k_unmap_page(void *virt_ptr)
+{
+  uint32_t *base_paging_dir = 0x0;
+
+  if((size_t)virt_ptr & ~MP_ADDRESS_MASK) {
+    k_panic("you must call k_unmap_page with the address of a page boundary (4k) to map\r\n");
+  }
+
+  //get the current paging dir
+  asm (
+    "mov %%cr3, %0"
+    : "rm+"(base_paging_dir)
+    : "rm"(base_paging_dir)
+  );
+  kprintf("DEBUG k_unmap_page base_paging_dir is 0x%x\r\n", base_paging_dir);
+  
+
+  uint16_t pd = CLASSIC_PAGEDIR(virt_ptr);
+  uint16_t pt = CLASSIC_PAGETABLE(virt_ptr);
+  uint32_t *pd_value = (uint32_t *)((size_t)base_paging_dir + pd*sizeof(uint32_t));
+  uint32_t *ptr = (uint32_t *)(((uint32_t)(*pd_value) & MP_ADDRESS_MASK) + pt*sizeof(uint32_t));
+  *ptr = 0;
+  asm __volatile__("wbinvd"); //ensure that main memory is synced
+}
+
+/**
+ * Looks up the physical page corresponding to the given address. 
+ */
+size_t virt_to_phys(void *virt_ptr, uint16_t *flags_out)
+{
+  uint32_t *base_paging_dir = 0x0;
+  //get the current paging dir
+  asm (
+    "mov %%cr3, %0"
+    : "rm+"(base_paging_dir)
+    : "rm"(base_paging_dir)
+  );
+  kprintf("DEBUG virt_to_phys base_paging_dir is 0x%x\r\n", base_paging_dir);
+  kprintf("DEBUG virt_to_phys vptr is 0x%x\r\n", virt_ptr);
+
+  uint16_t pd = CLASSIC_PAGEDIR(virt_ptr);
+  uint16_t pt = CLASSIC_PAGETABLE(virt_ptr);
+  kprintf("DEBUG virt_to_phys page directory offset is 0x%x\r\n", pd);
+  uint32_t *pd_value = (uint32_t *)((size_t)base_paging_dir + pd*sizeof(uint32_t));
+  kprintf("DEBUG virt_to_phys page directory is at 0x%x and value is 0x%x\r\n", pd_value, *pd_value);
+  uint32_t *ptr = (uint32_t *)(((uint32_t)(*pd_value) & MP_ADDRESS_MASK) + pt*sizeof(uint32_t));
+  kprintf("DEBUG virt_to_phys page table entry is at 0x%x and value is 0x%x\r\n", ptr, *ptr);
+  uint32_t value = *ptr;
+  kprintf("DEBUG virt_to_phys pagetable value is 0x%x\r\n", value);
+  if(flags_out != NULL) {
+    *flags_out = value & ~MP_ADDRESS_MASK;
+  }
+  return value & MP_ADDRESS_MASK;
 }
 
 void unmap_kernel_boot_space()
@@ -333,6 +407,8 @@ void unmap_kernel_boot_space()
  */
 err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_addr, uint32_t page_count, uint8_t should_reverse, uint32_t *out_block_start)
 {
+  struct PhysMapEntry **physicalMapPtr = (struct PhysMapEntry **)PHYSICAL_MAP_PTR;
+  struct PhysMapEntry *physicalMap = *physicalMapPtr;
   kprintf("DEBUG find_next_free_pages start_addr=0x%x end_addr=0x%x page_count=%d\r\n", optional_start_addr, optional_end_addr, page_count);
   uint32_t start_index = CLASSIC_PAGE_INDEX(optional_start_addr);
   uint32_t end_index = optional_end_addr>0 ? CLASSIC_PAGE_INDEX(optional_end_addr) : physical_page_count;
@@ -442,4 +518,14 @@ void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
     level_one_tables[i] = (level_one_tables[i] & MP_ADDRESS_MASK) | flags | MP_PRESENT; //ensure MP_PRESENT is still thre
   }
   return (void *)found_block_linear_start;
+}
+
+void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *phys_ptr, size_t page_count)
+{
+  struct PhysMapEntry **physicalMapPtr = (struct PhysMapEntry **)PHYSICAL_MAP_PTR;
+  struct PhysMapEntry *physicalMap = *physicalMapPtr;
+  uint32_t start_page_idx = CLASSIC_PAGE_INDEX(phys_ptr);
+  for(register uint32_t i=start_page_idx; i<start_page_idx+page_count; i++) {
+    physicalMap[i].in_use = 0;
+  }
 }
