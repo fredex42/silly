@@ -30,6 +30,6 @@ struct BiosDriveParameters {
 #define BIOS_DRIVE_INFO_SUPPORT_VERIFY  1<<3    //verify is supported
 #define BIOS_DRIVE_INFO_CHANGELINE  1<<4    //changeline is supported (for removables)
 #define BIOS_DRIVE_INFO_LOCKABLE    1<<5    //drive can be locked (for removables)
-#define BIOS_DROVE_INFO_CHS_MAXED   1<<6    //CHS set to max supported valies, not current media (for removables)
+#define BIOS_DRIVE_INFO_CHS_MAXED   1<<6    //CHS set to max supported valies, not current media (for removables)
 
 void biosdisk_scan(struct VolMgr *volmgr);

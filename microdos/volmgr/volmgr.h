@@ -11,6 +11,7 @@ struct DiskDescriptor {
     struct DiskDescriptor *next;
     struct DiskDescriptor *prev;
 
+    char disk_identifier[32];   //This is a byte string, don't assume it's printable!
     //struct DiskDriverIface *driver;
 };
 

@@ -22,7 +22,6 @@ size_t biosdisk_get_parameters(uint8_t disk_number, struct BiosDriveParameters *
 
     output->buffer_size = sizeof(struct BiosDriveParameters);
 
-    activate_v86_tss();
     get_realmode_interrupt(0x13, &seg, &off);
 
     //0x584 => V86_EXIT_TRAMPOLINE
@@ -71,8 +70,18 @@ void biosdisk_scan(struct VolMgr *volmgr)
     kprintf("INFO BIOS reports %d fixed disks\r\n", (uint16_t)fixed_disk_count);
 
     map_v86_stackmem();
+    activate_v86_tss();
+    
     for(int i=0; i<fixed_disk_count; i++) {
         size_t result = biosdisk_get_parameters(i+0x80, &params);
+        kprintf("Got structure size 0x%x\r\n", result);
+        kprintf("Info for disk %d:\r\n", (uint32_t) i);
+        kprintf("\tBuffer size: 0x%x\r\n", (uint32_t)params.buffer_size);
+        kprintf("\tFlags: 0x%x\r\n", (uint32_t)params.information_flags);
+        kprintf("\tC/H/S: %d / %d / %d\r\n", params.cylinder_count, params.head_count, params.sector_count);
+        kprintf("\tTotal sector count: %l, bytes per sector: %d\r\n", (uint32_t) params.total_sector_count, (uint32_t)params.bytes_per_sector);  //hmmm can we print int64 yet?
+        uint32_t total_bytes = params.total_sector_count * params.bytes_per_sector;
+        kprintf("\tTotal bytes on disk: %l (%d Mb)\r\n", total_bytes, total_bytes/1048576);
     }
     unmap_v86_stackmem();
 }

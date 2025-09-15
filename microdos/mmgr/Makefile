@@ -1,4 +1,4 @@
-CFLAGS=-fPIC -fno-stack-protector -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables -DMMGR_PARANOID
+CFLAGS=-fPIC -fno-stack-protector -m32 -I../include -march=i486 -fno-asynchronous-unwind-tables #-DMMGR_PARANOID
 
 all: libmmgr.a
 

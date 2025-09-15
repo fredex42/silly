@@ -13,6 +13,9 @@ void setup_tss()
     memset(&v86_io_port_map, 0x0, 128); //allow all i/o port operations in v86 mode
 }
 
+/*
+* Sets the V86 mode TSS as the active one in the system
+*/
 void activate_v86_tss()
 {
     asm __volatile__(

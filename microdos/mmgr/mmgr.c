@@ -154,7 +154,9 @@ void allocate_physical_map(size_t highest_value, size_t *area_start_out, size_t 
 
   //The physical RAM map is allocated at the end of physical RAM (wherever that is)
   //and then gets mapped towards the end of VRAM
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG %d map entries per 4k page\r\n", entries_per_page);
+  #endif
   kprintf("Allocating %d pages to physical ram map\r\n", pages_to_allocate);
   *map_length_in_pages_out = pages_to_allocate;
   size_t physical_map_start = highest_value - ((pages_to_allocate+1) * 0x1000);
@@ -316,12 +318,18 @@ err_t k_map_page(void * phys_addr, void * virt_addr, uint16_t flags)
     : "rm+"(base_paging_dir)
     : "rm"(base_paging_dir)
   );
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_map_page base_paging_dir is 0x%x\r\n", base_paging_dir);
+  #endif
 
   size_t offset = (size_t)virt_addr >> 12;
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_map_page offset is 0x%x\r\n", offset);
+  #endif
   uint32_t *ptr = (uint32_t *)((size_t)base_paging_dir +PAGE_SIZE+ (offset*sizeof(uint32_t)));
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_map_page ptr is 0x%x\r\n", ptr);
+  #endif
   *ptr = (uint32_t)phys_addr | MP_PRESENT | flags;
   asm __volatile__("wbinvd"); //ensure that main memory is synced
   return ERR_NONE;
@@ -341,8 +349,9 @@ void k_unmap_page(void *virt_ptr)
     : "rm+"(base_paging_dir)
     : "rm"(base_paging_dir)
   );
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG k_unmap_page base_paging_dir is 0x%x\r\n", base_paging_dir);
-  
+  #endif
 
   uint16_t pd = CLASSIC_PAGEDIR(virt_ptr);
   uint16_t pt = CLASSIC_PAGETABLE(virt_ptr);
@@ -364,18 +373,28 @@ size_t virt_to_phys(void *virt_ptr, uint16_t *flags_out)
     : "rm+"(base_paging_dir)
     : "rm"(base_paging_dir)
   );
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG virt_to_phys base_paging_dir is 0x%x\r\n", base_paging_dir);
   kprintf("DEBUG virt_to_phys vptr is 0x%x\r\n", virt_ptr);
+  #endif
 
   uint16_t pd = CLASSIC_PAGEDIR(virt_ptr);
   uint16_t pt = CLASSIC_PAGETABLE(virt_ptr);
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG virt_to_phys page directory offset is 0x%x\r\n", pd);
+  #endif
   uint32_t *pd_value = (uint32_t *)((size_t)base_paging_dir + pd*sizeof(uint32_t));
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG virt_to_phys page directory is at 0x%x and value is 0x%x\r\n", pd_value, *pd_value);
+  #endif
   uint32_t *ptr = (uint32_t *)(((uint32_t)(*pd_value) & MP_ADDRESS_MASK) + pt*sizeof(uint32_t));
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG virt_to_phys page table entry is at 0x%x and value is 0x%x\r\n", ptr, *ptr);
+  #endif
   uint32_t value = *ptr;
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG virt_to_phys pagetable value is 0x%x\r\n", value);
+  #endif
   if(flags_out != NULL) {
     *flags_out = value & ~MP_ADDRESS_MASK;
   }
@@ -409,7 +428,9 @@ err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_a
 {
   struct PhysMapEntry **physicalMapPtr = (struct PhysMapEntry **)PHYSICAL_MAP_PTR;
   struct PhysMapEntry *physicalMap = *physicalMapPtr;
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG find_next_free_pages start_addr=0x%x end_addr=0x%x page_count=%d\r\n", optional_start_addr, optional_end_addr, page_count);
+  #endif
   uint32_t start_index = CLASSIC_PAGE_INDEX(optional_start_addr);
   uint32_t end_index = optional_end_addr>0 ? CLASSIC_PAGE_INDEX(optional_end_addr) : physical_page_count;
 
@@ -417,8 +438,10 @@ err_t find_next_free_pages(uint32_t optional_start_addr, uint32_t optional_end_a
   register uint32_t found_pages = 0;
   uint32_t starting_page = 0;
 
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG find_next_free_pages start_index=0x%x end_index=0x%x\r\n", start_index, end_index);
-
+  #endif
+  
   while(i<=end_index && i>=start_index) {
     if(physicalMap[i].in_use && found_pages>0) {
       //if this page is in use and we are already tracking pages, then there are not enough
