@@ -231,6 +231,9 @@ size_t map_physical_memory_map_area(size_t map_start, size_t map_length_pages)
   kprintf("DEBUG physical_map_start 0x%x map_length_pages 0x%x directories_needed 0x%x\r\n", physical_map_start, map_length_pages, directories_needed);
   #endif
   for(size_t i=0;i<map_length_pages+directories_needed;i++) {
+    if(i+physical_map_start >=physical_page_count) {
+      k_panic("ERROR physical map exceeds physical RAM limit\r\n");
+    }
     #ifdef MMGR_VERBOSE
     kprintf("DEBUG phys page 0x%x is in PMM\r\n", i+physical_map_start);
     #endif
@@ -323,6 +326,10 @@ uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks)
     #ifdef MMGR_VERBOSE
     kprintf("DEBUG freeing physical 0x%x (0x%x)\r\n", phys_addr, page_idx);
     #endif
+    if(page_idx>=physical_page_count) {
+      kprintf("WARNING attempt to free page 0x%x which is beyond physical RAM limit of 0x%x pages\r\n", page_idx, physical_page_count);
+      continue;
+    }
     physical_memory_map[page_idx].in_use=0;
   }
   release_spinlock(&physlock);
@@ -522,8 +529,9 @@ void * vm_map_next_unallocated_pages(uint32_t *root_page_dir, uint32_t flags, vo
  * Maps the contents of the given paging dir into memory, on a 4mb boundary
 */
 uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
-  //check if starting_from is on an appropriate boundary
-  if(starting_from & 0x3FFFFF != 0) {
+  //check if starting_from is on an appropriate 4Mb boundary
+  if( (starting_from & 0x3FFFFF) != 0) {  
+    //NOTE! In C, != is a higher precedence than & which means that without the brackets this would evaluate as starting_from & (0x3FFFFF !=0)m i.e. always true if starting_from !=0
     kprintf("DEBUG map_app_paging_dir requested boundary start 0x%x is not correctly aligned\r\n",starting_from);
     return NULL;
   }
@@ -563,7 +571,7 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
  * Removes the mappings of the given paging directory
 */
 void unmap_app_pagingdir(uint32_t *mapped_pd) {
-  if((vaddr)mapped_pd & 0x3FFFFF != 0) {
+  if( ((vaddr)mapped_pd & 0x3FFFFF) != 0) { //Brackets are necessary due to operator precedence
     kprintf("DEBUG unmap_app_pagingdir pd location 0x%x is not correctly aligned\r\n", mapped_pd);
     return;
   }
@@ -576,7 +584,7 @@ void unmap_app_pagingdir(uint32_t *mapped_pd) {
   kernel_paging_directory[page_num] = NULL;
   
   for(register size_t i=0; i<0x400; i++) {
-    vaddr target = (vaddr)mapped_pd & i<<12;
+    vaddr target = (vaddr)mapped_pd | i<<12;
     __invalidate_vptr(target);
   }
 
@@ -590,7 +598,7 @@ void unmap_app_pagingdir(uint32_t *mapped_pd) {
 */
 void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
   size_t unmap_counter = 0;
-  if((vaddr)mapped_pd & 0x3FFFFF != 0) {
+  if( ((vaddr)mapped_pd & 0x3FFFFF) != 0) { //Brackets are necessary due to operator precedence
     kprintf("WARNING unmap_app_pagingdir pd location 0x%x is not correctly aligned\r\n", mapped_pd);
     return;
   }
@@ -673,10 +681,9 @@ void vm_deallocate_physical_pages(uint32_t *root_page_dir, void *vmem_ptr, size_
 
   vaddr pageptr_offset = (vaddr)vmem_ptr >> 12;
 
-  for(uint32_t p=pageptr_offset; p<pageptr_offset*page_count; p++) {
+  for(uint32_t p=pageptr_offset; p<pageptr_offset+page_count; p++) {
     flat_pagetables_ptr[p] = 0;
-    __invalidate_vptr((vaddr)vmem_ptr+(p-pageptr_offset)*1024);
-
+    __invalidate_vptr((vaddr)vmem_ptr + (p-pageptr_offset)*PAGE_SIZE);
   }
   mb();
 }
@@ -756,7 +763,6 @@ void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t 
   uint32_t allocd = allocate_free_physical_pages(1, &phys_ptr);
   if(allocd!=1) {
     kputs("  WARNING insufficient pages allocd, deallocating and removing\r\n");
-    release_spinlock(&memlock);
     return NULL;
   }
 
@@ -1044,6 +1050,11 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
   void *phys_ptr;
   if(error_code&PAGEFAULT_ERR_PRESENT) {  //if this is set, then the page _was_ present => protection violation => not an allocation fault => can't handle it here.
     kputs("DEBUG error was a protection violation, not handling\r\n");
+    return 1;
+  }
+
+  if(pagefault_depth_ctr>50) {
+    k_panic("FATAL Too many nested pagefaults, probably in handle_allocation_fault\r\n");
     return 1;
   }
 
