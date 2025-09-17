@@ -8,7 +8,7 @@
 #define TASK_DEADLINE   2
 #define TASK_AFTERTIME  3
 
-#define BUFFER_COUNT    2
+#define BUFFER_COUNT    4
 
 typedef struct scheduler_task {
   struct scheduler_task *next;

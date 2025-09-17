@@ -88,6 +88,12 @@ SchedulerTask *new_scheduler_task(uint8_t task_type, void (*task_proc)(struct sc
     }
 
     current_buffer = global_scheduler_state->buffers[global_scheduler_state->current_buffer];
+    
+    // Reset buffer when switching to it (simple task cleanup)
+    if(current_buffer->buffer_idx > 0) {
+      current_buffer->buffer_idx = 0;
+      current_buffer->waiting_tasks = 0;
+    }
   }
 
   task_ptr = (SchedulerTask *)((vaddr)current_buffer->buffer_ptr + current_buffer->buffer_idx);

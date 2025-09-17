@@ -203,9 +203,18 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     k_panic("buffer_loc corruption detected");
   }
   
-  for(register size_t i=op->buffer_loc; i<op->buffer_loc+256;i++) {
-    if(i==op->buffer_loc+255) inb(ATA_STATUS(op->base_addr)); //read status byte to reset interrupt flag. We don't actually care about the values right now.
-    buf[i] = inw(ATA_DATA_REG(op->base_addr));
+  // Check for potential buffer overrun before reading
+  size_t words_needed = op->buffer_loc + 256;
+  size_t buffer_words = op->sector_count * 256;  // Total buffer capacity in words
+  if(words_needed > buffer_words) {
+    kprintf("ERROR: About to overrun buffer! words_needed=%d, buffer_words=%d\r\n", 
+            (uint32_t)words_needed, (uint32_t)buffer_words);
+    k_panic("Buffer overrun detected before sector read");
+  }
+  
+  for(register size_t i=0; i<256; i++) {
+    if(i==255) inb(ATA_STATUS(op->base_addr)); //read status byte to reset interrupt flag. We don't actually care about the values right now.
+    buf[op->buffer_loc + i] = inw(ATA_DATA_REG(op->base_addr));
   }
 
   op->buffer_loc += 256;
@@ -272,6 +281,9 @@ void ata_continue_read_chunk(SchedulerTask *t)
     k_panic("Invalid operation in ata_continue_read_chunk");
   }
   
+  // Switch to the correct paging directory for this operation
+  vaddr old_pd = switch_paging_directory_if_required((vaddr)op->paging_directory);
+  
   // Clear the continuation pending flag since we're now handling it
   op->continuation_pending = 0;
   
@@ -291,6 +303,9 @@ void ata_continue_read_chunk(SchedulerTask *t)
   outb(ATA_LBA_MID(op->base_addr), LBA28_LMID(op->current_lba));
   outb(ATA_LBA_HI(op->base_addr), LBA28_HMID(op->current_lba));
   outb(ATA_COMMAND(op->base_addr), ATA_CMD_READ_SECTORS);
+  
+  // Restore the original paging directory
+  if(old_pd != NULL) switch_paging_directory_if_required(old_pd);
 }
 
 /*
