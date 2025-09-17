@@ -14,6 +14,11 @@ void init_keyboard();
  */
 void kb_notify_activity();
 
+/**
+ * Clean up any pending keyboard operations for a process that is being terminated
+ */
+void kb_cleanup_process_operations(struct ProcessTableEntry *process);
+
 typedef struct PendingOperationList {
     struct PendingOperationList *next;
 

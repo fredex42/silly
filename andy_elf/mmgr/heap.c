@@ -236,6 +236,17 @@ void* _zone_alloc(struct HeapZoneStart *zone, size_t bytes)
     #ifdef MMGR_VERBOSE
     kprintf("DEBUG Success, block start is 0x%x and ptr is 0x%x\r\n", p, ptr);
     #endif
+    
+    // Extra validation for large allocations
+    if(bytes > 0x100000) { // 1MB+
+      kprintf("DEBUG Large allocation: ptr=0x%x, size=0x%x, zone=0x%x\r\n", ptr, bytes, zone);
+      kprintf("DEBUG Block header at 0x%x: magic=0x%x, block_length=0x%x, in_use=%d\r\n", 
+              p, p->magic, p->block_length, p->in_use);
+      if(new_ptr) {
+        kprintf("DEBUG Next block header at 0x%x: magic=0x%x, block_length=0x%x, in_use=%d\r\n",
+                new_ptr, new_ptr->magic, new_ptr->block_length, new_ptr->in_use);
+      }
+    }
 
     return ptr;
   }

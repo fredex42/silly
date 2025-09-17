@@ -63,8 +63,10 @@ typedef struct ata_pending_operation {
   void *buffer;   //data buffer that is being sent or retrieved
   void *paging_directory; //paging directory for the vmem pointer `buffer`
   size_t buffer_loc;
-  uint8_t sector_count;
-  uint8_t sectors_read;
+  uint16_t sector_count;  //total sectors requested
+  uint16_t sectors_read;  //sectors completed so far
+  uint64_t start_lba;     //original LBA address
+  uint64_t current_lba;   //current LBA position for multi-part reads
   uint16_t base_addr;     //base IO port to do the read from/write to
 
   uint8_t device;         //0=>master 1=>slave
@@ -74,8 +76,8 @@ typedef struct ata_pending_operation {
 } ATAPendingOperation;
 
 void print_drive_info(uint8_t drive_nr);
-int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
-int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
+int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
+int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
 
 //ATA error codes
 #define ATA_E_AMNF    1<<0  //address mark not found

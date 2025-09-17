@@ -60,7 +60,7 @@ This should be called with interrupts disabled.
 It will return E_BUSY if another operation is already pending, for this reason should be considered
 "internal" as it needs queueing in front of it.
 */
-int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
+int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
 {
   uint16_t base_addr;
   uint8_t selector;
@@ -79,12 +79,16 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
   uint8_t rv = ports_for_drive_nr(drive_nr, &base_addr, &selector);
   if(rv != E_OK) return rv;
 
+  //ATA28 sector count is 8-bit, so max 255 sectors per command (0 means 256)
+  //For larger reads, we need to limit to 255 sectors and let the completion handler continue
+  uint8_t current_sector_count = (sector_count > 255) ? 255 : (uint8_t)sector_count;
+
   //We will receive an interrupt when the drive has the data ready for us
   //so store the fact we are waiting for an operation so it can be picked up later.
   //we should get an interrupt for every sector.
   ATAPendingOperation *op = master_driver_state->pending_disk_operation[drive_nr >> 1];
   op->type = ATA_OP_READ;
-  op->sector_count = sector_count;
+  op->sector_count = sector_count;  // Total sectors requested
   op->device = drive_nr & 0x1;  //just take the leftmost bit, 0=>master, 1=>slave
   op->buffer = buffer;
   op->extradata = extradata;
@@ -92,18 +96,20 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint8_t sector
   op->buffer_loc = 0;
   op->base_addr = base_addr;
   op->sectors_read = 0;
+  op->start_lba = lba_address;
+  op->current_lba = lba_address;
   op->completed_func = callback;
 
   //request an LBA28 read
   outb(ATA_DRIVE_HEAD(base_addr), selector | LBA28_HI(lba_address));
-  outb(ATA_SECTOR_COUNT(base_addr), sector_count);
+  outb(ATA_SECTOR_COUNT(base_addr), current_sector_count);
   outb(ATA_LBA_LOW(base_addr), LBA28_LO(lba_address));
   outb(ATA_LBA_MID(base_addr), LBA28_LMID(lba_address));
   outb(ATA_LBA_HI(base_addr), LBA28_HMID(lba_address));
   outb(ATA_COMMAND(base_addr), ATA_CMD_READ_SECTORS);
 }
 
-int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint8_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
+int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
 {
   uint16_t base_addr;
   uint8_t selector;
@@ -163,6 +169,18 @@ Returns: Nothing
 void ata_complete_read_lowerhalf(SchedulerTask *t)
 {
   ATAPendingOperation *op = (ATAPendingOperation *)t->data;
+  
+  // Sanity check the operation structure
+  if(op == NULL) {
+    k_panic("NULL ATAPendingOperation pointer");
+  }
+  if(op->type != ATA_OP_READ) {
+    kprintf("ERROR: Invalid operation type: %d\r\n", (int)op->type);
+    k_panic("Invalid ATA operation type");
+  }
+  if(op->buffer == NULL) {
+    k_panic("NULL buffer pointer in ATAPendingOperation");
+  }
 
   vaddr old_pd = switch_paging_directory_if_required((vaddr)op->paging_directory);
 
@@ -171,6 +189,19 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
   cli();
   //each sector is 512 bytes (or 256 words)
   uint16_t *buf = (uint16_t *)op->buffer;
+  
+  // Minimal debug output only every 50 sectors to reduce memory layout impact
+  if((op->sectors_read % 50) == 0) {
+    kprintf("s=%d ", (uint16_t)op->sectors_read);
+  }
+  
+  // Quick sanity check
+  size_t expected_buffer_loc = (size_t)op->sectors_read * 256;
+  if(op->buffer_loc != expected_buffer_loc) {
+    kprintf("ERROR: buffer_loc mismatch!\r\n");
+    k_panic("buffer_loc corruption detected");
+  }
+  
   for(register size_t i=op->buffer_loc; i<op->buffer_loc+256;i++) {
     if(i==op->buffer_loc+255) inb(ATA_STATUS(op->base_addr)); //read status byte to reset interrupt flag. We don't actually care about the values right now.
     buf[i] = inw(ATA_DATA_REG(op->base_addr));
@@ -178,22 +209,75 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
 
   op->buffer_loc += 256;
   ++op->sectors_read;
+  ++op->current_lba;
+  
   if(op->sectors_read>=op->sector_count) {
-    //reset the "pending operation" block for the next operation
-    //memset((void *)op, 0, sizeof(ATAPendingOperation));
+    //All sectors completed - finish the operation
     op->type = ATA_OP_NONE;
-    //the operation is now completed
     if(!op->completed_func) {
       kprintf("ERROR disk operation with NULL callback, this causes a memory leak\r\n");
     } else {
       op->completed_func(ATA_STATUS_OK, op->buffer, op->extradata);
     }
+  } else {
+    //Check if we need to issue another read command for remaining sectors
+    uint16_t remaining_sectors = op->sector_count - op->sectors_read;
+    
+    //Issue another hardware command for the remaining sectors
+    uint8_t next_sector_count = (remaining_sectors > 255) ? 255 : (uint8_t)remaining_sectors;
+    
+    kprintf("continuing: s=%d next=%d\r\n", 
+            (uint16_t)op->sectors_read, next_sector_count);
+    
+    //Update current LBA for the next chunk
+    op->current_lba = op->start_lba + op->sectors_read;
+    
+    //Instead of issuing hardware command here, schedule a task to do it
+    //This avoids potential race conditions with interrupt handling
+    SchedulerTask *continue_task = new_scheduler_task(TASK_ASAP, &ata_continue_read_chunk, op);
+    if(continue_task == NULL) {
+      k_panic("Could not create scheduler task for ATA chunk continuation");
+    }
+    schedule_task(continue_task);
   }
 
   if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
 
   sti();
 
+}
+
+/*
+This function is called by the scheduler to issue the next chunk of an ATA read command.
+It's used to avoid issuing hardware commands directly from interrupt context.
+Arguments: t - scheduler task containing ATAPendingOperation as data
+Returns: Nothing
+*/
+void ata_continue_read_chunk(SchedulerTask *t)
+{
+  ATAPendingOperation *op = (ATAPendingOperation *)t->data;
+  
+  if(op == NULL || op->type != ATA_OP_READ) {
+    k_panic("Invalid operation in ata_continue_read_chunk");
+  }
+  
+  //Calculate next chunk size
+  uint16_t remaining_sectors = op->sector_count - op->sectors_read;
+  uint8_t next_sector_count = (remaining_sectors > 255) ? 255 : (uint8_t)remaining_sectors;
+  
+  kprintf("chunk: %d sectors at LBA 0x%x\r\n", 
+          next_sector_count, (uint32_t)op->current_lba);
+  
+  //Issue the next read command
+  uint8_t selector = 0xE0;  //LBA28 mode, master drive by default
+  if(op->device) selector |= 0x10;  //set slave bit if needed
+  
+  outb(ATA_DRIVE_HEAD(op->base_addr), selector | LBA28_HI(op->current_lba));
+  outb(ATA_SECTOR_COUNT(op->base_addr), next_sector_count);
+  outb(ATA_LBA_LOW(op->base_addr), LBA28_LO(op->current_lba));
+  outb(ATA_LBA_MID(op->base_addr), LBA28_LMID(op->current_lba));
+  outb(ATA_LBA_HI(op->base_addr), LBA28_HMID(op->current_lba));
+  outb(ATA_COMMAND(op->base_addr), ATA_CMD_READ_SECTORS);
 }
 
 /*
