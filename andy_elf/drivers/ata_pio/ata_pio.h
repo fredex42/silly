@@ -70,6 +70,7 @@ typedef struct ata_pending_operation {
   uint16_t base_addr;     //base IO port to do the read from/write to
 
   uint8_t device;         //0=>master 1=>slave
+  uint8_t continuation_pending; //flag to prevent multiple continuation tasks
 
   void *extradata;    //arbitary pointer that gets passed unaltered to the callback
   void (*completed_func)(uint8_t status, void *buffer, void *extradata);

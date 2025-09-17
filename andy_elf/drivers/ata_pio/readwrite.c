@@ -98,6 +98,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint16_t secto
   op->sectors_read = 0;
   op->start_lba = lba_address;
   op->current_lba = lba_address;
+  op->continuation_pending = 0;  // Initialize continuation flag
   op->completed_func = callback;
 
   //request an LBA28 read
@@ -190,8 +191,8 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
   //each sector is 512 bytes (or 256 words)
   uint16_t *buf = (uint16_t *)op->buffer;
   
-  // Minimal debug output only every 50 sectors to reduce memory layout impact
-  if((op->sectors_read % 50) == 0) {
+  // Ultra-minimal debug output only every 500 sectors
+  if((op->sectors_read % 500) == 0) {
     kprintf("s=%d ", (uint16_t)op->sectors_read);
   }
   
@@ -223,16 +224,26 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     //Check if we need to issue another read command for remaining sectors
     uint16_t remaining_sectors = op->sector_count - op->sectors_read;
     
+    // Prevent multiple continuation tasks for the same operation
+    if(op->continuation_pending) {
+      kprintf("WARNING: Continuation already pending for sectors_read=%d\r\n", (uint16_t)op->sectors_read);
+      if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
+      sti();
+      return;
+    }
+    
     //Issue another hardware command for the remaining sectors
     uint8_t next_sector_count = (remaining_sectors > 255) ? 255 : (uint8_t)remaining_sectors;
     
-    kprintf("continuing: s=%d next=%d\r\n", 
-            (uint16_t)op->sectors_read, next_sector_count);
+    kprintf("cont:s=%d\r\n", (uint16_t)op->sectors_read);
     
     //Update current LBA for the next chunk
     op->current_lba = op->start_lba + op->sectors_read;
     
-    //Instead of issuing hardware command here, schedule a task to do it
+    //Set flag to prevent duplicate continuation tasks
+    op->continuation_pending = 1;
+    
+    //Schedule a task to issue the next hardware command
     //This avoids potential race conditions with interrupt handling
     SchedulerTask *continue_task = new_scheduler_task(TASK_ASAP, &ata_continue_read_chunk, op);
     if(continue_task == NULL) {
@@ -261,12 +272,14 @@ void ata_continue_read_chunk(SchedulerTask *t)
     k_panic("Invalid operation in ata_continue_read_chunk");
   }
   
+  // Clear the continuation pending flag since we're now handling it
+  op->continuation_pending = 0;
+  
   //Calculate next chunk size
   uint16_t remaining_sectors = op->sector_count - op->sectors_read;
   uint8_t next_sector_count = (remaining_sectors > 255) ? 255 : (uint8_t)remaining_sectors;
   
-  kprintf("chunk: %d sectors at LBA 0x%x\r\n", 
-          next_sector_count, (uint32_t)op->current_lba);
+  kprintf("chunk:%d@0x%x\r\n", next_sector_count, (uint32_t)op->current_lba);
   
   //Issue the next read command
   uint8_t selector = 0xE0;  //LBA28 mode, master drive by default
