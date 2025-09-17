@@ -74,15 +74,16 @@ SchedulerTask *new_scheduler_task(uint8_t task_type, void (*task_proc)(struct sc
 
   SchedulerTaskBuffer *current_buffer = global_scheduler_state->buffers[global_scheduler_state->current_buffer];
 
-  while(current_buffer->buffer_idx + sizeof(SchedulerTaskBuffer) > PAGE_SIZE*TASK_BUFFER_SIZE_IN_PAGES) {
-    ++current_buffer->buffer_idx;
-    if(current_buffer->buffer_idx > BUFFER_COUNT) {
+  while(current_buffer->buffer_idx + sizeof(SchedulerTask) > PAGE_SIZE*TASK_BUFFER_SIZE_IN_PAGES) {
+    // Current buffer is full, switch to next buffer
+    ++global_scheduler_state->current_buffer;
+    if(global_scheduler_state->current_buffer >= BUFFER_COUNT) {
       if(iterations>0) {  //if we have already looped back to the beginning once in order to check for space there, and not found any, we ran out :(
         k_panic("Ran out of mem for scheduling tasks\r\n");
         return NULL;
       } else {
         ++iterations;
-        current_buffer->buffer_idx=0;
+        global_scheduler_state->current_buffer = 0;
       }
     }
 
