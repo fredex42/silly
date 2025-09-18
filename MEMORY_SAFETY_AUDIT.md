@@ -24,6 +24,8 @@ vfat_read_async(fp, seg->content, hdr->p_filesz, (void *)t, &_elf_next_segment_l
 **Risk:** Memory corruption during ELF loading, potential arbitrary code execution
 **Recommendation:** Add size validation before all memcpy operations, check for integer overflow
 
+**Results:** First one does not exist in the file. Second and third are fixed.
+
 #### 2. Heap Allocator - Complex Pointer Arithmetic  
 **File:** `andy_elf/mmgr/heap.c`
 **Lines:** 108-120, 220-240, 130-150
@@ -42,6 +44,10 @@ new_ptr->block_length = remaining_length - 2*sizeof(struct PointerHeader);
 ```
 **Risk:** Heap corruption, arbitrary memory access if header fields corrupted
 **Recommendation:** Add comprehensive boundary validation, validate all pointer arithmetic against zone limits
+**Results:** 
+- Updated first one to check for integer overflow.
+- Updated second one to check for integer overflow or out of zone
+- Updated third one to check for integer overflow/underflow
 
 #### 3. ATA Driver - Buffer Boundary Issues (Previously Patched)
 **File:** `andy_elf/drivers/ata_pio/readwrite.c`  
