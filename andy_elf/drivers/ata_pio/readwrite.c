@@ -65,8 +65,33 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint16_t secto
   uint16_t base_addr;
   uint8_t selector;
 
+  // Input parameter validation
+  if(buffer == NULL) {
+    kprintf("ERROR: NULL buffer pointer passed to ata_pio_start_read\r\n");
+    return E_PARAMS;
+  }
+  if(callback == NULL) {
+    kprintf("ERROR: NULL callback function passed to ata_pio_start_read\r\n");
+    return E_PARAMS;
+  }
+  if(sector_count == 0) {
+    kprintf("ERROR: Zero sector count passed to ata_pio_start_read\r\n");
+    return E_PARAMS;
+  }
+  if(lba_address > 0xFFFFFFF) {  // LBA28 maximum
+    kprintf("ERROR: LBA address 0x%x exceeds LBA28 limit\r\n", (uint32_t)lba_address);
+    return E_PARAMS;
+  }
+
   uint8_t bus_nr = (uint8_t) ((drive_nr & 0xF) >> 1);
-  if(master_driver_state==NULL || master_driver_state->pending_disk_operation[drive_nr >> 1]==NULL) {
+  
+  // Critical bounds check: pending_disk_operation array only has 4 elements
+  if(bus_nr >= 4) {
+    kprintf("ERROR Invalid drive number %d (bus_nr %d >= 4)\r\n", (uint16_t)drive_nr, (uint16_t)bus_nr);
+    return E_PARAMS;
+  }
+  
+  if(master_driver_state==NULL || master_driver_state->pending_disk_operation[bus_nr]==NULL) {
     k_panic("ERROR Requested disk read before ATA subsystem was initialised\r\n");
     return E_BUSY;
   }
@@ -86,7 +111,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint16_t secto
   //We will receive an interrupt when the drive has the data ready for us
   //so store the fact we are waiting for an operation so it can be picked up later.
   //we should get an interrupt for every sector.
-  ATAPendingOperation *op = master_driver_state->pending_disk_operation[drive_nr >> 1];
+  ATAPendingOperation *op = master_driver_state->pending_disk_operation[bus_nr];
   op->type = ATA_OP_READ;
   op->sector_count = sector_count;  // Total sectors requested
   op->device = drive_nr & 0x1;  //just take the leftmost bit, 0=>master, 1=>slave
@@ -115,8 +140,33 @@ int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint16_t sect
   uint16_t base_addr;
   uint8_t selector;
 
+  // Input parameter validation
+  if(buffer == NULL) {
+    kprintf("ERROR: NULL buffer pointer passed to ata_pio_start_write\r\n");
+    return E_PARAMS;
+  }
+  if(callback == NULL) {
+    kprintf("ERROR: NULL callback function passed to ata_pio_start_write\r\n");
+    return E_PARAMS;
+  }
+  if(sector_count == 0) {
+    kprintf("ERROR: Zero sector count passed to ata_pio_start_write\r\n");
+    return E_PARAMS;
+  }
+  if(lba_address > 0xFFFFFFF) {  // LBA28 maximum
+    kprintf("ERROR: LBA address 0x%x exceeds LBA28 limit\r\n", (uint32_t)lba_address);
+    return E_PARAMS;
+  }
+
   uint8_t bus_nr = (uint8_t) ((drive_nr & 0xF) >> 1);
-  if(master_driver_state==NULL || master_driver_state->pending_disk_operation[drive_nr >> 1]==NULL) {
+  
+  // Critical bounds check: pending_disk_operation array only has 4 elements
+  if(bus_nr >= 4) {
+    kprintf("ERROR Invalid drive number %d (bus_nr %d >= 4)\r\n", (uint16_t)drive_nr, (uint16_t)bus_nr);
+    return E_PARAMS;
+  }
+  
+  if(master_driver_state==NULL || master_driver_state->pending_disk_operation[bus_nr]==NULL) {
     k_panic("ERROR Requested disk read before ATA subsystem was initialised\r\n");
     return E_BUSY;
   }
@@ -132,10 +182,14 @@ int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint16_t sect
   uint8_t rv = ports_for_drive_nr(drive_nr, &base_addr, &selector);
   if(rv != E_OK) return rv;
 
+  //ATA28 sector count is 8-bit, so max 255 sectors per command (0 means 256)
+  //For larger writes, we need to limit to 255 sectors and let the completion handler continue
+  uint8_t current_sector_count = (sector_count > 255) ? 255 : (uint8_t)sector_count;
+
   //We will receive an interrupt when the drive has the data ready for us
   //so store the fact we are waiting for an operation so it can be picked up later.
   //we should get an interrupt for every sector.
-  ATAPendingOperation *op = master_driver_state->pending_disk_operation[drive_nr >> 1];
+  ATAPendingOperation *op = master_driver_state->pending_disk_operation[bus_nr];
   op->type = ATA_OP_WRITE;
   op->sector_count = sector_count;
   op->device = drive_nr & 0x1;  //just take the leftmost bit, 0=>master, 1=>slave
@@ -149,7 +203,7 @@ int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint16_t sect
 
   //request an LBA28 write
   outb(ATA_DRIVE_HEAD(base_addr), selector | LBA28_HI(lba_address));
-  outb(ATA_SECTOR_COUNT(base_addr), sector_count);
+  outb(ATA_SECTOR_COUNT(base_addr), current_sector_count);
   outb(ATA_LBA_LOW(base_addr), LBA28_LO(lba_address));
   outb(ATA_LBA_MID(base_addr), LBA28_LMID(lba_address));
   outb(ATA_LBA_HI(base_addr), LBA28_HMID(lba_address));
@@ -236,7 +290,7 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     // Prevent multiple continuation tasks for the same operation
     if(op->continuation_pending) {
       kprintf("WARNING: Continuation already pending for sectors_read=%d\r\n", (uint16_t)op->sectors_read);
-      if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
+      if(old_pd!=0) switch_paging_directory_if_required(old_pd);
       sti();
       return;
     }
@@ -261,7 +315,7 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     schedule_task(continue_task);
   }
 
-  if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
+  if(old_pd!=0) switch_paging_directory_if_required(old_pd);
 
   sti();
 
@@ -305,7 +359,7 @@ void ata_continue_read_chunk(SchedulerTask *t)
   outb(ATA_COMMAND(op->base_addr), ATA_CMD_READ_SECTORS);
   
   // Restore the original paging directory
-  if(old_pd != NULL) switch_paging_directory_if_required(old_pd);
+  if(old_pd != 0) switch_paging_directory_if_required(old_pd);
 }
 
 /*
@@ -317,11 +371,30 @@ Returns: Nothing
 */
 void ata_continue_write(ATAPendingOperation *op)
 {
+  // Sanity check the operation structure
+  if(op == NULL) {
+    k_panic("NULL ATAPendingOperation pointer in ata_continue_write");
+  }
+  if(op->buffer == NULL) {
+    k_panic("NULL buffer pointer in ATAPendingOperation");
+  }
+
   vaddr old_pd = switch_paging_directory_if_required((vaddr)op->paging_directory);
 
   //need to make sure interrupts are disabled, otherwise we trigger the next data packet
   //before we stored the last word of this one, meaning that we miss data.
   cli();
+
+  // Check for potential buffer overrun before writing
+  size_t words_needed = op->buffer_loc + 256;
+  size_t buffer_words = op->sector_count * 256;  // Total buffer capacity in words
+  if(words_needed > buffer_words) {
+    kprintf("ERROR: About to overrun buffer in write! words_needed=%d, buffer_words=%d\r\n", 
+            (uint32_t)words_needed, (uint32_t)buffer_words);
+    if(old_pd!=0) switch_paging_directory_if_required(old_pd);
+    sti();
+    k_panic("Buffer overrun detected before sector write");
+  }
 
   //each sector is 512 bytes (or 256 words)
   uint16_t *buf = (uint16_t *)op->buffer;
@@ -337,7 +410,7 @@ void ata_continue_write(ATAPendingOperation *op)
   ++op->sectors_read;
 
 
-  if(old_pd!=NULL) switch_paging_directory_if_required(old_pd);
+  if(old_pd!=0) switch_paging_directory_if_required(old_pd);
 
   sti();
 }
