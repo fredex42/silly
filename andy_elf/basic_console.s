@@ -117,19 +117,19 @@ PMPrintStringLen:
 
 	pop ecx		;restore the length into cx...
 
-	pm_next_char_len:
-	lodsb
-	dec ecx
-	test ecx,ecx
-	jz pm_string_done_len	;if we get to zero, then exit
+pm_next_char_len:
+test ecx,ecx
+jz pm_string_done_len	;if we get to zero, then exit
+lodsb
+dec ecx
 
-	%ifdef SERIAL_CONSOLE
-	push ax
-	call early_serial_putchar
-	pop ax
-	%endif
+%ifdef SERIAL_CONSOLE
+push ax
+call early_serial_putchar
+pop ax
+%endif
 
-	cmp al, 0x0d		;CR
+cmp al, 0x0d		;CR
 	jz pm_carraige_rtn_len
 	cmp al, 0x0a		;LF
 	jz pm_linefeed_len

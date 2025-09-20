@@ -51,9 +51,9 @@ void scheduler_tick()
     global_scheduler_state->task_asap_list = global_scheduler_state->task_asap_list->next;
 
     ++global_scheduler_state->tasks_in_progress;
-    kprintf("Running task proc...\r\n");
+    //kprintf("Running task proc...\r\n");
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
-    kprintf("Task proc returned.\r\n");
+    //kprintf("Task proc returned.\r\n");
     --global_scheduler_state->tasks_in_progress;
   }
   sti();
@@ -151,7 +151,7 @@ void enter_next_process()
   pid_t i, temp;
   struct ProcessTableEntry* process = NULL;
 
-  kprintf("enter_next_process\r\n");
+  //kprintf("enter_next_process\r\n");
   cli();
   for(i=last_run_pid+1;i<PID_MAX;i++) {
     temp = i;

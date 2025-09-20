@@ -298,7 +298,7 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     //Issue another hardware command for the remaining sectors
     uint8_t next_sector_count = (remaining_sectors > 255) ? 255 : (uint8_t)remaining_sectors;
     
-    kprintf("cont:s=%d\r\n", (uint16_t)op->sectors_read);
+    //kprintf("cont:s=%d\r\n", (uint16_t)op->sectors_read);
     
     //Update current LBA for the next chunk
     op->current_lba = op->start_lba + op->sectors_read;
@@ -345,7 +345,7 @@ void ata_continue_read_chunk(SchedulerTask *t)
   uint16_t remaining_sectors = op->sector_count - op->sectors_read;
   uint8_t next_sector_count = (remaining_sectors > 255) ? 255 : (uint8_t)remaining_sectors;
   
-  kprintf("chunk:%d@0x%x\r\n", next_sector_count, (uint32_t)op->current_lba);
+  //kprintf("chunk:%d@0x%x\r\n", next_sector_count, (uint32_t)op->current_lba);
   
   //Issue the next read command
   uint8_t selector = 0xE0;  //LBA28 mode, master drive by default

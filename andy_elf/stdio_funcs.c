@@ -11,7 +11,7 @@ finds the next '%' token in the string. Ignore any escaped % signs (i.e. double-
 size_t find_next_token(const char *fmt, size_t start_at)
 {
   for(size_t i=start_at; fmt[i]!=0; i++) {
-    if(fmt[i]=='%' && fmt[i+1]!='%') return i;
+    if(fmt[i]=='%' && fmt[i+1]!=0 && fmt[i+1]!='%') return i;
   }
   return -1;
 }
@@ -41,9 +41,14 @@ void kprintf(const char *fmt, ...)
       int32_t value;
       int16_t svalue;
       char cvalue;
-      kputlen(&fmt[current_position], next_position-current_position+1);
+      if(next_position > current_position) {
+        kputlen(&fmt[current_position], next_position-current_position);
+      }
 
       char format_specifier = fmt[next_position+1]; //the format should be the character after the %
+      // kputs("[DEBUG: format=");
+      // kputlen(&format_specifier, 1);
+      // kputs("]");
       switch(format_specifier) {
         case 'd':
           svalue = (int16_t)va_arg(ap, int);  //varargs are upcast to `int` from `short`, according to gcc
@@ -65,7 +70,7 @@ void kprintf(const char *fmt, ...)
           break;
         case 'c':
           cvalue = (char)va_arg(ap, int);
-          kputlen(&cvalue, 2);
+          kputlen(&cvalue, 1);
           break;
         default:
           break;
