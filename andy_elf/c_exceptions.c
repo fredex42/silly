@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <sys/mmgr.h>
 #include <sys/pagefault.h>
+#include "utils/debug.h"
 
 /**
 higher-level exception handlers
@@ -32,6 +33,8 @@ uint32_t c_except_pagefault(uint32_t pf_load_addr, uint32_t error_code, uint32_t
 {
   uint8_t rc = handle_allocation_fault(pf_load_addr, error_code, faulting_addr, faulting_codeseg, eflags);
   if(rc==0) return 0; //page fault was handled!
+  
+  dump_stack();
   
   kprintf("ERROR: Page fault, occurring at 0x%x:0x%x\r\n", faulting_codeseg, faulting_addr);
   kprintf("Page fault loading address was 0x%x\r\n", pf_load_addr);

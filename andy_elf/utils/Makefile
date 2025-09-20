@@ -17,5 +17,8 @@ spinlock.o: spinlock.c ../include/spinlock.h
 ringbuffer.o: ringbuffer.c ../include/utils/ringbuffer.h
 	gcc -c ${CFLAGS} ringbuffer.c
 
-libutils.a: ucs_conv.o string.o spinlock.o ringbuffer.o
-	ar rcs libutils.a ucs_conv.o string.o spinlock.o ringbuffer.o
+debug.o: debug.c debug.h
+	gcc -c ${CFLAGS} debug.c
+
+libutils.a: ucs_conv.o string.o spinlock.o ringbuffer.o debug.o
+	ar rcs libutils.a ucs_conv.o string.o spinlock.o ringbuffer.o debug.o
