@@ -23,7 +23,7 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
   size_t pages_required = (sizeof(struct ProcessTableEntry) * PID_MAX) / PAGE_SIZE;
 
   acquire_spinlock(&process_table_lock);
-  process_table = (struct ProcessTableEntry*) vm_alloc_pages(NULL, pages_required+1, MP_PRESENT|MP_READWRITE);
+  process_table = (struct ProcessTableEntry*) vm_alloc_pages(NULL, pages_required+1, MP_PRESENT|MP_READWRITE|MP_GLOBAL);
 
   kprintf("INFO Process table is at 0x%x. Pages required 0x%x\r\n", process_table, pages_required+1);
   //memset(process_table, 0, sizeof(struct ProcessTableEntry)*PID_MAX);
@@ -50,10 +50,19 @@ struct ProcessTableEntry* get_process(uint16_t pid)
 {
   if(pid>PID_MAX) return NULL;
 
-  acquire_spinlock(&process_table_lock);
-  size_t offset = pid * sizeof(struct ProcessTableEntry);
-  struct ProcessTableEntry* e = (struct ProcessTableEntry *)((char *)process_table + offset);
+  //kprintf("DEBUG get_process: 0x%d\r\n", pid);
 
+  acquire_spinlock(&process_table_lock);
+  //kprintf("DEBUG process_table base 0x%x\r\n", process_table);
+  struct ProcessTableEntry* e = &process_table[pid];
+  // if(e >= 0x400000 && e<= 0x4001A0) {
+  //   kprintf("DEBUG get_process: 0x%d\r\n", pid);
+  //   kprintf("DEBUG sizeof ProcessTableEntry is 0x%x\r\n", sizeof(struct ProcessTableEntry));
+  //   kprintf("DEBUG process_table base 0x%x\r\n", process_table);
+  //   kprintf("DEBUG get_process entry for pid %d is 0x%x\r\n", pid, e);
+  // }
+  //kprintf("DEBUG get_process entry for pid %d is 0x%x\r\n", pid, e);
+  
   if(e->magic!=PROCESS_TABLE_ENTRY_SIG) {
     kprintf("DEBUG get_process entry for pid %d is 0x%x\r\n", pid, e);
     k_panic("get_process Process table corruption detected\r\n");

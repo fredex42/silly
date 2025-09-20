@@ -23,6 +23,7 @@
 #include "process.h"
 
 #define ROOT_PAGE_DIR_LOCATION        0x3000
+#define KERNEL_PAGETABLES_LOCATION    0xF03C0000 //the kernel root paging dir is remapped here in the flat pagetables area
 #define FIRST_PAGEDIR_ENTRY_LOCATION  0x4000
 
 static uint32_t *kernel_paging_directory;  //root paging directory on page 0
@@ -610,7 +611,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
       //first, unmap every page that is in the directory
       uint32_t *paging_dir_ent = (uint32_t *)((vaddr)mapped_pd + i*PAGE_SIZE);
       for(size_t j=0; j<1024; j++) {
-        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_ent[j] & MP_GLOBAL) && (paging_dir_root[i] & MP_USER)) {
+        if(paging_dir_ent[j] & MP_PRESENT && ! (paging_dir_ent[j] & MP_GLOBAL) && (paging_dir_ent[j] & MP_USER)) {
           ++unmap_counter;
           #ifdef MMGR_VERBOSE
           kprintf("DEBUG free_app_memory vptr is 0x%x\r\n", (i<<22) | (j<<12));
@@ -954,6 +955,10 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
   uint32_t *root_dir_virt = (uint32_t *) (temp_ptr + 0); 
   uint32_t *stack_paging_table_virt = (uint32_t *) (temp_ptr + (2*PAGE_SIZE));  
   uint32_t *stack_initial_page_virt = (uint32_t *) (temp_ptr + (3*PAGE_SIZE)); 
+
+  //POTENTIAL BUG - by copying the kernel paging directory here, the page table entries get freed when the process exits
+  //and then the kernel crashes when it tries to access them.  This is now prevented by ensuring that the kernel page tables are
+  //marked as MP_GLOBAL so the freeing process will skip them.
   memcpy_dw(root_dir_virt, kernel_paging_directory, PAGE_SIZE_DWORDS);
 
   //That's the system area taken care of. Now we need the app stack.  This will get extended by a fault handler.
@@ -1088,9 +1093,10 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
     kprintf("DEBUG pagetable_ptr is 0x%x\r\n", pagetables_entry);
     #endif
 
-    //if it's not into the kernel space then we need user-access too
-    if(pagetables_entry != ROOT_PAGE_DIR_LOCATION) {
-      page_flags |= MP_USER;
+    if(pagetables_entry==ROOT_PAGE_DIR_LOCATION || pagetables_entry==KERNEL_PAGETABLES_LOCATION) {
+      page_flags |= MP_GLOBAL; //kernel space pages should be global
+    } else {
+      page_flags |= MP_USER;  //user space pages should be user-accessible
     }
 
     uint32_t allocd = allocate_free_physical_pages(1, &phys_ptr);
