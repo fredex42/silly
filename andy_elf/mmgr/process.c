@@ -25,6 +25,10 @@ void initialise_process_table(uint32_t* kernel_paging_directory)
   acquire_spinlock(&process_table_lock);
   process_table = (struct ProcessTableEntry*) vm_alloc_pages(NULL, pages_required+1, MP_PRESENT|MP_READWRITE|MP_GLOBAL);
 
+  if(process_table==NULL) {
+    k_panic("Unable to allocate memory for process table");
+  }
+  
   kprintf("INFO Process table is at 0x%x. Pages required 0x%x\r\n", process_table, pages_required+1);
   //memset(process_table, 0, sizeof(struct ProcessTableEntry)*PID_MAX);
   for(size_t p=0; p<pages_required+1; p++) {

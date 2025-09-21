@@ -87,7 +87,10 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
   apply_memory_map_protections(ptr);
   kputs("Memory manager initialised.\r\n");
   initialise_process_table(kernel_paging_directory);
-  initialise_heap(get_process(0), MIN_ZONE_SIZE_PAGES*4);
+  void *heap_ptr = initialise_heap(get_process(0), MIN_ZONE_SIZE_PAGES*4);
+  if(heap_ptr==NULL) {
+    k_panic("Unable to allocate initial heap");
+  }
 }
 
 /**
