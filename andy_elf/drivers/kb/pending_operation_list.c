@@ -23,7 +23,6 @@ PendingOperationList* kb_cancel_pending_ops_for_process(PendingOperationList *st
 
     acquire_spinlock(&kb_pending_operation_lock);
     PendingOperationList *prev=NULL,*op=NULL,*new_start=NULL,*temp=NULL;
-    uint8_t last_iteration=0;
 
     new_start = start;
     op = new_start;
@@ -60,11 +59,10 @@ PendingOperationList* kb_cancel_pending_ops_for_process(PendingOperationList *st
  */
 PendingOperationList* kb_cancel_pending_ops_for_file(PendingOperationList *start, struct FilePointer *fp)
 {
-    if(start==NULL) return; //no list => nothing to do
+    if(start==NULL) return NULL; //no list => nothing to do
 
     acquire_spinlock(&kb_pending_operation_lock);
     PendingOperationList *prev=NULL,*op=NULL,*new_start=NULL,*temp=NULL;
-    uint8_t last_iteration=0;
 
     new_start = start;
     op = new_start;
@@ -92,6 +90,7 @@ PendingOperationList* kb_cancel_pending_ops_for_file(PendingOperationList *start
     }
 
     release_spinlock(&kb_pending_operation_lock);
+    return new_start;
 }
 
 /**
@@ -99,17 +98,19 @@ PendingOperationList* kb_cancel_pending_ops_for_file(PendingOperationList *start
  */
 PendingOperationList *kb_pop_pending_operation(PendingOperationList **start)
 {
-    if(start==NULL) return NULL;
+    if(start==NULL || *start==NULL) return NULL;
 
     acquire_spinlock(&kb_pending_operation_lock);
     PendingOperationList *head = *start;
-    start = (*start)->next;
+    *start = (*start)->next;
+    head->next = NULL; // Clear the next pointer to avoid dangling references
     release_spinlock(&kb_pending_operation_lock);
     return head;
 }
 
 /**
- * Queue a pending operation to read from the keyboard
+ * Queue a pending operation to read from the keyboard.  A "pending operation" is when a process wants to read but there is
+ * nothing in the buffer; we store the process and filepointer so that when data arrives we can wake it up and fill the buffer.
  */
 PendingOperationList *kb_push_pending_operation(PendingOperationList **start, struct ProcessTableEntry *p, struct FilePointer *fp) 
 {
@@ -144,4 +145,5 @@ PendingOperationList *kb_push_pending_operation(PendingOperationList **start, st
     }
 
     release_spinlock(&kb_pending_operation_lock);
+    return new_entry;
 }

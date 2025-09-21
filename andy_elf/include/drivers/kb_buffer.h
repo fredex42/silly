@@ -41,4 +41,9 @@ PendingOperationList* kb_cancel_pending_ops_for_file(PendingOperationList *start
  */
 PendingOperationList *kb_pop_pending_operation(PendingOperationList **start);
 
+/**
+ * Queue a pending operation to read from the keyboard
+ */
+PendingOperationList *kb_push_pending_operation(PendingOperationList **start, struct ProcessTableEntry *p, struct FilePointer *fp);
+
 #endif
