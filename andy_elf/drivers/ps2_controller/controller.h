@@ -11,9 +11,9 @@ struct PS2KeyboardState {
 };
 
 struct KeyboardBufferHeader {
-    uint32_t write_ptr;
-    uint32_t read_ptr;
-    uint32_t buffer_size;
+    size_t write_ptr;
+    size_t read_ptr;
+    size_t buffer_size;
     char *content;
 };
 

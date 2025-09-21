@@ -303,9 +303,9 @@ IKeyboard:	;keyboard interrupt handler
     call ps2_put_buffer
     pop ax
     
-	xor bx, bx
-	mov bl, '.'
-	call PMPrintChar
+;	xor bx, bx
+;	mov bl, '.'
+;	call PMPrintChar
 
     mov ebx, 1
     push ebx
