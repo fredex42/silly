@@ -7,60 +7,6 @@ This comprehensive audit identified **15 critical memory safety issues** across 
 
 ### HIGH PRIORITY
 
-#### 1. ELF Loader - Multiple Buffer Operations Without Bounds Checking
-**File:** `andy_elf/process/elfloader.c`
-**Lines:** 45-70, 120-140, 195-210, 250-280
-**Issue:** Multiple `memcpy` operations lack proper validation
-```c
-// Line ~56: No validation that bytes_read <= sizeof(ElfHeader32)
-memcpy(t->file_header, buf, bytes_read);
-
-// Line ~195: Potential integer overflow  
-size_t header_block_length = table_entry_size * table_entry_count;
-
-// Line ~105: No validation that p_filesz <= p_memsz
-vfat_read_async(fp, seg->content, hdr->p_filesz, (void *)t, &_elf_next_segment_loaded);
-```
-**Risk:** Memory corruption during ELF loading, potential arbitrary code execution
-**Recommendation:** Add size validation before all memcpy operations, check for integer overflow
-
-**Results:** First one does not exist in the file. Second and third are fixed.
-
-#### 2. Heap Allocator - Complex Pointer Arithmetic  
-**File:** `andy_elf/mmgr/heap.c`
-**Lines:** 108-120, 220-240, 130-150
-**Issue:** Multiple pointer calculations without comprehensive bounds checking
-```c
-// Line 108: Good overlap check but limited scope
-if((void *)prev_ptr + prev_ptr->block_length > (void*) ptr) {
-    k_panic("Heap corruption detected.\r\n");
-}
-
-// Line ~220: Complex pointer arithmetic for new block headers
-new_ptr = (struct PointerHeader *)((void *)p + sizeof(struct PointerHeader) + p->block_length);
-
-// Line ~225: Remaining length calculation could underflow if corrupted
-new_ptr->block_length = remaining_length - 2*sizeof(struct PointerHeader);
-```
-**Risk:** Heap corruption, arbitrary memory access if header fields corrupted
-**Recommendation:** Add comprehensive boundary validation, validate all pointer arithmetic against zone limits
-**Results:** 
-- Updated first one to check for integer overflow.
-- Updated second one to check for integer overflow or out of zone
-- Updated third one to check for integer overflow/underflow
-
-#### 3. ATA Driver - Buffer Boundary Issues (Previously Patched)
-**File:** `andy_elf/drivers/ata_pio/readwrite.c`  
-**Lines:** 203-210, 245-260
-**Issue:** Buffer calculations assume word alignment, potential edge cases
-```c
-// Recently patched but needs verification
-size_t words_needed = op->buffer_loc + 256;
-size_t buffer_words = op->sector_count * 256;
-```
-**Risk:** Buffer overrun during large disk reads (2MB+ allocations)
-**Status:** Recently fixed but monitoring required for edge cases
-
 ### MEDIUM-HIGH PRIORITY
 
 #### 4. VFAT Directory Operations - Fixed Buffer Copies
@@ -240,12 +186,6 @@ strncpy(test, "hello", 4);  // Should test null termination behavior
 3. **Long-term:** Consider memory-safe alternatives (bounded buffers, safe string libraries)
 4. **Testing:** Develop fuzzing tests for all identified high-risk functions
 **Status:** Band-aid fixes applied, needs architectural fix
-
-#### 3. Process ELF Loading - Unchecked Memory Operations
-**File:** `andy_elf/process/elfloader.c`
-**Lines:** TBD (investigating)
-**Issue:** Multiple memcpy operations without bounds checking
-**Risk:** High - Could corrupt memory during process loading
 
 ### MEDIUM PRIORITY
 
