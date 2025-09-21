@@ -66,3 +66,11 @@ void kb_notify_activity() {
         next_op->fp->status = FP_STATUS_READY;
     }
 }
+
+/**
+ * Clean up any pending keyboard operations for a process that is being terminated
+ */
+void kb_cleanup_process_operations(struct ProcessTableEntry *process) {
+    kprintf("DEBUG kb_cleanup_process_operations for process 0x%x\r\n", process);
+    kb_pending_ops = kb_cancel_pending_ops_for_process(kb_pending_ops, process);
+}

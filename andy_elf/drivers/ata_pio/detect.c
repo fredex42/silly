@@ -159,6 +159,15 @@ void initialise_ata_driver()
 
   for(register int i=0;i<4; i++) {
     master_driver_state->pending_disk_operation[i] = (ATAPendingOperation*) malloc(sizeof(ATAPendingOperation));
+    if(!master_driver_state->pending_disk_operation[i]) {
+      // Cleanup previously allocated operations before panicking
+      for(register int j=0; j<i; j++) {
+        free(master_driver_state->pending_disk_operation[j]);
+      }
+      free(master_driver_state);
+      k_panic("Could not allocate memory for ATA pending operations\r\n");
+      return;
+    }
     memset(master_driver_state->pending_disk_operation[i], 0, sizeof(ATAPendingOperation));
   }
 

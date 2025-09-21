@@ -19,7 +19,7 @@ void init_kb_pending_ops() {
  */
 PendingOperationList* kb_cancel_pending_ops_for_process(PendingOperationList *start, struct ProcessTableEntry *process)
 {
-    if(start==NULL) return; //no list => nothing to do
+    if(start==NULL) return NULL; //no list => nothing to do
 
     acquire_spinlock(&kb_pending_operation_lock);
     PendingOperationList *prev=NULL,*op=NULL,*new_start=NULL,*temp=NULL;
@@ -51,6 +51,7 @@ PendingOperationList* kb_cancel_pending_ops_for_process(PendingOperationList *st
     }
 
     release_spinlock(&kb_pending_operation_lock);
+    return new_start;
 }
 
 /**

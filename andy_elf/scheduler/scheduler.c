@@ -51,7 +51,9 @@ void scheduler_tick()
     global_scheduler_state->task_asap_list = global_scheduler_state->task_asap_list->next;
 
     ++global_scheduler_state->tasks_in_progress;
+    //kprintf("Running task proc...\r\n");
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
+    //kprintf("Task proc returned.\r\n");
     --global_scheduler_state->tasks_in_progress;
   }
   sti();
@@ -72,19 +74,26 @@ SchedulerTask *new_scheduler_task(uint8_t task_type, void (*task_proc)(struct sc
 
   SchedulerTaskBuffer *current_buffer = global_scheduler_state->buffers[global_scheduler_state->current_buffer];
 
-  while(current_buffer->buffer_idx + sizeof(SchedulerTaskBuffer) > PAGE_SIZE*TASK_BUFFER_SIZE_IN_PAGES) {
-    ++current_buffer->buffer_idx;
-    if(current_buffer->buffer_idx > BUFFER_COUNT) {
+  while(current_buffer->buffer_idx + sizeof(SchedulerTask) > PAGE_SIZE*TASK_BUFFER_SIZE_IN_PAGES) {
+    // Current buffer is full, switch to next buffer
+    ++global_scheduler_state->current_buffer;
+    if(global_scheduler_state->current_buffer >= BUFFER_COUNT) {
       if(iterations>0) {  //if we have already looped back to the beginning once in order to check for space there, and not found any, we ran out :(
         k_panic("Ran out of mem for scheduling tasks\r\n");
         return NULL;
       } else {
         ++iterations;
-        current_buffer->buffer_idx=0;
+        global_scheduler_state->current_buffer = 0;
       }
     }
 
     current_buffer = global_scheduler_state->buffers[global_scheduler_state->current_buffer];
+    
+    // Reset buffer when switching to it (simple task cleanup)
+    if(current_buffer->buffer_idx > 0) {
+      current_buffer->buffer_idx = 0;
+      current_buffer->waiting_tasks = 0;
+    }
   }
 
   task_ptr = (SchedulerTask *)((vaddr)current_buffer->buffer_ptr + current_buffer->buffer_idx);
@@ -142,6 +151,7 @@ void enter_next_process()
   pid_t i, temp;
   struct ProcessTableEntry* process = NULL;
 
+  //kprintf("enter_next_process\r\n");
   cli();
   for(i=last_run_pid+1;i<PID_MAX;i++) {
     temp = i;

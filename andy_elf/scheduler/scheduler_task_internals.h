@@ -1,6 +1,6 @@
 #include <types.h>
 
-#define TASK_BUFFER_SIZE_IN_PAGES   1
+#define TASK_BUFFER_SIZE_IN_PAGES   16
 
 /*
 the task buffer manages a memory page which contains a number of task defintitions.

@@ -35,13 +35,13 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
     return;
   }
   //see https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system, under "File allocation table"
-  if(buffer[1]=0xFF && buffer[2]==0xFF && buffer[3]==0x0F) {
+  if(buffer[1]==0xFF && buffer[2]==0xFF && buffer[3]==0x0F) {
     kprintf("INFO Detected a FAT32 filesystem\r\n");
     new_fs->cluster_map->bitsize=32;
   } else if(buffer[1]==0xFF && buffer[2]==0xFF && buffer[3]!=0xFF) {
     kprintf("INFO Detected a FAT12 filesystem\r\n");
     new_fs->cluster_map->bitsize=12;
-  } else if(buffer[1]=0xFF && buffer[2]==0xFF && buffer[3]==0xFF && buffer[4]!=0x0F) {
+  } else if(buffer[1]==0xFF && buffer[2]==0xFF && buffer[3]==0xFF && buffer[4]!=0x0F) {
     kprintf("INFO Detected a FAT16 filesystem\r\n");
     new_fs->cluster_map->bitsize=16;
   } else {
@@ -71,6 +71,7 @@ void vfat_load_cluster_map(FATFS* new_fs)
   }
 
   new_fs->cluster_map->buffer = (uint8_t*)malloc(fat_region_length_bytes);
+  kprintf("DEBUG allocated cluster map buffer at 0x%x, size 0x%x\r\n", new_fs->cluster_map->buffer, fat_region_length_bytes);
   if(!new_fs->cluster_map->buffer) {
     free(new_fs->cluster_map);
     new_fs->did_mount_cb(new_fs, E_NOMEM, NULL);

@@ -83,6 +83,13 @@ void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
     return;
   }
 
+  if(hdr->p_filesz > hdr->p_memsz) {
+    kprintf("ERROR elf_load_next_segment segment %l has filesz > memsz (%l > %l)\r\n", t->_scanned_segment_count, hdr->p_filesz, hdr->p_memsz);
+    t->callback(E_INVALID_FILE, t, t->extradata);
+    delete_elf_parsed_data(t);
+    return;
+  }
+
   kprintf("DEBUG elf_load_next_segment segment %l is loadable\r\n", t->_scanned_segment_count);
   ElfLoadedSegment *seg = (ElfLoadedSegment *)malloc(sizeof(ElfLoadedSegment));
   memset(seg, 0, sizeof(ElfLoadedSegment));
@@ -190,6 +197,13 @@ void elf_load_section_headers(VFatOpenFile *fp, struct elf_parsed_data *t, size_
 {
   if(!t->file_header) {
     kprintf("ERROR elf_load_section_headers called with NULL file header, can't continue");
+    delete_elf_parsed_data(t);
+    return;
+  }
+
+  //Protect against integer wraparound on header_block_length
+  if(table_entry_size>0xFFFF || table_entry_count > 0xFFFF) {
+    kprintf("ERROR elf_load_section_headers called with invalid table size/count (%l/%l)\r\n", table_entry_size, table_entry_count);
     delete_elf_parsed_data(t);
     return;
   }

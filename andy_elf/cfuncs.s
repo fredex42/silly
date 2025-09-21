@@ -91,29 +91,28 @@ longToString:
 	jz longToStringEnd					;don't try to divide by zero
 
 	div_loop:
-	xor edx, edx	;edx is the upper 32 bits of the numerator going in and the remained going out. Ensure it's 0 before we start
-	div ecx				;divide by the number base. Result is in EAX and remainder is in EDX. Remainder is our numeral
-	mov bl, byte [edx+numerals]	;set bl to the ascii code of the numeral
-	push bx				;push that result onto the stack
-	cmp eax, dword [ss:ebp+16]	;keep looping until out result is < the number base
-	jge div_loop
+	xor edx, edx						;edx is the upper 32 bits of the numerator going in and the remained going out. Ensure it's 0 before we start
+	div ecx								;divide by the number base. Result is in EAX and remainder is in EDX. Remainder is our numeral
+	mov bl, byte [edx+numerals]			;set bl to the ascii code of the numeral
+	push ebx							;push that result onto the stack
+	cmp eax, dword [ss:ebp+16]			;keep looping until out result is < the number base
+	jae div_loop						;jump if above or equal (unsigned)
 
 	;last digit is in EAX
 	mov bl, byte [eax+numerals]
-	push bx
+	push ebx
 
 	;now we have the characters pushed onto the stack, move them into the provided buffer
 	mov edi, dword [ss:ebp+12]	;set edi to the location
 	store_loop:
-	pop ax				;pop the next character off the stack
+	pop eax				;pop the next character off the stack
 	mov byte [edi], al		;store it in the string
 	inc edi
 	cmp esp, esi			;loop until our stack is at the same point as where we started the operation
 	jnz store_loop
 
-  mov byte [edi], 0		;null-terminate
-
 	longToStringEnd:
+	mov byte [edi], 0		;null-terminate
 	pop esi
 	pop edi
 	pop ebx
