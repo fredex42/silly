@@ -223,7 +223,7 @@ void ps2_put_buffer(uint8_t scancode)
 
     uint8_t ascii = lookup_scancode(scancode, &driver_state->kbd);
 
-    kprintf("DEBUG ps2_put_buffer 0x%x -> 0x%x '%c'\r\n", (size_t)scancode, (size_t)ascii, ascii);
+    //kprintf("DEBUG ps2_put_buffer 0x%x -> 0x%x '%c'\r\n", (size_t)scancode, (size_t)ascii, ascii);
 
     if(ascii==0) return;
     

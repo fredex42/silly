@@ -43,7 +43,7 @@ char lookup_scancode(char scancode, struct PS2KeyboardState* kbd_state)
     size_t keymap_pos = ( (scancode & 0xFF) * 2); //code 1 is at position 3+4 (0-based byte 2 + 3), there is no code 0
     if(kbd_state->shift_state || kbd_state->caps_lock) keymap_pos+=1;  //shifted equivalent is at +1
     if(keymap_pos>keymap_len) {
-        kprintf("ERROR scancode 0x%x out of range, limit was 0x%x\r\n", (uint32_t)(scancode & 0xFF), (uint32_t)keymap_len);
+        //kprintf("ERROR scancode 0x%x out of range, limit was 0x%x\r\n", (uint32_t)(scancode & 0xFF), (uint32_t)keymap_len);
         return 0;
     }
     return active_keymap_ptr[keymap_pos];

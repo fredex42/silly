@@ -88,7 +88,7 @@ struct ProcessTableEntry32 {
   pid_t pid;
 } __attribute__((packed));
 
-#if WORDSIZE == 32
+#if __WORDSIZE == 32
 #define ProcessTableEntry ProcessTableEntry32
 #else
 // Currently only 32-bit is supported.
