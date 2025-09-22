@@ -166,7 +166,7 @@ enter_kernel_context:
   ;Now we are in kernel context, copy the register state over to the process table
   call get_current_process    ;eax should hold the address of the process struct. C function so can't rely on registers now.
   mov edi, eax
-  add edi, 0x24               ;offset of SavedRegisterStates32 in the struct (destination pointer)
+  add edi, 0x28               ;offset of SavedRegisterStates32 in the struct (destination pointer)
   mov esi, CurrentProcessRegisterScratch  ;source pointer
   mov ecx, 0x13               ; 0x4c bytes = 0x13 dwords
   rep movsd                   ; copy the data across

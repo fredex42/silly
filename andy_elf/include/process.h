@@ -62,10 +62,10 @@ struct SavedRegisterStates32 {
 
 #define PROCESS_TABLE_MAGIC_NUMBER  0x54504552
 
-struct ProcessTableEntry {
+struct ProcessTableEntry32 {
   uint32_t magic; //must be 0x54504552 = 'PTBE'               //offset 0x0
   //saved register states are on the process's stack
-  size_t stack_page_count;                                    //offset 0x04
+  uint32_t stack_page_count;                                    //offset 0x04
 
   //process state
   uint8_t status;                                             //offset 0x08
@@ -77,8 +77,8 @@ struct ProcessTableEntry {
   void* root_paging_directory_phys; //physical RAM address of the root paging directory. Offset 0x0C
   void* root_paging_directory_kmem; //virtual RAM address of the root paging directory, in kernel space. NULL if not currently mapped. Offset 0x10.
   void* heap_start;                 //location of the heap, in process space. Offset 0x14
-  size_t heap_allocated;            //offset 0x18
-  size_t heap_used;                 //offset 0x1C
+  uint32_t heap_allocated;            //offset 0x18
+  uint32_t heap_used;                 //offset 0x1C
   void *stack_phys_ptr;             //offset 0x30
   uint32_t *stack_kmem_ptr;         //offset 0x24
 
@@ -88,6 +88,13 @@ struct ProcessTableEntry {
   pid_t pid;
 } __attribute__((packed));
 
+#if WORDSIZE == 32
+#define ProcessTableEntry ProcessTableEntry32
+#else
+// Currently only 32-bit is supported.
+// When supporting 64-bit, ensure that the stack offsets used in scheduler/lowlevel.asm are updated accordingly.
+#error "No process table entry defined for this architecture"
+#endif
 
 // in mmgr/process.c
 struct ProcessTableEntry* get_process(pid_t pid);
