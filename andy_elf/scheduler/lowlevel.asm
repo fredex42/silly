@@ -140,9 +140,12 @@ enter_kernel_context:
   mov [edi + 0x40], eax
   mov eax, dr7
   mov [edi + 0x44], eax
-  mov eax, esp              ;this is the current stack pointer. BUT we must subtract one pointer from it (our own return address)
-  sub eax, 0x08
-  mov [edi + 0x48], eax     ;process stack pointer when we entered the interrupt handler (see notes)
+  mov eax, esp              ;this is the current stack pointer (points at return address from the CALL)
+  ;The CPU pushed EFLAGS, CS, EIP when the interrupt happened, then CALL pushed a return address.
+  ;we PUSHed EDI above, but popped it back out into EAX above
+  ;After that POP the stack points at the return address, so add 4 to get back to the interrupted EIP.
+  add eax, 0x04
+  mov [edi + 0x48], eax     ;process stack pointer (points at EIP) when we entered the interrupt handler
 
   ; OK, now we have saved the registers switch into kernel context
 
