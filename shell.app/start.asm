@@ -16,11 +16,16 @@ _start:
   mov esi, waiting
   int 0x60
 
+  .loop_wait_key:
   mov eax, 0x0A       ;"API read()"
   mov bx, 0x00        ;file descriptor (stdin)
   mov ecx, 0x01       ;buffer length
   mov esi, buf        ;pointer to buffer
   int 0x60
+
+  
+  cmp byte [buf], 'q' ;if 'q' was pressed, exit
+  jne .loop_wait_key
 
   ;cli     ;this should cause a GPF
 

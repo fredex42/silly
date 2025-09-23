@@ -28,7 +28,8 @@ size_t api_read(uint32_t fd, char *buf, size_t len)
   char ch;
 
   pid_t current_pid = get_active_pid();
-  kprintf("DEBUG api_read on file 0x%x current PID is 0x%d\r\n", fd, current_pid);
+  //debug, unless writing to console
+  if(fd>0) kprintf("DEBUG api_read on file 0x%x current PID is 0x%d\r\n", fd, current_pid);
   
   if(fd > FILE_MAX) return API_ERR_NOTSUPP;
 
@@ -67,7 +68,7 @@ size_t api_write(uint32_t fd, char *buf, size_t len)
 {
   if(fd > FILE_MAX) return API_ERR_NOTSUPP;
   pid_t current_pid = get_active_pid();
-  kprintf("DEBUG api_write current PID is 0x%d\r\n", current_pid);
+  if(fd>1) kprintf("DEBUG api_write on file 0x%x current PID is 0x%d\r\n", fd, current_pid);
   if(current_pid==0) {
     return API_ERR_NOTSUPP;
   }

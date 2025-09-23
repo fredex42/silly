@@ -246,9 +246,9 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
   uint16_t *buf = (uint16_t *)op->buffer;
   
   // Ultra-minimal debug output only every 500 sectors
-  if((op->sectors_read % 500) == 0) {
-    kprintf("s=%d ", (uint16_t)op->sectors_read);
-  }
+  // if((op->sectors_read % 500) == 0) {
+  //   kprintf("s=%d ", (uint16_t)op->sectors_read);
+  // }
   
   // Quick sanity check
   size_t expected_buffer_loc = (size_t)op->sectors_read * 256;
@@ -289,7 +289,7 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     
     // Prevent multiple continuation tasks for the same operation
     if(op->continuation_pending) {
-      kprintf("WARNING: Continuation already pending for sectors_read=%d\r\n", (uint16_t)op->sectors_read);
+      //kprintf("WARNING: Continuation already pending for sectors_read=%d\r\n", (uint16_t)op->sectors_read);
       if(old_pd!=0) switch_paging_directory_if_required(old_pd);
       sti();
       return;
