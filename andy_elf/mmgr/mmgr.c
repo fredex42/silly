@@ -778,6 +778,25 @@ void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t 
   }
 }
 
+void vm_update_page_flags(uint32_t *root_page_dir, void *vmem_ptr, uint32_t new_flags)
+{
+  int16_t dir,off;
+  vaddr phys_ptr;
+  size_t phys_page_idx;
+
+  if(root_page_dir==NULL) root_page_dir = (uint32_t *)kernel_paging_directory;
+
+  _resolve_vptr(vmem_ptr, &dir, &off);
+
+  vaddr pageptr = (vaddr)root_page_dir + ((vaddr)dir << 12) + ((vaddr)off * sizeof(uint32_t));
+  uint32_t entry = *(uint32_t *)pageptr;
+  if(entry & MP_PRESENT) {
+    entry = (entry & MP_ADDRESS_MASK) | MP_PRESENT | new_flags;
+    *(uint32_t *)pageptr = entry;
+    mb();
+    __invalidate_vptr((vaddr)vmem_ptr);
+  }
+}
 /**
 parses the memory map obtained from BIOS INT 0x15, EAX = 0xE820
 by the bootloader.

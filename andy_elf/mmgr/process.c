@@ -189,50 +189,59 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     return 0;
   }
 
-  kprintf("DEBUG app paging dirs remapped to 0x%x\r\n", mapped_pagedirs);
+  // kprintf("DEBUG app paging dirs remapped to 0x%x\r\n", mapped_pagedirs);
 
-  ElfLoadedSegment *seg = elf->loaded_segments_list;
-  size_t i=0;
-  while(seg!=NULL) {
-    kprintf("INFO Segment %d is %d pages from src 0x%x\r\n", i, seg->page_count, seg->content);
-    if(! seg->header ) {
-      kprintf("ERROR internal_create_process section %d has no header\r\n", i);
-      continue;
-    }
+  // ElfLoadedSegment *seg = elf->loaded_segments_list;
+  // size_t i=0;
+  // while(seg!=NULL) {
+  //   kprintf("INFO Segment %d is %d pages from src 0x%x\r\n", i, seg->page_count, seg->content);
+  //   if(! seg->header ) {
+  //     kprintf("ERROR internal_create_process section %d has no header\r\n", i);
+  //     continue;
+  //   }
 
-    if(! (seg->header->p_flags) & SHF_ALLOC ) continue;
+  //   if(! (seg->header->p_flags) & SHF_ALLOC ) continue;
 
-    kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
-    void *base_kernel_ptr = NULL; //base_kernel_ptr points to the first of a set of allocated pages, mapped into kernel-space. this is so that they can be bulk-unmapped below.
+  //   kprintf("DEBUG internal_create_process mapping ELF section %d at 0x%x\r\n", i, seg->header->p_vaddr);
+  //   void *base_kernel_ptr = NULL; //base_kernel_ptr points to the first of a set of allocated pages, mapped into kernel-space. this is so that they can be bulk-unmapped below.
 
-    //first ensure that the RAM space is available
-    for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
-      void *page_addr = (void *) ( (seg->header->p_vaddr & ~0x3FF) + pagenum*PAGE_SIZE);
-      if(!vm_is_address_present(mapped_pagedirs, page_addr)) {
-        kprintf("DEBUG Address 0x%x is not mapped yet.\r\n", page_addr);
-        size_t flags = MP_USER|MP_PRESENT;
-        if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
-        kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
-        void *kernel_ptr = vm_alloc_specific_page(mapped_pagedirs, page_addr, flags);
-        kprintf("DEBUG page mapped into kmem at 0x%x\r\n", kernel_ptr);
-        if(!kernel_ptr) {
-          kprintf("ERROR Unable to allocate memory for 0x%x in 0x%x\r\n", page_addr, mapped_pagedirs);
-          k_panic("Aborting\r\n");  //FIXME - yeah should bail and cleanup, here.
-        }
-        if(base_kernel_ptr==NULL) base_kernel_ptr = kernel_ptr;
-        memset_dw(kernel_ptr, 0, PAGE_SIZE_DWORDS);  //ensure that the page is blank before we use it.
-      }
-    }
+  //   //first ensure that the RAM space is available
+  //   for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
+  //     void *page_addr = (void *) ( (seg->header->p_vaddr & ~0x3FF) + pagenum*PAGE_SIZE);
+  //     if(!vm_is_address_present(mapped_pagedirs, page_addr)) {
+  //       kprintf("DEBUG Address 0x%x is not mapped yet.\r\n", page_addr);
+  //       size_t flags = MP_PRESENT| MP_READWRITE;  //we need readwrite access in order to set it up!
+  //       //size_t flags = MP_USER|MP_PRESENT;
+  //       //if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+  //       kprintf("DEBUG internal_create_process flags are 0x%x\r\n", flags);
+  //       void *kernel_ptr = vm_alloc_specific_page(mapped_pagedirs, page_addr, flags);
+  //       kprintf("DEBUG page mapped into kmem at 0x%x\r\n", kernel_ptr);
+  //       if(!kernel_ptr) {
+  //         kprintf("ERROR Unable to allocate memory for 0x%x in 0x%x\r\n", page_addr, mapped_pagedirs);
+  //         k_panic("Aborting\r\n");  //FIXME - yeah should bail and cleanup, here.
+  //       }
+  //       if(base_kernel_ptr==NULL) base_kernel_ptr = kernel_ptr;
+  //       memset_dw(kernel_ptr, 0, PAGE_SIZE_DWORDS);  //ensure that the page is blank before we use it.
+  //     }
+  //   }
 
-    kprintf("DEBUG copying 0x%x bytes into 0x%x\r\n", seg->header->p_filesz, seg->header->p_vaddr);
-    //now that the space is definitely there, copy the loaded data into it.  The pointers are freed at the end of this routine.
-    memcpy(seg->header->p_vaddr, seg->content, seg->header->p_filesz);
-    for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
-      k_unmap_page_ptr(NULL, (vaddr)(base_kernel_ptr + pagenum*PAGE_SIZE));
-    }
-    i++;
-    seg = seg->next;
-  }
+  //   kprintf("DEBUG copying 0x%x bytes into 0x%x\r\n", seg->header->p_filesz, seg->header->p_vaddr);
+  //   //now that the space is definitely there, copy the loaded data into it.  The pointers are freed at the end of this routine.
+  //   memcpy(seg->header->p_vaddr, seg->content, seg->header->p_filesz);
+  //   for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
+  //     k_unmap_page_ptr(NULL, (vaddr)(base_kernel_ptr + pagenum*PAGE_SIZE));
+  //   }
+
+  //   // Update the paging flags to allow ring3 access and block write access if necessary
+  //   for(size_t pagenum=0;pagenum < seg->page_count; ++pagenum) {
+  //     void *page_addr = (void *) ( (seg->header->p_vaddr & ~0x3FF) + pagenum*PAGE_SIZE);
+  //     size_t flags = MP_PRESENT | MP_USER;
+  //     if(seg->header->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+  //     vm_update_page_flags(mapped_pagedirs, page_addr, flags);
+  //   }
+  //   i++;
+  //   seg = seg->next;
+  // }
 
   //now set up a heap
   kputs("DEBUG new_process setting up process heap\r\n");
@@ -276,6 +285,8 @@ void process_initial_stack(struct ProcessTableEntry *new_entry, ElfFileHeader* f
   process_stack_temp -= 1;
   *process_stack_temp = file_header->i386_subheader.entrypoint;
   new_entry->saved_regs.esp -= 0x0C;
+
+  kprintf("DEBUG process_initial_stack entrypoint at 0x%x\r\n", file_header->i386_subheader.entrypoint);
   mb();
 }
 

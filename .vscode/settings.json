@@ -9,6 +9,7 @@
         "stdio.h": "c",
         "panic.h": "c",
         "ringbuffer.h": "c",
-        "memops.h": "c"
+        "memops.h": "c",
+        "errors.h": "c"
     }
 }

@@ -84,7 +84,7 @@ struct vfat_read_transient_data {
 
 void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
 {
-  kputs("DEBUG entered _vfat_next_block_read %x 0x%x 0x%x\r\n", (uint32_t)status, buffer, extradata);
+  kprintf("DEBUG entered _vfat_next_block_read %x 0x%x 0x%x\r\n", (uint32_t)status, buffer, extradata);
 
   struct vfat_read_transient_data* t = (struct vfat_read_transient_data *)extradata;
 
@@ -205,6 +205,14 @@ Returns 0 if successful, 1 if EOF was encountered, 2 if the parameters were not 
 */
 uint8_t vfat_seek(VFatOpenFile *fp, size_t offset, uint8_t whence)
 {
+  if(fp->parent_fs->bpb->bytes_per_logical_sector==0) {
+    kputs("ERROR vfat_seek called on uninitialised filesystem\r\n");
+    return 2;
+  }
+  if(fp->parent_fs->bpb->logical_sectors_per_cluster==0) {
+    kputs("ERROR vfat_seek called on uninitialised filesystem\r\n");
+    return 2;
+  }
   size_t total_offset_in_sectors = offset / fp->parent_fs->bpb->bytes_per_logical_sector;
   size_t total_offset_in_clusters = total_offset_in_sectors / fp->parent_fs->bpb->logical_sectors_per_cluster;
 

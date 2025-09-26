@@ -151,6 +151,11 @@ void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t 
 void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys);
 
 /**
+ * Change the flags on the given virtual memory pointer
+ */
+void vm_update_page_flags(uint32_t *root_page_dir, void *vmem_ptr, uint32_t new_flags);
+
+/**
  * ensures that all pages mapped into kernel-space are also backed by allocated ram.
  * if they are not, it raises a kernel panic if should_panic is non-zero; otherwise it will unmap the offending page.
 */

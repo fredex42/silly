@@ -7,290 +7,227 @@
 #include <memops.h>
 #include <sys/mmgr.h>
 #include <malloc.h>
+#include <exeformats/elf.h>
 #include "elfloader.h"
 
-/**
- * Recursively delete the loaded segment list
-*/
-void delete_loaded_segments(ElfLoadedSegment *ptr)
-{
-  kprintf("DEBUG delete_loaded_segments 0x%x\r\n", ptr);
-  if(!ptr) return;
-  ElfLoadedSegment *next = ptr->next;
-  //header is a weak ref which does not need freeing.
-  //content is owned by the segment structure and so must be freed
-  if(ptr->content) free(ptr->content);
-  free(ptr);
-  if(next) delete_loaded_segments(next);
+struct LoadList *load_list_push(struct LoadList *list, struct LoadList *new) {
+  if(!new) return list;
+  if (!list) return new;
+
+  struct LoadList *cur = list;
+  while (cur->next) cur = cur->next;
+  cur->next = new;
+  return list;
 }
 
-void delete_elf_parsed_data(struct elf_parsed_data *t)
-{
-  kprintf("DEBUG delete_elf_parsed_data: 0x%x\r\n", t);
-  kputs("DEBUG file headers...\r\n");
+size_t load_list_count(struct LoadList *list) {
+  size_t count = 0;
+  struct LoadList *cur = list;
+  while (cur) {
+    count++;
+    cur = cur->next;
+  }
+  return count;
+}
+
+void delete_load_list(struct LoadList *list, uint8_t free_vptr) {
+  struct LoadList *cur = list;
+  while (cur) {
+    struct LoadList *next = cur->next;
+    if (cur->vptr && free_vptr) free(cur->vptr);
+    free(cur);
+    cur = next;
+  }
+}
+
+void delete_elf_parsed_data(struct elf_parsed_data *t) {
+  if(!t) return;
   if(t->file_header) free(t->file_header);
-  kputs("DEBUG program headers...\r\n");
   if(t->program_headers) free(t->program_headers);
-  kputs("DEBUG section headers...\r\n");
-  if(t->section_headers_buffer) free(t->section_headers_buffer);
-  kputs("DEBUG loaded segments...\r\n");
-  if(t->loaded_segments_list) delete_loaded_segments(t->loaded_segments_list);
-  kputs("DEBUG struct itself...\r\n");
   free(t);
-  kputs("DEBUG Done!\r\n");
 }
 
-void _elf_next_segment_loaded(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)
-{
-  struct elf_parsed_data *t = (struct elf_parsed_data *)extradata;
+void delete_elf_loader_state(struct ElfLoaderState *s) {
+  if(!s) return;
+  if(s->load_list) delete_load_list(s->load_list, 1);
+  if(s->parsed_data) delete_elf_parsed_data(s->parsed_data);
+  free(s);
+}
 
+struct ElfLoaderState *new_elfloader_state(VFatOpenFile *file, void *extradata, void (*callback)(uint8_t status, struct elf_parsed_data* parsed_data, void* extradata)) {
+  struct ElfLoaderState *s = (struct ElfLoaderState *) malloc(sizeof(struct ElfLoaderState));
+  if(!s) return NULL;
+  memset(s, 0, sizeof(struct ElfLoaderState));
+  s->file = file;
+  s->extradata = extradata;
+  s->callback = callback;
+  return s;
+}
+
+void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
+  struct elf_program_header_i386 *headers = (struct elf_program_header_i386 *) buf;
+  struct ElfLoaderState *t = (struct ElfLoaderState *) extradata;
   if(status != E_OK) {
-    t->callback(status, t, t->extradata);
-    delete_elf_parsed_data(t);
-  }
-
-  kprintf("INFO Segment %l loaded.\r\n", t->_loaded_segment_count);
-  ++t->_loaded_segment_count;
-  if(t->_loaded_segment_count < t->program_headers_count) {
-    elf_load_next_segment(fp, t);
-  } else {
-    kprintf("INFO All segments now loaded\r\n");
-  }
-  vfat_close(fp);
-  t->callback(status, t, t->extradata);
-  //the caller will have to free the parsed_data structure.
-}
-
-void elf_load_next_segment(VFatOpenFile *fp, struct elf_parsed_data *t)
-{
-  cli();
-  if(t->_scanned_segment_count>=t->program_headers_count) {
-    kprintf("DEBUG elf_load_next_segment Loaded all %l section headers.\r\n", t->program_headers_count);
-    t->callback(E_OK, t, t->extradata);
+    kprintf("ERROR: Could not read ELF program headers, code %d\r\n", status);
+    t->callback(status, t->parsed_data, t->extradata);
+    delete_elf_loader_state(t);
+    if(headers) free(headers);
     return;
   }
-
-  ElfProgramHeader32 *hdr = &t->program_headers[t->_scanned_segment_count];
-
-  kprintf("ELF program header:\r\n");
-  kprintf("    Type is %d, offset is 0x%x, virtual load address is 0x%x\r\n", hdr->p_type, hdr->p_offset, hdr->p_vaddr);
-  kprintf("      on-disk size 0x%x, in-memory size 0x%x, flags are 0x%x\r\n", hdr->p_filesz, hdr->p_memsz, hdr->p_flags);
-
-  if(hdr->p_type!=PT_LOAD) {
-    kprintf("DEBUG elf_load_next_segment segment %l is not loadable, moving on to next\r\n", t->_scanned_segment_count);
-    ++t->_scanned_segment_count;
-    elf_load_next_segment(fp, t);
-    return;
-  }
-
-  if(hdr->p_filesz > hdr->p_memsz) {
-    kprintf("ERROR elf_load_next_segment segment %l has filesz > memsz (%l > %l)\r\n", t->_scanned_segment_count, hdr->p_filesz, hdr->p_memsz);
-    t->callback(E_INVALID_FILE, t, t->extradata);
-    delete_elf_parsed_data(t);
-    return;
-  }
-
-  kprintf("DEBUG elf_load_next_segment segment %l is loadable\r\n", t->_scanned_segment_count);
-  ElfLoadedSegment *seg = (ElfLoadedSegment *)malloc(sizeof(ElfLoadedSegment));
-  memset(seg, 0, sizeof(ElfLoadedSegment));
-  if(t->last_loaded_segment) {
-    t->last_loaded_segment->next = seg;
-  } else {
-    t->loaded_segments_list = seg;
-  }
-  seg->header = hdr;  //this is a weak reference which is not owned by seg
   
-  kprintf("DEBUG elf_load_next_segment list ptr 0x%x\r\n", t->loaded_segments_list);
-  t->last_loaded_segment = seg;
-   kprintf("DEBUG last_loaded_segment ptr 0x%x\r\n", t->last_loaded_segment);
-  //Step one - work out how many pages we need.
-  seg->page_count = hdr->p_memsz / PAGE_SIZE;
-  size_t pages_spare = hdr->p_memsz % PAGE_SIZE;
-  if(pages_spare!=0) ++seg->page_count;
-  kprintf("DEBUG elf_load_next_segment required pages is %l\r\n", seg->page_count);
+  t->parsed_data->program_headers = headers;
+  t->parsed_data->program_headers_count = t->parsed_data->file_header->i386_subheader.program_header_table_entry_count;
+  kprintf("INFO Loaded %d ELF program headers\r\n", t->parsed_data->program_headers_count);
 
-  seg->content = (void *)malloc(hdr->p_memsz);
-
-  //Step two - initiate the load.
-  //fixme: check for EOF
-  vfat_seek(fp, hdr->p_offset, SEEK_SET);
-
-  vfat_read_async(fp, seg->content, hdr->p_filesz, (void *)t, &_elf_next_segment_loaded);
-}
-
-/**
-Returns an ElfSectionHeader32 struct from the buffer in `t`.
-Returns NULL if the index is invalid.
-*/
-ElfSectionHeader32* elf_get_section_header_by_index(struct elf_parsed_data *t, size_t idx)
-{
-  if(idx>t->section_headers_count) return NULL;
-  ElfSectionHeader32 *section = (ElfSectionHeader32 *)(t->section_headers_buffer + idx*sizeof(ElfSectionHeader32));
-  return section;
-}
-
-/**
-Invokes the provided callback once for each section
-*/
-uint32_t elf_sections_foreach(struct elf_parsed_data *t, void *extradata, void (*callback)(struct elf_parsed_data *t, void *extradata, uint32_t idx, ElfSectionHeader32* section))
-{
-  size_t i;
-  if(!t->section_headers_buffer) return 0;
-  ElfSectionHeader32 *section = (ElfSectionHeader32 *)t->section_headers_buffer;
-
-  for(i=0; i<t->section_headers_count; i++) {
-    callback(t, extradata, i, section);
-    section++;
+  //Now we must build a load-list
+  for(size_t i = 0; i < t->parsed_data->program_headers_count; i++) {
+    struct LoadList *entry = (struct LoadList *) malloc(sizeof(struct LoadList));
+    if(!entry) {
+      kprintf("ERROR: Out of memory\r\n");
+      t->callback(E_NOMEM, t->parsed_data, t->extradata);
+      delete_elf_loader_state(t);
+      return;
+    }
+    memset(entry, 0, sizeof(struct LoadList));
+    entry->file_offset = t->parsed_data->program_headers[i].p_offset;
+    entry->length = t->parsed_data->program_headers[i].p_filesz;
+    t->load_list = load_list_push(t->load_list, entry);
   }
-  return i;
+
+  //We have a basic load list; now we should coalesce any adjacent entries
+  for(struct LoadList *cur = t->load_list; cur != NULL; cur = cur->next) {
+    while(cur->next && (cur->file_offset + cur->length == cur->next->file_offset)) {
+      struct LoadList *to_delete = cur->next;
+      cur->length += to_delete->length;
+      cur->next = to_delete->next;
+      free(to_delete);
+    }
+  }
+
+  kprintf("INFO After coalesce, we have %d load list entries\r\n", load_list_count(t->load_list));
+
 }
 
-void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)
-{
-  struct elf_parsed_data *t = (struct elf_parsed_data *)extradata;
-
-  kprintf("INFO Program header loaded.\r\n");
+void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
+  ElfFileHeader *header = (ElfFileHeader *) buf;
+  struct ElfLoaderState *t = (struct ElfLoaderState *) extradata;
   if(status != E_OK) {
-    t->callback(status, t, t->extradata);
-    if(buf) free(buf);
-    delete_elf_parsed_data(t);
-    return;
-  }
-  t->program_headers = (ElfProgramHeader32 *)buf;
-
-  elf_load_next_segment(fp, t);
-}
-
-void _elf_show_section(struct elf_parsed_data *t, void *extradata, uint32_t idx, ElfSectionHeader32 *section)
-{
-  kprintf("ELF section %d:\r\n", idx);
-  kprintf("    Type is %d, flags are 0x%x, load address 0x%x, file offset 0x%x\r\n", section->sh_type, section->sh_flags, section->sh_addr, section->sh_offset);
-}
-
-void _elf_loaded_section_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
-  struct elf_parsed_data *t = (struct elf_parsed_data *)extradata;
-  uint8_t failed = 0;
-
-  if(status!=E_OK) {
-    kprintf("ERROR: Could not load section headers, error code was 0x%x\r\n", (uint32_t)status);
-    t->callback(status, t, t->extradata);
-    delete_elf_parsed_data(t);
-    return;
-  }
-
-  kprintf("DEBUG: Section headers in buffer at 0x%x\r\n", buf);
-  t->section_headers_buffer = buf;
-  elf_sections_foreach(t, NULL, &_elf_show_section);
-  elf_load_section_headers(fp, t, t->file_header->i386_subheader.program_header_table_entry_size, t->file_header->i386_subheader.program_header_table_entry_count, t->file_header->i386_subheader.program_header_offset);
-}
-
-/**
-Loads a block of headers from the files.
-Arguments:
-- fp                    - VFatOpenFile pointer giving the file to load from
-- t                     - ElfParsedData structure that is being loaded in
-- table_entry_size      - size of the table to load in
-- table_entry_count     - count of entries to load in
-- section_header_offset - offset in the file to load the sections from
-*/
-void elf_load_section_headers(VFatOpenFile *fp, struct elf_parsed_data *t, size_t table_entry_size, size_t table_entry_count, size_t section_header_offset)
-{
-  if(!t->file_header) {
-    kprintf("ERROR elf_load_section_headers called with NULL file header, can't continue");
-    delete_elf_parsed_data(t);
-    return;
-  }
-
-  //Protect against integer wraparound on header_block_length
-  if(table_entry_size>0xFFFF || table_entry_count > 0xFFFF) {
-    kprintf("ERROR elf_load_section_headers called with invalid table size/count (%l/%l)\r\n", table_entry_size, table_entry_count);
-    delete_elf_parsed_data(t);
-    return;
-  }
-
-  size_t header_block_length = table_entry_size * table_entry_count;
-
-  void *header_buffer = malloc(header_block_length);
-  if(!header_buffer) {
-    kprintf("ERROR Unable to allocate memory for section headers\r\n");
-    delete_elf_parsed_data(t);
-    return;
-  }
-
-  //FIXME: check for EOF
-  vfat_seek(fp, section_header_offset, SEEK_SET);
-
-  kprintf("DEBUG Loading in %l headers of %l bytes each\r\n", table_entry_count, table_entry_size);
-
-  if(section_header_offset==t->file_header->i386_subheader.section_header_offset) {
-    t->section_headers_count = table_entry_count;
-    vfat_read_async(fp, header_buffer, header_block_length, (void *)t, &_elf_loaded_section_headers);
-  } else if(section_header_offset==t->file_header->i386_subheader.program_header_offset) {
-    t->program_headers_count = table_entry_count;
-    vfat_read_async(fp, header_buffer, header_block_length, (void *)t, &_elf_loaded_program_headers);
-  }
-}
-
-void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata)
-{
-  struct elf_parsed_data *t = (struct elf_parsed_data *)extradata;
-  uint8_t failed = 0;
-  kprintf("File header loaded (%l bytes), inspecting...\r\n", bytes_read);
-
-  if(status!=E_OK) {
-    if(buf) free(buf);
-    vfat_close(fp);
-    t->callback(status, NULL, extradata);
-    delete_elf_parsed_data(t);
-    return;
-  }
-
-  t->file_header = (ElfFileHeader *) buf;
-  kprintf("ELF file header at 0x%x in memory\r\n", t->file_header);
-
-  if(t->file_header->magic[0] != 0x7F || t->file_header->magic[1] != 0x45 ||
-     t->file_header->magic[2] != 0x4c || t->file_header->magic[3] != 0x46) {
-    kprintf("ELF magic number check failed, this is not an executable. Got 0x%x\r\n",
-      (uint32_t)t->file_header->magic[1]
-    );
-    if(buf) free(buf);
-    vfat_close(fp);
-    t->callback(E_BAD_EXECUTABLE, NULL, extradata);
-    delete_elf_parsed_data(t);
-    return;
-  }
-
-  if(! (t->file_header->ident_os_abi == ELF_ABI_LINUX || t->file_header->ident_os_abi == ELF_ABI_SYSV)) {  //kinda temporary but that is what we expect for now
-    kprintf("ELF executable had wrong ABI, expected linux (3) got %d\r\n", t->file_header->ident_os_abi);
-    failed = 1;
-  }
-  if(t->file_header->ident_endian != 1) {
-    kprintf("Expected little-endian ELF format but got big.\r\n");
-    failed = 1;
-  }
-  if(t->file_header->ident_class != 1) {
-    kprintf("Expected 32-bit executable (1), got class %d\r\n", t->file_header->ident_class);
-    failed = 1;
-  }
-  if(t->file_header->e_type != ET_EXEC) {
-    kprintf("This is not an executable file. Expected 2 got %d\r\n", t->file_header->e_type);
-    failed = 1;
-  }
-  if(t->file_header->target_isa != 0x03) {
-    kprintf("We only support x86 (i386) executables at present\r\n");
-    failed = 1;
-  }
-  if(failed == 1) {
-    if(buf) free(buf);
-    vfat_close(fp);
-    t->callback(E_BAD_EXECUTABLE, NULL, extradata);
+    kprintf("ERROR: Could not read ELF file header, code %d\r\n", status);
+    t->callback(status, t->parsed_data, t->extradata);
     free(t);
     return;
   }
 
-  kprintf("Executable looks OK, starting load...\r\n");
-  elf_load_section_headers(fp, t, t->file_header->i386_subheader.section_header_table_entry_size, t->file_header->i386_subheader.section_header_table_entry_count, t->file_header->i386_subheader.section_header_offset);
+  //check the magic
+  if(header->magic[0] != 0x7F || header->magic[1] != 'E' || header->magic[2] != 'L' || header->magic[3] != 'F') {
+    kprintf("ERROR: Not a valid ELF file (bad magic)\r\n");
+    t->callback(E_NOT_ELF, t, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+
+  //check the class
+  if(header->ident_class != 1) {
+    kprintf("ERROR: Only 32-bit ELF files are supported\r\n");
+    t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+  //check the endianness
+  if(header->ident_endian != 1) {
+    kprintf("ERROR: Only little-endian ELF files are supported\r\n");
+    t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+  //check the version
+  if(header->ident_version != 1) {
+    kprintf("ERROR: Unsupported ELF version %d\r\n", header->ident_version);
+    t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+  // //check the OS ABI
+  // if(header->ident_os_abi != ELF_ABI_SILLY && header->ident_os_abi != ELF_ABI_LINUX) {
+  //   kprintf("ERROR: Unsupported ELF OS ABI %d\r\n", header->ident_os_abi);
+  //   t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+  //   free(t);
+  //   free(header);
+  //   return;
+  // }
+  //check the ABI version
+  if(header->ident_abi_version != 0) {
+    kprintf("ERROR: Unsupported ELF ABI version %d\r\n", header->ident_abi_version);
+    t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+  //check the type
+  if(header->e_type != ET_EXEC && header->e_type != ET_DYN) {
+    kprintf("ERROR: Only executable and shared-object ELF files are supported (type %d)\r\n", header->e_type);
+    t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+  //check the target ISA
+  if(header->target_isa != ISA_I386) {
+    kprintf("ERROR: Only i386 ELF files are supported (target ISA %d)\r\n", header->target_isa);
+    t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+  kprintf("INFO ELF file header looks good\r\n");
+  t->parsed_data = (struct elf_parsed_data *) malloc(sizeof(struct elf_parsed_data));
+  if(!t->parsed_data) {
+    kprintf("ERROR: Out of memory\r\n");
+    t->callback(E_NOMEM, t->parsed_data, t->extradata);
+    free(t);
+    free(header);
+    return;
+  }
+  memset(t->parsed_data, 0, sizeof(struct elf_parsed_data));
+  t->parsed_data->file_header = header;
+  kprintf("INFO ELF entry point is 0x%x\r\n", header->i386_subheader.entrypoint);
+  kprintf("INFO ELF has %d program headers, at offset 0x%x\r\n", header->i386_subheader.program_header_table_entry_count, header->i386_subheader.program_header_offset);
+  if(header->i386_subheader.program_header_table_entry_count == 0) {
+    kprintf("ERROR: ELF file has no program headers\r\n");
+    t->callback(E_MALFORMED_ELF, t->parsed_data, t->extradata);
+    free(t->parsed_data);
+    free(t);
+    return;
+  }
+  //load in the program headers
+  size_t ph_size = header->i386_subheader.program_header_table_entry_count * sizeof(ElfProgramHeader32);
+  ElfProgramHeader32 *ph_buf = (ElfProgramHeader32 *) malloc(ph_size);
+  if(!ph_buf) {
+    kprintf("ERROR: Out of memory\r\n");
+    t->callback(E_NOMEM, t->parsed_data, t->extradata);
+    free(t->parsed_data);
+    free(t);
+    return;
+  }
+  memset(ph_buf, 0, ph_size);
+  kprintf("INFO Loading ELF program headers...\r\n");
+  uint8_t err = vfat_seek(fp, t->parsed_data->file_header->i386_subheader.program_header_offset, SEEK_SET);
+  if(err != 0) {
+    kprintf("ERROR: Could not seek to program headers, code %d\r\n", err);
+    t->callback(err, t->parsed_data, t->extradata);
+    free(t->parsed_data);
+    free(t);
+    free(ph_buf);
+    return;
+  }
+
+  vfat_read_async(fp, (void *)ph_buf, ph_size, (void*)t, &_elf_loaded_program_headers);
 }
+
 
 void elf_load_and_parse(uint8_t device_index, DirectoryEntry *file, void *extradata, void (*callback)(uint8_t status, ElfParsedData* something, void *extradata))
 {
@@ -306,14 +243,15 @@ void elf_load_and_parse(uint8_t device_index, DirectoryEntry *file, void *extrad
     return;
   }
 
-  struct elf_parsed_data *t = (struct elf_parsed_data *) malloc(sizeof(struct elf_parsed_data));
+  struct ElfLoaderState *t = (struct ElfLoaderState *) malloc(sizeof(struct ElfLoaderState));
   if(!t) {
     callback(E_NOMEM, NULL, extradata);
     return;
   }
-  memset(t, 0, sizeof(struct elf_parsed_data));
+  memset(t, 0, sizeof(struct ElfLoaderState));
   t->extradata = extradata;
   t->callback = callback;
+  t->file = fp;
 
   /* Step one - load in the file header */
   ElfFileHeader *header_buf = (ElfFileHeader *)malloc(sizeof(ElfFileHeader));
