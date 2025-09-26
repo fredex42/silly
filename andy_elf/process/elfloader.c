@@ -254,14 +254,14 @@ void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read
     free(header);
     return;
   }
-  //check the OS ABI (we imply Linux support for compatibility with existing tools)
-  if(header->ident_os_abi != ELF_ABI_SILLY && header->ident_os_abi != ELF_ABI_LINUX) {
-    kprintf("ERROR: Unsupported ELF OS ABI %d\r\n", header->ident_os_abi);
-    t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
-    free(t);
-    free(header);
-    return;
-  }
+  // //check the OS ABI (we imply Linux support for compatibility with existing tools)
+  // if(header->ident_os_abi != ELF_ABI_SILLY && header->ident_os_abi != ELF_ABI_LINUX) {
+  //   kprintf("ERROR: Unsupported ELF OS ABI %d\r\n", header->ident_os_abi);
+  //   t->callback(E_UNSUPPORTED_ELF, t->parsed_data, t->extradata);
+  //   free(t);
+  //   free(header);
+  //   return;
+  // }
   //check the ABI version
   if(header->ident_abi_version != 0) {
     kprintf("ERROR: Unsupported ELF ABI version %d\r\n", header->ident_abi_version);
