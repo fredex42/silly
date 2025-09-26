@@ -176,6 +176,7 @@ struct ProcessTableEntry* new_process()
 pid_t internal_create_process(struct elf_parsed_data *elf)
 {
   struct ProcessTableEntry *new_entry = new_process();
+  void **phys_ptrs;
   if(new_entry==NULL) {
     kputs("ERROR No process slots available!\r\n");
     return 0;
@@ -187,6 +188,80 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     kputs("ERROR Unable to map app paging dir\r\n");
     new_entry->status = PROCESS_NONE;
     return 0;
+  }
+
+  for(size_t i=0; i<elf->program_headers_count; ++i) {
+    if(elf->program_headers[i].p_type != PT_LOAD) continue;
+
+    struct elf_program_header_i386 *ph = &elf->program_headers[i];
+    size_t pages_required = ph->p_memsz / PAGE_SIZE;
+    if((ph->p_memsz % PAGE_SIZE) != 0) pages_required++;  //if there is any remainder, we must allocate an extra page.
+    if(pages_required==0) continue; //nothing to do!
+
+    phys_ptrs = (void **)malloc(sizeof(void *) * pages_required);
+    if(!phys_ptrs) {
+      kputs("ERROR Unable to allocate memory for process segment\r\n");
+      unmap_app_pagingdir(mapped_pagedirs);
+      new_entry->status = PROCESS_NONE;
+      return 0;
+    }
+
+    size_t c = allocate_free_physical_pages(pages_required, phys_ptrs);
+    if(c<pages_required) {
+      kputs("ERROR Unable to allocate memory for process segment\r\n");
+      free(phys_ptrs);
+      unmap_app_pagingdir(mapped_pagedirs);
+      new_entry->status = PROCESS_NONE;
+      return 0;
+    }
+    void *base_kernel_ptr = vm_map_next_unallocated_pages(NULL, MP_PRESENT|MP_USER|MP_READWRITE, phys_ptrs, pages_required);
+    if(!base_kernel_ptr) {
+      kputs("ERROR Unable to map process segment into kernel memory\r\n");
+      deallocate_physical_pages(c, &phys_ptrs);
+      free(phys_ptrs);
+      unmap_app_pagingdir(mapped_pagedirs);
+      new_entry->status = PROCESS_NONE;
+      return 0;
+    }
+    memset_dw(base_kernel_ptr, 0, PAGE_SIZE_DWORDS * pages_required); //ensure that the memory is zeroed before we use it.
+    //The entire segment should be in a single load list entry. We just need to find it.
+    struct LoadList *seg = load_list_find_by_offset(elf->loaded_segments, ph->p_offset);
+    if(!seg) {
+      kprintf("ERROR internal_create_process could not find load list entry for segment %d\r\n", i);
+      k_unmap_page_ptr(NULL, base_kernel_ptr);
+      deallocate_physical_pages(c, &phys_ptrs);
+      free(phys_ptrs);
+      unmap_app_pagingdir(mapped_pagedirs);
+      new_entry->status = PROCESS_NONE;
+      return 0;
+    }
+    if(seg->length < ph->p_filesz) {
+      kprintf("ERROR internal_create_process load list entry for segment %d is too small (%d < %d)\r\n", i, seg->length, ph->p_filesz);
+      k_unmap_page_ptr(NULL, base_kernel_ptr);
+      deallocate_physical_pages(c, &phys_ptrs);
+      free(phys_ptrs);
+      unmap_app_pagingdir(mapped_pagedirs);
+      new_entry->status = PROCESS_NONE;
+      return 0;
+    }
+
+    kprintf("DEBUG internal_create_process copying 0x%x bytes into 0x%x\r\n", ph->p_filesz, base_kernel_ptr);
+    //There might be an offset from the start of the segment to the start of the load list entry.
+    size_t offset_into_seg = ph->p_offset - seg->file_offset;
+    kprintf("DEBUG source pointer is 0x%x dest is 0x%x (phys 0x%x)\r\n", (void *)((vaddr)seg->vptr + offset_into_seg), base_kernel_ptr, phys_ptrs[0]);
+
+    memcpy(base_kernel_ptr, (void *)((vaddr)seg->vptr + offset_into_seg), ph->p_filesz);
+
+    kprintf("DEBUG first bytes are 0x%x 0x%x 0x%x 0x%x\r\n", ((uint8_t *)base_kernel_ptr)[0], ((uint8_t *)base_kernel_ptr)[1], ((uint8_t *)base_kernel_ptr)[2], ((uint8_t *)base_kernel_ptr)[3]);
+
+    //now map the pages into the process's paging directory and remove them from kernel space
+    for(size_t pagenum=0;pagenum < pages_required; ++pagenum) {
+      void *page_addr = (void *) ( (ph->p_vaddr & ~0x3FF) + pagenum*PAGE_SIZE);
+      size_t flags = MP_PRESENT | MP_USER;
+      if(ph->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+      k_map_page_bytes(mapped_pagedirs, phys_ptrs[pagenum], page_addr, flags);
+      k_unmap_page_ptr(NULL, (vaddr)(base_kernel_ptr + pagenum*PAGE_SIZE));
+    }
   }
 
   // kprintf("DEBUG app paging dirs remapped to 0x%x\r\n", mapped_pagedirs);

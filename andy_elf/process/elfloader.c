@@ -64,6 +64,17 @@ struct ElfLoaderState *new_elfloader_state(VFatOpenFile *file, void *extradata, 
   return s;
 }
 
+//Finds the load list entry that contains the given file offset, or NULL if none do.
+struct LoadList *load_list_find_by_offset(struct LoadList *list, size_t file_offset) {
+  struct LoadList *cur = list;
+  while (cur) {
+    kprintf("DEBUG looking for 0x%x in load list entry 0x%x-0x%x\r\n", file_offset, cur->file_offset, cur->file_offset + cur->length);
+    if (file_offset >= cur->file_offset && file_offset <= (cur->file_offset + cur->length)) return cur;
+    cur = cur->next;
+  }
+  return NULL;
+}
+
 void _elf_loaded_next_segment(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
   struct ElfLoaderState *t = (struct ElfLoaderState *) extradata;
   if(status != E_OK) {

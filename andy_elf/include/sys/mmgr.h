@@ -178,4 +178,15 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count);
 
 /** called from the page-fault handler for JIT allocation*/
 uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags);
+
+void idpaging(uint32_t *first_pte, vaddr from, int size);
+void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, size_t *map_length_pages_out);
+size_t map_physical_memory_map_area(physical_map_start, physical_map_pages);
+void parse_memory_map(struct BiosMemoryMap *ptr);
+void apply_memory_map_protections(struct BiosMemoryMap *ptr);
+void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags);
+uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks);
+uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks);
+void *k_map_page_bytes(uint32_t *root_page_dir, void *phys_addr, void *target_virt_addr, uint32_t flags);
+vaddr _mmgr_get_pd();
 #endif

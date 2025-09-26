@@ -138,6 +138,12 @@ struct LoadList {
     vaddr phys_addr;
 };
 
+//Finds the load list entry that contains the given file offset, or NULL if none do.
+struct LoadList *load_list_find_by_offset(struct LoadList *list, size_t file_offset);
+void delete_load_list(struct LoadList *list, uint8_t free_vptr);
+struct LoadList *load_list_push(struct LoadList *list, struct LoadList *new);
+size_t load_list_count(struct LoadList *list);
+
 typedef struct elf_parsed_data {
   struct elf_file_header *file_header;
   struct elf_program_header_i386 *program_headers;

@@ -44,15 +44,7 @@ struct PhysMapEntry *physical_memory_map = NULL;
 static size_t physical_page_count = 0;
 
 #define __invalidate_vptr(vptr_to_invalidate) asm inline volatile("invlpg (%0)" : : "r" (vptr_to_invalidate) : "memory")
-void idpaging(uint32_t *first_pte, vaddr from, int size);
-void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, size_t *map_length_pages_out);
-size_t map_physical_memory_map_area(physical_map_start, physical_map_pages);
-void parse_memory_map(struct BiosMemoryMap *ptr);
-void apply_memory_map_protections(struct BiosMemoryMap *ptr);
-void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags);
-uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks);
-void *k_map_page_bytes(uint32_t *root_page_dir, void *phys_addr, void *target_virt_addr, uint32_t flags);
-vaddr _mmgr_get_pd();
+
 
 /**
 Kickoff entrypoint
@@ -719,6 +711,7 @@ void k_unmap_page(uint32_t *root_page_dir, uint16_t pagedir_idx, uint16_t pageen
   kprintf("DEBUG k_unmap_page page for %d - %d is at 0x%x\r\n", pagedir_idx, pageent_idx, &page_ptr[pageent_idx]);
   #endif
   page_ptr[pageent_idx] = 0;
+  __invalidate_vptr((vaddr)pagedir_idx << 22 | (vaddr)pageent_idx << 12);
   mb();
 }
 
@@ -992,54 +985,10 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
   //Finally we need the (sparsely-mapped) paging directory area. This will enable JIT allocation of memory pages
   root_dir_virt[0x3C0] = (vaddr) root_dir_phys | MP_PRESENT | MP_READWRITE;
 
-  // void *page_one_phys = phys_ptr_list[1];
-  // void *stack_paging_table = phys_ptr_list[2];
-  // void *stack_initial_page = phys_ptr_list[3];
-
-  // temp_ptr = (vaddr)k_map_next_unallocated_pages(MP_PRESENT|MP_READWRITE, phys_ptr_list, phys_ptr_count);
-  // if(!temp_ptr) {
-  //   kputs("ERROR Not enough memory to map in initial app setup!\r\n");
-  //   return NULL;
-  // }
-
-  // uint32_t *root_dir_virt = (uint32_t *) (temp_ptr + 0); 
-  // uint32_t *page_one_virt = (uint32_t *) (temp_ptr + PAGE_SIZE); 
-  // uint32_t *stack_paging_table_virt = (uint32_t *) (temp_ptr + (2*PAGE_SIZE));  
-  // uint32_t *stack_initial_page_virt = (uint32_t *) (temp_ptr + (3*PAGE_SIZE));  
-
-  // #ifdef MMGR_VERBOSE
-  // kprintf("DEBUG root_dir_virt=0x%x\r\n", root_dir_virt);
-  // kprintf("DEBUG page_one_virt=0x%x\r\n", page_one_virt);
-  // kprintf("DEBUG stack_paging_table_virt=0x%x\r\n", stack_paging_table_virt);
-  // #endif
-
-  // memset(stack_paging_table_virt, 0, PAGE_SIZE);
-  // memset(stack_initial_page_virt, 0, PAGE_SIZE);
-  // stack_paging_table_virt[0x3FF] = (vaddr)stack_initial_page | MP_PRESENT | MP_READWRITE | MP_USER;
-
-  // memset_dw(root_dir_virt, MPC_PAGINGDIR, PAGE_SIZE_DWORDS);
-
-  // root_dir_virt[0] = (vaddr)page_one_phys | MP_PRESENT | MP_GLOBAL | MP_READWRITE; //we need kernel-only access to page 0 so that we can use interrupts
-
-  // //copy over the content of the first page of the kernel paging directory to the application paging directory
-  // memcpy_dw(page_one_virt, (void *)FIRST_PAGEDIR_ENTRY_LOCATION, PAGE_SIZE_DWORDS);
-
-  // //this page contains the IDT
-  // page_one_virt[1] = (1 << 12) | MP_PRESENT | MP_GLOBAL | MP_USER;       //user-mode needs readonly in order to access IDT
-
-  // //That's the system area taken care of. Now we need the app stack.  This will get extended by a fault handler.
-  // root_dir_virt[0x3FF] = (vaddr)stack_paging_table | MP_PRESENT | MP_READWRITE | MP_USER;
-
-  // //Finally we need the (sparsely-mapped) paging directory area. This will enable JIT allocation of memory pages
-  // //to the process through the same mechanism as used in the kernel.  The process does not need access to this area.
-  // root_dir_virt[0x3C0] = (vaddr) root_dir_phys | MP_PRESENT | MP_READWRITE;
-
-  // //FIXME - also need to map the physical memory map!!!
   
   k_unmap_page_ptr(NULL, stack_initial_page_virt);
   k_unmap_page_ptr(NULL, stack_paging_table_virt);
-  //k_unmap_page_ptr(NULL, page_one_virt);
-  // k_unmap_page_ptr(NULL, root_dir_virt);
+
 
   mb();
   __invalidate_vptr(stack_initial_page_virt);

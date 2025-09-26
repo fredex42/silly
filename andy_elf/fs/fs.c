@@ -63,6 +63,7 @@ void _fs_root_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, voi
 
 void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* parsed_app, void *extradata)
 {
+  //Note: parsed_app is freed by the caller, don't free it here!
   if(status!=E_OK) {
     kprintf("ERROR Could not load SHELL.APP: error %d\r\n", (uint16_t)status);
     return;
@@ -72,7 +73,6 @@ void _fs_shell_app_loaded(uint8_t status, struct elf_parsed_data* parsed_app, vo
   pid_t pid = internal_create_process(parsed_app);
   kprintf("SHELL.APP running with PID %d\r\n", pid);
 
-  delete_elf_parsed_data(parsed_app);
 }
 
 void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extradata)
