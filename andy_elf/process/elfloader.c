@@ -64,6 +64,54 @@ struct ElfLoaderState *new_elfloader_state(VFatOpenFile *file, void *extradata, 
   return s;
 }
 
+void _elf_loaded_next_segment(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
+  struct ElfLoaderState *t = (struct ElfLoaderState *) extradata;
+  if(status != E_OK) {
+    kprintf("ERROR: Could not read ELF segment, code %d\r\n", status);
+    t->callback(status, t->parsed_data, t->extradata);
+    delete_elf_loader_state(t);
+    vfat_close(fp);
+    return;
+  }
+
+  kprintf("INFO Loaded ELF segment %d of %d\r\n", t->load_list_index+1, t->load_list_count);
+  //we have successfully loaded the current segment
+  t->load_list_index++;
+  if(t->load_list_index >= t->load_list_count) {
+    //we are done
+    kprintf("INFO All ELF segments loaded\r\n");
+    t->parsed_data->loaded_segments = t->load_list;
+    t->parsed_data->loaded_segment_count = t->load_list_count;
+    t->load_list = NULL; //so that we don't free it below
+    t->load_list_count = 0;
+    t->callback(E_OK, t->parsed_data, t->extradata);
+    delete_elf_loader_state(t);
+    vfat_close(fp);
+    return;
+  }
+
+  //seek to the next segment
+  struct LoadList *next = t->load_list;
+  for(size_t i=0; i < t->load_list_index; ++i) {
+    if(!next) break;
+    next = next->next;
+  }
+
+  if(!next) {
+    kprintf("ERROR: Load list index out of range\r\n");
+    t->callback(E_MALFORMED_ELF, t->parsed_data, t->extradata);
+    delete_elf_loader_state(t);
+    vfat_close(fp);
+    return;
+  }
+  vfat_seek(fp, next->file_offset, SEEK_SET);
+  next->vptr = malloc(next->length);
+  if(!next->vptr) {
+    kprintf("ERROR: Out of memory\r\n");
+  }
+  vfat_read_async(fp, next->vptr, next->length, (void*)t, &_elf_loaded_next_segment);
+}
+
 void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {
   struct elf_program_header_i386 *headers = (struct elf_program_header_i386 *) buf;
   struct ElfLoaderState *t = (struct ElfLoaderState *) extradata;
@@ -72,6 +120,7 @@ void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
     t->callback(status, t->parsed_data, t->extradata);
     delete_elf_loader_state(t);
     if(headers) free(headers);
+    vfat_close(fp);
     return;
   }
   
@@ -94,9 +143,12 @@ void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
     t->load_list = load_list_push(t->load_list, entry);
   }
 
+  for(struct LoadList *cur = t->load_list; cur != NULL; cur = cur->next) {
+    kprintf("DEBUG Load list entry: file offset 0x%x, length 0x%x, extent 0x%x\r\n", cur->file_offset, cur->length, cur->file_offset + cur->length);
+  }
   //We have a basic load list; now we should coalesce any adjacent entries
   for(struct LoadList *cur = t->load_list; cur != NULL; cur = cur->next) {
-    while(cur->next && (cur->file_offset + cur->length == cur->next->file_offset)) {
+    while(cur->next && (cur->file_offset + cur->length == cur->next->file_offset-1)) {  //-1, because if adjacent they don't share a byte! next offset is one byte after the end of this one.
       struct LoadList *to_delete = cur->next;
       cur->length += to_delete->length;
       cur->next = to_delete->next;
@@ -104,8 +156,34 @@ void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
     }
   }
 
-  kprintf("INFO After coalesce, we have %d load list entries\r\n", load_list_count(t->load_list));
+  t->load_list_count = load_list_count(t->load_list);
+  kprintf("INFO After coalesce, we have %d load list entries\r\n", t->load_list_count);
+  for(struct LoadList *cur = t->load_list; cur != NULL; cur = cur->next) {
+    kprintf("DEBUG Load list entry: file offset 0x%x, length 0x%x, extent 0x%x\r\n", cur->file_offset, cur->length, cur->file_offset + cur->length);
+  }
 
+  //now we can start loading the segments
+  if(t->load_list_count==0) {
+    kprintf("ERROR: ELF file has no loadable segments\r\n");
+    t->callback(E_MALFORMED_ELF, t->parsed_data, t->extradata);
+    delete_elf_loader_state(t);
+    vfat_close(fp);
+    return;
+  }
+
+  t->load_list_index = 0; //loading the first entry
+  //Seek to the first offset in the load list
+  vfat_seek(fp, t->load_list->file_offset, SEEK_SET);
+  t->load_list->vptr = malloc(t->load_list->length);
+  if(!t->load_list->vptr) {
+    kprintf("ERROR: Out of memory\r\n");
+    t->callback(E_NOMEM, t->parsed_data, t->extradata);
+    delete_elf_loader_state(t);
+    vfat_close(fp);
+    return;
+  }
+
+  vfat_read_async(fp, t->load_list->vptr, t->load_list->length, (void*)t, &_elf_loaded_next_segment);
 }
 
 void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read, void *buf, void* extradata) {

@@ -130,12 +130,20 @@ typedef struct elf_section_header_i386 {
 } __attribute__((packed)) ElfSectionHeader32;
 
 
+struct LoadList {
+    struct LoadList *next;
+    size_t file_offset;
+    size_t length;
+    void *vptr;
+    vaddr phys_addr;
+};
 
 typedef struct elf_parsed_data {
   struct elf_file_header *file_header;
   struct elf_program_header_i386 *program_headers;
   size_t program_headers_count;
-
+  struct LoadList *loaded_segments;
+  size_t loaded_segment_count;
 } ElfParsedData;
 
 #endif
