@@ -130,29 +130,26 @@ typedef struct elf_section_header_i386 {
 } __attribute__((packed)) ElfSectionHeader32;
 
 
-typedef struct ElfLoadedSegment {
-  struct ElfLoadedSegment *next;
-  ElfProgramHeader32 *header; //to get the byte size, use header->p_memsz. To get the vaddr, use header->p_vaddr. Note that this is a weak reference.
-  void *content;            //pointer to loaded content
-  size_t page_count;
-  void *content_virt_ptr;   //the virtual-memory pointer where this data should live, in process-space
-} ElfLoadedSegment;
+struct LoadList {
+    struct LoadList *next;
+    size_t file_offset;
+    size_t length;
+    void *vptr;
+    vaddr phys_addr;
+};
+
+//Finds the load list entry that contains the given file offset, or NULL if none do.
+struct LoadList *load_list_find_by_offset(struct LoadList *list, size_t file_offset);
+void delete_load_list(struct LoadList *list, uint8_t free_vptr);
+struct LoadList *load_list_push(struct LoadList *list, struct LoadList *new);
+size_t load_list_count(struct LoadList *list);
 
 typedef struct elf_parsed_data {
   struct elf_file_header *file_header;
   struct elf_program_header_i386 *program_headers;
   size_t program_headers_count;
-
-  void *section_headers_buffer;
-  size_t section_headers_count;
-
-  ElfLoadedSegment *loaded_segments_list;
-  ElfLoadedSegment *last_loaded_segment;
-  size_t _loaded_segment_count;
-  size_t _scanned_segment_count;
-
-  void *extradata;
-  void (*callback)(uint8_t status, struct elf_parsed_data* parsed_data, void* extradata);
+  struct LoadList *loaded_segments;
+  size_t loaded_segment_count;
 } ElfParsedData;
 
 #endif

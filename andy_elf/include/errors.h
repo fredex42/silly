@@ -11,4 +11,8 @@
 #define E_INVALID_FILE        0x13
 
 #define E_BAD_EXECUTABLE      0x21
+#define E_NOT_ELF             0x22
+#define E_UNSUPPORTED_ELF     0x23
+#define E_MALFORMED_ELF       0x24
+
 #endif

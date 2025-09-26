@@ -4,6 +4,19 @@
 #ifndef __ELFLOADER_H
 #define __ELFLOADER_H
 
+struct ElfLoaderState {
+    struct LoadList *load_list;
+    size_t load_list_count;
+    size_t load_list_index;
+
+    size_t current_segment_index;
+    struct elf_parsed_data *parsed_data;
+    VFatOpenFile *file;
+
+    void *extradata;
+    void (*callback)(uint8_t status, struct elf_parsed_data* parsed_data, void* extradata);
+};
+
 /**
  * Removes an ELF parsed data container and all references within it
 */

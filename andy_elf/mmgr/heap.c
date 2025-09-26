@@ -51,7 +51,7 @@ struct HeapZoneStart * initialise_heap(struct ProcessTableEntry *process, size_t
   void *slab = vm_alloc_pages(process->root_paging_directory_kmem, initial_pages, flags);
   if(!slab) k_panic("Unable to allocate heap!\r\n");
 
-  kprintf("Heap start at 0x%x\r\n", slab);
+  kprintf("INFO Heap start at 0x%x\r\n", slab);
 
   struct HeapZoneStart* zone = (struct HeapZoneStart *)slab;
   zone->magic = HEAP_ZONE_SIG;
@@ -88,7 +88,10 @@ struct PointerHeader* _last_pointer_of_zone(struct HeapZoneStart* zone)
 
 uint8_t validate_pointer(void *ptr, uint8_t panic)
 {
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG validate_pointer checking 0x%x\r\n", ptr);
+  #endif
+  
   if(ptr==NULL) {
     if(panic) {
       k_panic("Attempt to check a null pointer from the heap");
@@ -558,8 +561,10 @@ void* heap_alloc(struct HeapZoneStart *heap, size_t bytes)
 
 void* malloc_for_process(uint16_t pid, size_t bytes)
 {
+  #ifdef MMGR_VERBOSE
   kprintf("DEBUG malloc_for_process 0x%x 0x%x\r\n", (uint32_t)pid, (uint32_t)bytes);
-  
+  #endif
+
   // Validate parameters
   if(bytes == 0) {
     kprintf("WARNING malloc called with 0 bytes\r\n");

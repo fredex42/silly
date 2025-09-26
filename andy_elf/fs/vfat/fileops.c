@@ -38,9 +38,11 @@ VFatOpenFile* vfat_open_by_location(FATFS *fs_ptr, size_t cluster_location_start
     return NULL;
   }
 
+  #ifdef VFAT_VERBOSE
   kprintf("DEBUG vfat_open_by_location cluster start is 0x%x, size is 0x%x\r\n", cluster_location_start, file_size);
   kprintf("DEBUG vfat_open_by_location sector offset is 0x%x\r\n", sector_offset);
-  
+  #endif
+
   fp->parent_fs = fs_ptr;
   fs_ptr->open_file_count++;
   fp->current_cluster_number = cluster_location_start;
@@ -55,11 +57,16 @@ VFatOpenFile* vfat_open_by_location(FATFS *fs_ptr, size_t cluster_location_start
 
 VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
 {
+  #ifdef VFAT_VERBOSE
   kputs("DEBUG vfat_open\r\n");
+  #endif
+
   validate_pointer(fs_ptr->bpb, 1);
   size_t cluster_number = entry_to_open->low_cluster_num;
   if(fs_ptr->f32bpb) cluster_number += ((uint32_t)entry_to_open->f32_high_cluster_num << 16);
+  #ifdef VFAT_VERBOSE
   kprintf("DEBUG vfat_open cluster_number is 0x%x (32-bit), size is 0x%x\r\n", cluster_number, entry_to_open->file_size);
+  #endif
 
   return vfat_open_by_location(fs_ptr, cluster_number, entry_to_open->file_size, vfat_get_sector_offset(fs_ptr));
 }
@@ -67,7 +74,10 @@ VFatOpenFile* vfat_open(FATFS *fs_ptr, DirectoryEntry* entry_to_open)
 
 void vfat_close(VFatOpenFile *fp)
 {
+  #ifdef VFAT_VERBOSE
   kprintf("DEBUG vfat_close\r\n");
+  #endif
+
   fp->parent_fs->open_file_count--;
   free(fp);
 }
@@ -84,7 +94,9 @@ struct vfat_read_transient_data {
 
 void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
 {
-  kputs("DEBUG entered _vfat_next_block_read %x 0x%x 0x%x\r\n", (uint32_t)status, buffer, extradata);
+  #ifdef VFAT_VERBOSE
+  kprintf("DEBUG entered _vfat_next_block_read %x 0x%x 0x%x\r\n", (uint32_t)status, buffer, extradata);
+  #endif
 
   struct vfat_read_transient_data* t = (struct vfat_read_transient_data *)extradata;
 
@@ -118,7 +130,9 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
   if(bytes_to_copy>=t->requested_length) {
     //we are done!
     free(buffer);
+    #ifdef VFAT_VERBOSE
     kprintf("DEBUG finishing read because output buffer is full.\r\n");
+    #endif
     t->fp->busy = 0;
     t->callback(t->fp, status, t->buffer_write_offset, t->real_buffer, t->cb_extradata);
     free(t);
@@ -205,6 +219,14 @@ Returns 0 if successful, 1 if EOF was encountered, 2 if the parameters were not 
 */
 uint8_t vfat_seek(VFatOpenFile *fp, size_t offset, uint8_t whence)
 {
+  if(fp->parent_fs->bpb->bytes_per_logical_sector==0) {
+    kputs("ERROR vfat_seek called on uninitialised filesystem\r\n");
+    return 2;
+  }
+  if(fp->parent_fs->bpb->logical_sectors_per_cluster==0) {
+    kputs("ERROR vfat_seek called on uninitialised filesystem\r\n");
+    return 2;
+  }
   size_t total_offset_in_sectors = offset / fp->parent_fs->bpb->bytes_per_logical_sector;
   size_t total_offset_in_clusters = total_offset_in_sectors / fp->parent_fs->bpb->logical_sectors_per_cluster;
 

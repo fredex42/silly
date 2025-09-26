@@ -41,7 +41,9 @@ void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir
       //we found it! Might as well free the directory contents before we fire the callback, but since `entry` is a reference
       //into `dir`'s buffer we must copy it first
       vfat_get_printable_filename(entry, printable, 64);
+      #ifdef VFAT_VERBOSE
       kprintf("Found file at entry %d: %s\r\n", i, printable);
+      #endif
       DirectoryEntry *copied_entry = (DirectoryEntry *)malloc(sizeof(DirectoryEntry));
       memcpy(copied_entry, entry, sizeof(DirectoryEntry));
       vfat_dir_close(dir);
@@ -147,13 +149,19 @@ struct opendir_transient_data {
 
 DirectoryEntry* vfat_read_dir_next(VFatOpenDir *dir)
 {
+  #ifdef VFAT_VERBOSE
   kprintf("DEBUG vfat_read_dir_next reading 0x%x\r\n", dir);
+  #endif
   size_t byte_offset = dir->current_dir_idx * sizeof(DirectoryEntry);
+  #ifdef VFAT_VERBOSE
   kprintf("DEBUG vfat_read_dir_next current index is 0x%x, byte_offset is 0x%x,\r\n length in bytes is 0x%x\r\n", dir->current_dir_idx, dir->length_in_bytes);
+  #endif
   if(byte_offset >= dir->length_in_bytes) return NULL;  //we got to the end of the directory
 
   DirectoryEntry *result = &dir->buffer[dir->current_dir_idx]; //the buffer is typed to DirectoryEntry so we need a block offset not byte offset.
+  #ifdef VFAT_VERBOSE
   kprintf("DEBUG vfat_read_dir_next result data is at 0x%x\r\n", result);
+  #endif
 
   if(result->file_size==0 && result->attributes==0) return NULL;  //we got to the end of useful content
   ++dir->current_dir_idx;
