@@ -68,7 +68,9 @@ struct ElfLoaderState *new_elfloader_state(VFatOpenFile *file, void *extradata, 
 struct LoadList *load_list_find_by_offset(struct LoadList *list, size_t file_offset) {
   struct LoadList *cur = list;
   while (cur) {
+    #ifdef ELFLOADER_VERBOSE
     kprintf("DEBUG looking for 0x%x in load list entry 0x%x-0x%x\r\n", file_offset, cur->file_offset, cur->file_offset + cur->length);
+    #endif
     if (file_offset >= cur->file_offset && file_offset <= (cur->file_offset + cur->length)) return cur;
     cur = cur->next;
   }
@@ -85,12 +87,17 @@ void _elf_loaded_next_segment(VFatOpenFile *fp, uint8_t status, size_t bytes_rea
     return;
   }
 
+  #ifdef ELFLOADER_VERBOSE
   kprintf("INFO Loaded ELF segment %d of %d\r\n", t->load_list_index+1, t->load_list_count);
+  #endif
+
   //we have successfully loaded the current segment
   t->load_list_index++;
   if(t->load_list_index >= t->load_list_count) {
     //we are done
+    #ifdef ELFLOADER_VERBOSE
     kprintf("INFO All ELF segments loaded\r\n");
+    #endif
     t->parsed_data->loaded_segments = t->load_list;
     t->parsed_data->loaded_segment_count = t->load_list_count;
     t->load_list = NULL; //so that we don't free it below
@@ -109,7 +116,9 @@ void _elf_loaded_next_segment(VFatOpenFile *fp, uint8_t status, size_t bytes_rea
   }
 
   if(!next) {
+    #ifdef ELFLOADER_VERBOSE
     kprintf("ERROR: Load list index out of range\r\n");
+    #endif
     t->callback(E_MALFORMED_ELF, t->parsed_data, t->extradata);
     delete_elf_loader_state(t);
     vfat_close(fp);
@@ -154,9 +163,12 @@ void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
     t->load_list = load_list_push(t->load_list, entry);
   }
 
+  #ifdef ELFLOADER_VERBOSE
   for(struct LoadList *cur = t->load_list; cur != NULL; cur = cur->next) {
     kprintf("DEBUG Load list entry: file offset 0x%x, length 0x%x, extent 0x%x\r\n", cur->file_offset, cur->length, cur->file_offset + cur->length);
   }
+  #endif
+
   //We have a basic load list; now we should coalesce any adjacent entries
   for(struct LoadList *cur = t->load_list; cur != NULL; cur = cur->next) {
     while(cur->next && (cur->file_offset + cur->length == cur->next->file_offset-1)) {  //-1, because if adjacent they don't share a byte! next offset is one byte after the end of this one.
@@ -168,10 +180,12 @@ void _elf_loaded_program_headers(VFatOpenFile *fp, uint8_t status, size_t bytes_
   }
 
   t->load_list_count = load_list_count(t->load_list);
+  #ifdef ELFLOADER_VERBOSE
   kprintf("INFO After coalesce, we have %d load list entries\r\n", t->load_list_count);
   for(struct LoadList *cur = t->load_list; cur != NULL; cur = cur->next) {
     kprintf("DEBUG Load list entry: file offset 0x%x, length 0x%x, extent 0x%x\r\n", cur->file_offset, cur->length, cur->file_offset + cur->length);
   }
+  #endif
 
   //now we can start loading the segments
   if(t->load_list_count==0) {
@@ -283,8 +297,11 @@ void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read
   }
   memset(t->parsed_data, 0, sizeof(struct elf_parsed_data));
   t->parsed_data->file_header = header;
+  #ifdef ELFLOADER_VERBOSE
   kprintf("INFO ELF entry point is 0x%x\r\n", header->i386_subheader.entrypoint);
   kprintf("INFO ELF has %d program headers, at offset 0x%x\r\n", header->i386_subheader.program_header_table_entry_count, header->i386_subheader.program_header_offset);
+  #endif
+
   if(header->i386_subheader.program_header_table_entry_count == 0) {
     kprintf("ERROR: ELF file has no program headers\r\n");
     t->callback(E_MALFORMED_ELF, t->parsed_data, t->extradata);
@@ -303,7 +320,10 @@ void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read
     return;
   }
   memset(ph_buf, 0, ph_size);
+  #ifdef ELFLOADER_VERBOSE
   kprintf("INFO Loading ELF program headers...\r\n");
+  #endif
+
   uint8_t err = vfat_seek(fp, t->parsed_data->file_header->i386_subheader.program_header_offset, SEEK_SET);
   if(err != 0) {
     kprintf("ERROR: Could not seek to program headers, code %d\r\n", err);
@@ -350,6 +370,8 @@ void elf_load_and_parse(uint8_t device_index, DirectoryEntry *file, void *extrad
   }
   memset(header_buf, 0, sizeof(ElfFileHeader));
 
+  #ifdef ELFLOADER_VERBOSE
   kprintf("INFO Loading ELF file header...\r\n");
+  #endif
   vfat_read_async(fp, (void *)header_buf, sizeof(ElfFileHeader), (void*)t, &_elf_loaded_file_header);
 }

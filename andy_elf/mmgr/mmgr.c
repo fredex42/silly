@@ -281,8 +281,10 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks)
   uint32_t current_entry;
   uint32_t * current_page;
   uint32_t found_pages = 0;
+  #ifdef MMGR_VERBOSE
   kputs("DEBUG allocate_free_physical_pages acquiring lock...\r\n");
   kprintf("DEBUG allocate_free_physical_pages physical memory map is at 0x%x\r\n", &physical_memory_map);
+  #endif
   acquire_spinlock(&physlock);
 
   for(register size_t i=0x30;i<physical_page_count;i++) {
@@ -528,7 +530,7 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
   //check if starting_from is on an appropriate 4Mb boundary
   if( (starting_from & 0x3FFFFF) != 0) {  
     //NOTE! In C, != is a higher precedence than & which means that without the brackets this would evaluate as starting_from & (0x3FFFFF !=0)m i.e. always true if starting_from !=0
-    kprintf("DEBUG map_app_paging_dir requested boundary start 0x%x is not correctly aligned\r\n",starting_from);
+    kprintf("WARNING map_app_paging_dir requested boundary start 0x%x is not correctly aligned\r\n",starting_from);
     return NULL;
   }
 

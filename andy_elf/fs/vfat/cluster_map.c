@@ -11,7 +11,9 @@ Returns 0x0FFFFFFF when end-of-file is reached
 uint32_t vfat_cluster_map_next_cluster(VFatClusterMap *m, uint32_t current_cluster_num)
 {
   size_t offset;
+  #ifdef VFAT_VERBOSE
   kprintf("DEBUG vfat_cluster_map_next_cluster for 0x%x\r\n", current_cluster_num);
+  #endif
 
   switch(m->bitsize) {
     case 12:
