@@ -1,5 +1,9 @@
 #include <types.h>
 #include <multiboot.h>
+#include <sys/mmgr.h>
+
+//defined in acpi/rsdp.c
+void load_acpi_data();
 
 // Multiboot structures are defined inline and placed in their own
 // 'multiboot' section. The linker script ensures that this section is 
@@ -33,7 +37,7 @@ const struct MultibootInfoRequest {
     .requests = { MB_TAG_BASIC_MEMINFO, MB_TAG_BOOTDEV, MB_TAG_MEMORY_MAP, MB_TAG_BOOTLOADER_NAME, 0 }
 };
 
-uint32_t check_multiboot2_info(uint32_t magic, uint32_t addr) {
+uint32_t init_multiboot_system(uint32_t magic, uint32_t addr) {
     kprintf("Checking for multiboot2 info at %x with magic %x\r\n", addr, magic);
     // Check the magic number to ensure we were booted by a multiboot2-compliant bootloader
     if (magic != 0x36D76289) {  //this is the magic number the bootloader passes to us
@@ -71,6 +75,7 @@ uint32_t check_multiboot2_info(uint32_t magic, uint32_t addr) {
                 for (int i = 0; i < entries; i++) {
                     kprintf("Entry %d: Address 0x%x, Length 0x%x, Type %d\r\n", i, (uint32_t)mmap->entries[i].addr, (uint32_t)mmap->entries[i].len, mmap->entries[i].type);
                 }
+                initialise_mmgr(mmap->entries, entries, addr, header->total_size);
                 break;
             case MB_TAG_APM:
                 struct MultibootTagAPM *apm = (struct MultibootTagAPM *)tag;
@@ -79,9 +84,11 @@ uint32_t check_multiboot2_info(uint32_t magic, uint32_t addr) {
                 break;
             case MB_TAG_RSDP_NEW:
                 kputs("ACPI RSDP 2.0 found\r\n");
+                load_acpi_data();
                 break;
             case MB_TAG_RSDP_OLD:
                 kputs("ACPI RSDP 1.0 found\r\n");
+                load_acpi_data();
                 break;
             case MB_TAG_VBE:
                 struct MultibootTagVBE *vbe = (struct MultibootTagVBE *)tag;

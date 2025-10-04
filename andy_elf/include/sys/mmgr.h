@@ -16,6 +16,8 @@
 /**
 data structure for a memory region obtained from INT 0x15, EAX = 0xE820
 See https://wiki.osdev.org/Detecting_Memory_(x86)#Getting_an_E820_Memory_Map
+Fortunately it's also the same as the multiboot2 memory map entry structure
+See https://www.gnu.org/software/grub/manual/multiboot2/multiboot.html#Boot-information-format
 */
 struct MemoryMapEntry {
   uint64_t base_addr;
@@ -69,7 +71,7 @@ struct PhysMapEntry {
 /**
 initialise the memory manager, applying protections as per the BiosMemoryMap pointed to
 */
-void initialise_mmgr(struct BiosMemoryMap *ptr);
+void initialise_mmgr(struct MemoryMapEntry memmap[], uint32_t entries, void *multiboot_ptr, size_t multiboot_length);
 /**
 allocates the given number of pages of physical RAM and maps them into the memory space of the given page directory.
 */
@@ -180,10 +182,10 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count);
 uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags);
 
 void idpaging(uint32_t *first_pte, vaddr from, int size);
-void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, size_t *map_length_pages_out);
-size_t map_physical_memory_map_area(physical_map_start, physical_map_pages);
-void parse_memory_map(struct BiosMemoryMap *ptr);
-void apply_memory_map_protections(struct BiosMemoryMap *ptr);
+void allocate_physical_map(struct MemoryMapEntry memmap[], uint32_t entries, size_t *area_start_out, size_t *map_length_pages_out);
+size_t map_physical_memory_map_area(size_t physical_map_start, size_t physical_map_pages);
+void parse_memory_map(struct MemoryMapEntry memmap[], uint32_t entries);
+void apply_memory_map_protections(struct MemoryMapEntry memmap[], uint32_t entries);
 void* vm_add_dir(uint32_t *root_page_dir, uint16_t idx, uint32_t flags);
 uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks);
 uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks);
