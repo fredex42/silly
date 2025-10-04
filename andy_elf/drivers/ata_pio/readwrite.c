@@ -230,8 +230,8 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     k_panic("NULL ATAPendingOperation pointer");
   }
   if(op->type != ATA_OP_READ) {
-    kprintf("ERROR: Invalid operation type: %d\r\n", (int)op->type);
-    k_panic("Invalid ATA operation type");
+    kprintf("ERROR: ATA Invalid operation type: %d\r\n", (int)op->type);
+    return;
   }
   if(op->buffer == NULL) {
     k_panic("NULL buffer pointer in ATAPendingOperation");
@@ -278,6 +278,9 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
   if(op->sectors_read>=op->sector_count) {
     //All sectors completed - finish the operation
     op->type = ATA_OP_NONE;
+    op->continuation_pending = 0;
+    op->sectors_read=0;
+
     if(!op->completed_func) {
       kprintf("ERROR disk operation with NULL callback, this causes a memory leak\r\n");
     } else {
@@ -291,7 +294,6 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
     if(op->continuation_pending) {
       //kprintf("WARNING: Continuation already pending for sectors_read=%d\r\n", (uint16_t)op->sectors_read);
       if(old_pd!=0) switch_paging_directory_if_required(old_pd);
-      sti();
       return;
     }
     
@@ -332,7 +334,9 @@ void ata_continue_read_chunk(SchedulerTask *t)
   ATAPendingOperation *op = (ATAPendingOperation *)t->data;
   
   if(op == NULL || op->type != ATA_OP_READ) {
-    k_panic("Invalid operation in ata_continue_read_chunk");
+    //k_panic("Invalid operation in ata_continue_read_chunk");
+    kputs("WARNING Invalid operation in ata_continue_read_chunk, aborting\r\n");
+    return;
   }
   
   // Switch to the correct paging directory for this operation

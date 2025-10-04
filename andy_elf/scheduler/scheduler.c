@@ -50,6 +50,8 @@ void scheduler_tick()
     to_run = global_scheduler_state->task_asap_list;
     global_scheduler_state->task_asap_list = global_scheduler_state->task_asap_list->next;
 
+    //kprintf("to_run: 0x%x new list start: 0x%x\r\n", (vaddr)to_run, (vaddr)global_scheduler_state->task_asap_list);
+
     ++global_scheduler_state->tasks_in_progress;
     //kprintf("Running task proc...\r\n");
     (to_run->task_proc)(to_run);  //call the task_proc to do its thang
@@ -173,7 +175,7 @@ void enter_next_process()
   //Right, we have something.  We must switch process.
   last_run_pid = temp;
   active_process = temp;
-  kprintf("DEBUG process saved esp 0x%x\r\n", process->saved_regs.esp);
+  kprintf("DEBUG process saved esp 0x%x dr7 0x%x\r\n", process->saved_regs.esp, process->saved_regs.dr7);
   kprintf("DEBUG Exiting into process 0x%x\r\n", process);
 
   exit_to_process(process);

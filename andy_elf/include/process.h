@@ -79,7 +79,7 @@ struct ProcessTableEntry32 {
   void* heap_start;                 //location of the heap, in process space. Offset 0x14
   uint32_t heap_allocated;            //offset 0x18
   uint32_t heap_used;                 //offset 0x1C
-  void *stack_phys_ptr;             //offset 0x30
+  void *stack_phys_ptr;             //offset 0x20
   uint32_t *stack_kmem_ptr;         //offset 0x24
 
   struct SavedRegisterStates32 saved_regs;  //offset 0x28
