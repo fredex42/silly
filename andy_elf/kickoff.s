@@ -258,10 +258,15 @@ lidt [IDTPtr]
 pop es
 
 ; Now check for multiboot2 information.  We already pushed the values of eax and ebx, so we can just pass the addresses to C
-extern check_multiboot2_info
-call check_multiboot2_info
+extern init_multiboot_system
+call init_multiboot_system
 add esp, 8	;remove the two parameters we pushed earlier
+; if eax contains 1 then multiboot2 info was valid and processed, if 0 then not valid
+; if it's been processed, then the memory manager has been initialised and acpi init started
+test eax, eax
+jnz .post_mbt
 
+; no valid multiboot2 info, so we must set up the memory manager ourselves
 extern pci_preinit
 mov eax, TemporaryPciInfoLocation
 push eax
@@ -279,6 +284,7 @@ add esp, 4
 extern load_acpi_data
 call load_acpi_data
 
+.post_mbt:
 extern setup_pic
 call setup_pic
 
