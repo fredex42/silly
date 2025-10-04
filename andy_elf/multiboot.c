@@ -45,7 +45,6 @@ uint32_t check_multiboot2_info(uint32_t magic, uint32_t addr) {
 
     struct MultibootTagHeader *tag = (struct MultibootTagHeader *)(addr + sizeof(struct MultibootKernelDataHeader));
     while (tag && tag->type != MB_TAG_END) {
-        kprintf("next tag 0x%x size %d\r\n", tag, tag->size);
         // Process each tag as needed
         switch (tag->type) {
             case MB_TAG_BASIC_MEMINFO:
@@ -53,16 +52,52 @@ uint32_t check_multiboot2_info(uint32_t magic, uint32_t addr) {
                 kprintf("Lower memory: %d KB, Upper memory: %d KB\r\n", meminfo->mem_lower, meminfo->mem_upper);
                 break;
             case MB_TAG_BOOTLOADER_NAME:
-                kputs("Bootloader name tag found\r\n");
+                struct MultibootTagBootloaderName *bootloader = (struct MultibootTagBootloaderName *)tag;
+                kprintf("Bootloader name: %s\r\n", bootloader->name);// Null-terminated string so it's _probably_ safe :crossed-fingers:
                 break;
             case MB_TAG_BOOTDEV:
-                kputs("Boot device tag found\r\n");
+                struct MultibootTagBiosBootDevice *bootdev = (struct MultibootTagBiosBootDevice *)tag;
+                kprintf("Boot device: 0x%x:0x%x:0x%x\r\n", bootdev->biosdev, bootdev->partition, bootdev->subpartition);
                 break;
             case MB_TAG_CMDLINE:
-                kputs("Command line tag found\r\n");
+                struct MultibootTagCmdline *cmdline = (struct MultibootTagCmdline *)tag;
+                kprintf("Kernel command line: '%s'\r\n", cmdline->cmdline);
                 break;
             case MB_TAG_MEMORY_MAP:
-                kputs("Memory map tag found\r\n");
+                struct MultibootTagMemoryMap *mmap = (struct MultibootTagMemoryMap *)tag;
+                kprintf("Size of memory map is 0x%x, entry size 0x%x, entry version 0x%x\r\n", mmap->size, mmap->entry_size, mmap->entry_version);
+                int entries = (mmap->size - 16) / mmap->entry_size;
+                kprintf("There are %d entries\r\n", entries);
+                for (int i = 0; i < entries; i++) {
+                    kprintf("Entry %d: Address 0x%x, Length 0x%x, Type %d\r\n", i, (uint32_t)mmap->entries[i].addr, (uint32_t)mmap->entries[i].len, mmap->entries[i].type);
+                }
+                break;
+            case MB_TAG_APM:
+                struct MultibootTagAPM *apm = (struct MultibootTagAPM *)tag;
+                kprintf("APM version 0x%x, cseg 0x%x, offset 0x%x, cseg_16 0x%x, dseg 0x%x, flags 0x%x, cseg_len 0x%x, cseg_16_len 0x%x, dseg_len 0x%x\r\n",
+                        apm->version, apm->cseg, apm->offset, apm->cseg_16, apm->dseg, apm->flags, apm->cseg_len, apm->cseg_16_len, apm->dseg_len);
+                break;
+            case MB_TAG_RSDP_NEW:
+                kputs("ACPI RSDP 2.0 found\r\n");
+                break;
+            case MB_TAG_RSDP_OLD:
+                kputs("ACPI RSDP 1.0 found\r\n");
+                break;
+            case MB_TAG_VBE:
+                struct MultibootTagVBE *vbe = (struct MultibootTagVBE *)tag;
+                kprintf("VBE mode 0x%x, interface seg 0x%x, off 0x%x, len 0x%x\r\n", vbe->vbe_mode, vbe->vbe_interface_seg, vbe->vbe_interface_off, vbe->vbe_interface_len);
+                break;
+            case MB_TAG_FRAMEBUFFER:
+                struct MultibootTagFramebuffer *fb = (struct MultibootTagFramebuffer *)tag;
+                break;
+            case MB_TAG_ELF_SYMS:
+                break;
+            case MB_TAG_IMAGE_PHYS_ADDR:
+                struct MultibootTagPhysAddr *img = (struct MultibootTagPhysAddr *)tag;
+                kprintf("Image load address 0x%x\r\n", (uint32_t)img->image_addr);
+                break;
+            case MB_TAG_SMBIOS:
+                kputs("SMBIOS found\r\n");
                 break;
             // Add cases for other tags as needed
             default:
