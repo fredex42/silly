@@ -51,6 +51,9 @@ ioports.o: ioports.asm
 cpuid.o: cpuid.asm
 	nasm -f elf32 cpuid.asm
 
+multiboot.o: multiboot.c
+	gcc -c ${CFLAGS} multiboot.c
+
 acpi:
 	make -C acpi
 
@@ -77,10 +80,10 @@ utils:
 native_api:
 	make -C native_api
 
-test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
+test.elf: multiboot.o kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
 		cpuid.o mmgr 8259pic acpi drivers scheduler fs process utils native_api
-	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
+	ld -b elf32-i386 multiboot.o kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o fs/fs.o \
 		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
