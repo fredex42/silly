@@ -1,17 +1,118 @@
 #include <types.h>
 #include <malloc.h>
+#include <spinlock.h>
+#include <memops.h>
+#include <fs/vfat.h>
+#include <fs/fat_fs.h>
+#include <errors.h>
 #include "volmgr_internal.h"
 #include "../drivers/ata_pio/ata_pio.h"
 #include "../drivers/ata_pio/ata_readwrite.h"
 
 struct VolMgr_GlobalState *volmgr_state = NULL;
+spinlock_t volmgr_lock = 0;
 
 void volmgr_init() {
     volmgr_state = (struct VolMgr_GlobalState *)malloc(sizeof(struct VolMgr_GlobalState));
     volmgr_state->disk_list = NULL;
     volmgr_state->disk_count = 0;
+    volmgr_state->internal_counter = 0;
+    volmgr_lock = 0;
 }
 
+void vol_mounted_cb(uint8_t status, void *fs_ptr, void *extradata) {
+    kputs("volmgr: Volume mounted callback invoked\r\n");
+    struct volmgr_internal_mount_data *mount_data = (struct volmgr_internal_mount_data *)extradata;
+    switch(status) {
+        case E_OK:
+            kprintf("volmgr: Volume 0x%x mounted successfully: FS ptr 0x%x\r\n", mount_data->volume, fs_ptr);
+            mount_data->volume->fs_ptr = fs_ptr;
+            mount_data->callback(E_OK, fs_ptr, mount_data->extradata);
+            free(mount_data);
+            break;
+        default:
+            kprintf("volmgr: Volume 0x%x mount failed with status %d\r\n", mount_data->volume, status);
+            if(fs_ptr) free(fs_ptr);
+            void *extradata = mount_data->extradata;
+            mount_data->callback(status, NULL, mount_data->extradata);
+            free(mount_data);
+            break;
+    }
+}
+
+void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*callback)(uint8_t status, void *fs_ptr, void *extradata))
+{
+    switch(vol->part_type) {
+        case PARTTYPE_FAT12:
+        case PARTTYPE_FAT16_SMALL:
+        case PARTTYPE_FAT16:
+        case PARTTYPE_FAT32:
+        case PARTTYPE_FAT32_LBA:
+        case PARTTYPE_FAT16_LBA:
+            //Mount FAT filesystem
+            kputs("volmgr: Mounting FAT filesystem\r\n");
+            struct fat_fs *new_fs = (struct fat_fs *)malloc(sizeof(struct fat_fs));
+            if(!new_fs) {
+                kputs("volmgr: Unable to allocate memory for FATFS structure\r\n");
+                callback(E_NOMEM, NULL, extradata);
+                return;
+            }
+            memset(new_fs, 0, sizeof(struct fat_fs));
+            struct volmgr_internal_mount_data *mount_data = (struct volmgr_internal_mount_data *)malloc(sizeof(struct volmgr_internal_mount_data));
+            if(!mount_data) {
+                kputs("volmgr: Unable to allocate memory for mount data\r\n");
+                free(new_fs);
+                callback(E_NOMEM, NULL, extradata);
+                return;
+            }
+            memset(mount_data, 0, sizeof(struct volmgr_internal_mount_data));
+            mount_data->extradata = extradata;
+            mount_data->callback = callback;
+            mount_data->volume = vol;
+            vfat_mount((FATFS *)new_fs, ((struct VolMgr_Disk *)vol->next)->disk_id, mount_data, vol_mounted_cb);
+            break;
+        case PARTTYPE_NTFS:
+            //Mount NTFS filesystem
+            kputs("volmgr: NTFS mounting not yet implemented\r\n");
+            callback(0xFF, NULL, extradata);
+            break;
+        default:
+            kprintf("volmgr: Unsupported partition type 0x%x\r\n", vol->part_type);
+            callback(0xFF, NULL, extradata);
+            break;
+    }
+}
+void volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type) {
+    struct VolMgr_Disk *disk = (struct VolMgr_Disk *)disk_ptr;
+    struct VolMgr_Volume *new_volume = (struct VolMgr_Volume *)malloc(sizeof(struct VolMgr_Volume));
+    memset(&new_volume,0, sizeof(struct VolMgr_Volume));
+    new_volume->start_sector = start_sector;
+    new_volume->sector_count = sector_count;
+    new_volume->next = disk->volumes;
+    new_volume->part_type = (enum PartitionType)partition_type;
+    new_volume->fs_ptr = NULL; //To be initialised when the FS is mounted
+    disk->volumes = new_volume;
+    disk->volume_count++;
+    kprintf("volmgr: Added volume to disk 0x%x: Start Sector %d, Sector Count %d\r\n", disk, start_sector, sector_count);
+}
+
+uint32_t volmgr_next_counter_value() {
+    acquire_spinlock(&volmgr_lock);
+    uint32_t val = volmgr_state->internal_counter;
+    volmgr_state->internal_counter++;
+    release_spinlock(&volmgr_lock);
+    return val;
+}
+
+uint8_t volmgr_get_disk_count() {
+    return volmgr_state->disk_count;
+}
+
+/**
+ * Internal function, called by the IO driver when the bootsector has been
+ *  loaded into memory.  This parses the partition table and adds volumes
+ *  accordingly.
+ *  */
 void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
     struct VolMgr_Disk *disk = (struct VolMgr_Disk *)extradata;
     kputs("volmgr: Boot sector loaded callback for 0x%x\r\n", disk);
@@ -32,8 +133,8 @@ void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
             continue;
         uint32_t start_sector = *((uint32_t *)&part_entry[8]);
         uint32_t sector_count = *((uint32_t *)&part_entry[12]);
-        kprintf("volmgr: Found partition %d: Type 0x%X, Start Sector %d, Sector Count %d\r\n", i+1, part_type, start_sector, sector_count);
-        volmgr_add_volume(disk, start_sector, sector_count);
+        kprintf("volmgr: Found partition %d: Type 0x%x, Start Sector %d, Sector Count %d\r\n", i+1, part_type, start_sector, sector_count);
+        volmgr_add_volume(disk, start_sector, sector_count, part_type);
         disk->partition_count++;
     }
     free(buffer);
@@ -69,16 +170,20 @@ uint8_t volmgr_intialise_disk(struct VolMgr_Disk *disk) {
             return 0xFF;
     }
 }
+
 void volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags) {
     struct VolMgr_Disk *new_disk = (struct VolMgr_Disk *)malloc(sizeof(struct VolMgr_Disk));
     new_disk->type = type;
+    new_disk->disk_id = volmgr_next_counter_value();
     new_disk->base_addr = base_addr;
     new_disk->flags = flags;
     new_disk->volume_count = 0;
     new_disk->partition_count = 0;
     new_disk->optional_signature = 0;
     new_disk->volumes = NULL;
+    acquire_spinlock(&volmgr_lock);
     new_disk->next = volmgr_state->disk_list;
     volmgr_state->disk_list = new_disk;
     volmgr_state->disk_count++;
+    release_spinlock(&volmgr_lock);
 }

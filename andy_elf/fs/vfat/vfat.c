@@ -143,7 +143,7 @@ void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
 /**
 Step one - initialise mount operation
 */
-void vfat_mount(FATFS *new_fs, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
+void vfat_mount(FATFS *new_fs, uint8_t drive_nr, uint32_t sector_offset, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
 {
   void *bootsector = malloc(512);
   if(!bootsector) {
@@ -151,7 +151,7 @@ void vfat_mount(FATFS *new_fs, uint8_t drive_nr, void *extradata, void (*callbac
     return;
   }
 
-  ata_pio_start_read(drive_nr, 0, 1, bootsector, (void*)new_fs, &_vfat_loaded_bootsector);
+  ata_pio_start_read(drive_nr, (uint64_t)sector_offset, 1, bootsector, (void*)new_fs, &_vfat_loaded_bootsector);
 }
 
 void vfat_unmount(struct fat_fs *fs_ptr)

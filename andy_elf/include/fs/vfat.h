@@ -182,4 +182,6 @@ typedef struct fat_buffer {
   uint32_t buffer_length_sectors;   //how many sectors to write back to disk
 } FATBuffer;
 
+void vfat_mount(FATFS *new_fs, uint8_t drive_nr, uint32_t sector_offset, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
+
 #endif
