@@ -7,6 +7,7 @@
 #include <panic.h>
 #include <errors.h>
 #include <drivers/generic_storage.h>
+#include <volmgr.h>
 #include "ata_pio.h"
 #include "../../mmgr/heap.h"
 
@@ -179,12 +180,15 @@ void initialise_ata_driver()
       kprintf("\tFound ATA Primary Master, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[0] = info;
       print_drive_info(0);
+      //FIXME: parse disk identity data and drive capabilities to get LBA modes, etc.
+      volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_PRIMARY_BASE, DF_IDE_MASTER);
     }
     info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Slave, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[1] = info;
       print_drive_info(1);
+      volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_PRIMARY_BASE, DF_IDE_SLAVE);
     }
   }
   if(master_driver_state->active_bus_mask & 0x2) {
@@ -193,6 +197,7 @@ void initialise_ata_driver()
       kputs("\tFound ATA Secondary Master\r\n");
       master_driver_state->disk_identity[2] = info;
       print_drive_info(2);
+      volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_SECONDARY_BASE, DF_IDE_MASTER);
     }
     info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {

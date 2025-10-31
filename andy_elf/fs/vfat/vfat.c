@@ -10,6 +10,8 @@
 #include <memops.h>
 #include <stdio.h>
 #include <panic.h>
+#include <volmgr.h>
+
 /**
 Step four - now the cluster map is loaded, we should be ready to go
 */
@@ -143,15 +145,27 @@ void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
 /**
 Step one - initialise mount operation
 */
-void vfat_mount(FATFS *new_fs, uint8_t drive_nr, uint32_t sector_offset, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
+void vfat_mount(FATFS *new_fs, void *volmgr_volume, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
 {
   void *bootsector = malloc(512);
   if(!bootsector) {
     new_fs->did_mount_cb(new_fs, E_NOMEM, new_fs->did_mount_cb_extradata);
     return;
   }
+  if(!volmgr_volume) {
+    kputs("ERROR vfat_mount called with NULL volmgr_volume\r\n");
+    free(bootsector);
+    new_fs->did_mount_cb(new_fs, E_PARAMS, new_fs->did_mount_cb_extradata);
+    return;
+  }
+  if(!new_fs) {
+    kputs("ERROR vfat_mount called with NULL new_fs\r\n");
+    free(bootsector);
+    new_fs->did_mount_cb(new_fs, E_PARAMS, new_fs->did_mount_cb_extradata);
+    return;
+  }
 
-  ata_pio_start_read(drive_nr, (uint64_t)sector_offset, 1, bootsector, (void*)new_fs, &_vfat_loaded_bootsector);
+  volmgr_vol_start_read((struct VolMgr_Volume *)volmgr_volume, 0, 1, bootsector, (void*)new_fs, &_vfat_loaded_bootsector);
 }
 
 void vfat_unmount(struct fat_fs *fs_ptr)

@@ -12,7 +12,7 @@ void acquire_spinlock(spinlock_t *lock) {
     if(*lock != 0) {
         kprintf("WARNING attempting to acquire spinlock 0x%x that is already asserted\r\n", lock);
     }
-    asm(
+    asm volatile (
         ".acquire%=:\n\t"
         "lock bts $0, (%0)\n\t"        //bts is "bit switch". This will set bit 0 to 1 and return the previous value in the "carry" flag
         "jnc .wait_done%=\n\t"          //if the bit was 1 already, we are still locked, so wait
@@ -29,7 +29,7 @@ void release_spinlock(spinlock_t *lock) {
     #ifdef SPINLOCK_DEBUG
     kprintf("DEBUG acquiring spinlock 0x%x\r\n", lock);
     #endif
-    asm(
+    asm volatile (
         "lock btc $0, (%0)\n\t" : : "r"(lock) : "memory"
     );
 }

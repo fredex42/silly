@@ -284,6 +284,9 @@ add esp, 4
 extern load_acpi_data
 call load_acpi_data
 
+extern volmgr_init
+call volmgr_init
+
 .post_mbt:
 extern setup_pic
 call setup_pic

@@ -10,6 +10,8 @@
         "panic.h": "c",
         "ringbuffer.h": "c",
         "memops.h": "c",
-        "errors.h": "c"
+        "errors.h": "c",
+        "volmgr.h": "c",
+        "ata_pio.h": "c"
     }
 }

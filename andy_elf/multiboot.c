@@ -3,6 +3,7 @@
 #include <sys/mmgr.h>
 #include <kernel_config.h>
 #include <panic.h>
+#include <volmgr.h>
 
 //defined in acpi/rsdp.c
 void load_acpi_data();
@@ -177,6 +178,8 @@ uint32_t multiboot2_late_init(uint32_t magic, uint32_t addr) {
         tag = (struct MultibootTagHeader *)((uint32_t)tag + ((tag->size + 7) & ~7));
     }
 
+    //Initialise the volume manager. TODO: pass in relevant commandline params (e.g., boot volume)
+    volmgr_init();
     return 1; // Successfully processed multiboot2 info
 }
 
