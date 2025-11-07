@@ -58,6 +58,7 @@ struct SavedRegisterStates32 {
   uint32_t dr6;       //offset 0x40
   uint32_t dr7;       //offset 0x44
   uint32_t esp;       //offset 0x48
+  uint32_t eip;       //offset 0x4C
 } __attribute__((packed));
 
 #define PROCESS_TABLE_MAGIC_NUMBER  0x54504552

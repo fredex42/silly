@@ -86,6 +86,43 @@ struct ProcessTableEntry* get_current_process()
   return get_process(get_current_processid());
 }
 
+void dump_process_struct(struct ProcessTableEntry *p)
+{
+  if(!p) {
+    kputs("dump_process_struct: NULL process pointer\r\n");
+    return;
+  }
+  kprintf("Process Table Entry at 0x%x\r\n", p);
+  kprintf(" Magic: 0x%x\r\n", p->magic);
+  kprintf(" PID: %d\r\n", p->pid);
+  kprintf(" Status: %d\r\n", (uint16_t)p->status);
+  kprintf(" Stack Page Count: %d\r\n", (uint16_t)p->stack_page_count);
+  kprintf(" Root Paging Directory (phys): 0x%x\r\n", p->root_paging_directory_phys);
+  kprintf(" Root Paging Directory (kmem): 0x%x\r\n", p->root_paging_directory_kmem);
+  kprintf(" Heap Start: 0x%x\r\n", p->heap_start);
+  kprintf(" Heap Allocated: %l bytes\r\n", p->heap_allocated);
+  kprintf(" Heap Used: %l bytes\r\n", p->heap_used);
+  kprintf(" Stack Phys Ptr: 0x%x\r\n", p->stack_phys_ptr);
+  kprintf(" Stack Kmem Ptr: 0x%x\r\n", p->stack_kmem_ptr);
+  kprintf(" Saved Registers:\r\n");
+  kprintf("  EAX: 0x%x\r\n", p->saved_regs.eax);
+  kprintf("  EBX: 0x%x\r\n", p->saved_regs.ebx);
+  kprintf("  ECX: 0x%x\r\n",  p->saved_regs.ecx);
+  kprintf("  EDX: 0x%x\r\n", p->saved_regs.edx);
+  kprintf("  EBP: 0x%x\r\n", p->saved_regs.ebp);
+  kprintf("  ESI: 0x%x\r\n", p->saved_regs.esi);
+  kprintf("  EDI: 0x%x\r\n", p->saved_regs.edi);
+  kprintf("  EFLAGS: 0x%x\r\n", p->saved_regs.eflags);
+  kprintf("  CS: 0x%x\r\n", p->saved_regs.cs);
+  kprintf("  DS: 0x%x\r\n", p->saved_regs.ds);
+  kprintf("  ES: 0x%x\r\n", p->saved_regs.es);
+  kprintf("  FS: 0x%x\r\n", p->saved_regs.fs);
+  kprintf("  GS: 0x%x\r\n", p->saved_regs.gs);
+  kprintf("  ESP: 0x%x\r\n", p->saved_regs.esp);
+  kprintf("  EIP: 0x%x\r\n", p->saved_regs.eip);
+  
+}
+
 //INTERNAL USE ONLY! Called when entering kernel context.
 uint16_t set_current_process_id(uint16_t pid)
 {

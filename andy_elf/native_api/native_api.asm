@@ -23,7 +23,7 @@ extern api_read
 extern api_write
 
 ;scheduler/lowlevel.asm
-extern enter_kernel_context
+extern switch_out_process
 
 ;drivers/cmos/rtc.c
 extern rtc_get_epoch_time
@@ -76,18 +76,15 @@ native_api_landing_pad:
   cmp eax, API_EXIT
   jnz .napi_2
   call api_terminate_current_process ;puts the process record into a TERMINATING state. The scheduler will trigger cleanup
-  call enter_kernel_context          ;exit back to the kernel idle loop
   jmp .napi_rtn_to_kern
 .napi_2:
   cmp eax, API_SLEEP
   jnz .napi_3
-  call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   call api_sleep_current_process
   jmp .napi_rtn_to_kern
 .napi_3:
   cmp eax, API_CREATE_PROCESS
   jnz .napi_4
-  call enter_kernel_context     ;this should switch to kernel context and then land here. FIXME should not restore registers!
   call api_create_process
   jmp .napi_rtn_to_kern
 .napi_4:
@@ -111,7 +108,6 @@ native_api_landing_pad:
   add esp, 12
   test ax,ax
   jnz .napi_rtn_direct
-  call enter_kernel_context
   jmp .napi_rtn_to_kern
 .napi_7:
   cmp eax, API_WRITE
@@ -148,6 +144,7 @@ native_api_landing_pad:
   iret
 
 .napi_rtn_to_kern:
+  call switch_out_process
   ;set up a stack frame that gets us back to the kernel idle loop
   pushf
   xor eax, eax

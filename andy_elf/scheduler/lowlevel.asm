@@ -1,7 +1,7 @@
 [BITS 32]
 
 global exit_to_process
-global enter_kernel_context
+global switch_out_process
 
 extern get_current_process  ;defined in process.c  Returns the process struct for the current PID
 extern idle_loop            ;defined in kickoss.s. NOT a function, this is our "return address"
@@ -30,6 +30,7 @@ exit_to_process:
   mov esi, edi
   add esi, 0x28       ;Location of SavedRegisterStates32 within the ProtessTableEntry
   mov ebx, [esi+0x48] ;location of ESP in SavedRegisterStates32
+
 
   ;Set up a stack frame so we can return to the kernel easily after an int call. CPU expects to pop EIP, CS, EFLAGS in that order
   pushf
@@ -90,44 +91,50 @@ exit_to_process:
   pop esi
   iret
 
-;Purpose: Switches to kernel context. NOTE: this will return to the function that it
-;was called from BUT will not preserve the stack below it. Therefore it must be called at
-;the outer level immediately on entering an interrupt not from an arbitary C function
-;It is also essential that interrupts are disabled when calling this because it could leave
-;the CPU in an undefined state (resulting in a triple-fault) if interrupted
-enter_kernel_context:
-  ;first we need to save the register states, BUT we don't actually know where the process struct is right now.
-  ;And we can't find it without clobbering registers.
-  ;So, we first save the regs into a scratch area and then copy that into the process struct
-  ;the scratch area lives at a fixed memory location given in memlayout.asm
-  push edi
-  mov edi, CurrentProcessRegisterScratch
-  mov [edi + 0x00], eax
-  mov [edi + 0x04], ebx
-  mov [edi + 0x08], ecx
-  mov [edi + 0x0C], edx
-  mov [edi + 0x10], ebp
-  mov [edi + 0x14], esi
-  ;we are using EDI, so put its former value into EAX and commit it from there
-  pop eax
-  mov [edi + 0x18], eax   ;actually, inital value of EDI
-  pushf
-  pop eax
-  mov [edi + 0x1C], eax   ;actually the value of EFLAGS
+;Purpose: Saves the current process state into its ProcessTableEntry and switches to kernel context.
+; Note: assumes that the preceding stack frame is that of an interrupt handler, so the stack pointer
+; at entry points to the saved EIP, CS, EFLAGS, ESP, SS of the interrupted code.
+; Arguments: None; pointer to the current process struct is obtained by calling get_current_process
+switch_out_process:
+  push ebp
+  mov ebp, esp
 
-  xor eax, eax
-  mov ax, cs
-  mov [edi + 0x20], ax
+  pushad  ;save all general-purpose registers in this order: EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI
+  call get_current_process  ;defined in process.c  Returns the process struct for the current PID in EAX
+  test eax, eax
+  jz .no_process            ;if no current process, just return
+  mov edi, eax
+  push edi
+  call dump_process_struct
+  add esp, 4
+
+  add edi, 0x28            ;offset of SavedRegisterStates32 in the struct
+  mov eax, [ebp-0x20]  ;EAX
+  mov [edi + 0x00], eax
+  mov eax, [ebp-0x18]  ;EBX
+  mov [edi + 0x04], eax
+  mov eax, [ebp-0x1C]  ;ECX
+  mov [edi + 0x08], eax
+  mov eax, [ebp-0x14]  ;EDX
+  mov [edi + 0x0C], eax
+  mov eax, [ebp]  ;old EBP value
+  mov [edi + 0x10], eax
+  mov eax, [ebp-0x04]  ;ESI
+  mov [edi + 0x14], eax
+  mov eax, [ebp-0x00]  ;EDI
+  mov [edi + 0x18], eax
+  mov eax, [ebp+0x10]  ;EFLAGS from preceding stack frame
+  mov [edi + 0x1C], eax
+  mov eax, [ebp+0x0C]  ;CS from preceding stack frame
+  mov [edi + 0x20], eax
   mov ax, ds
-  mov [edi + 0x22], ax
+  mov word [edi + 0x22], ax
   mov ax, es
-  mov [edi + 0x24], ax
+  mov word [edi + 0x24], ax
   mov ax, fs
-  mov [edi + 0x26], ax
+  mov word [edi + 0x26], ax
   mov ax, gs
-  mov [edi + 0x28], ax
-  xor eax, eax
-  mov [edi + 0x2A], eax
+  mov word [edi + 0x28], ax
   mov eax, dr0
   mov [edi + 0x30], eax
   mov eax, dr1
@@ -140,42 +147,30 @@ enter_kernel_context:
   mov [edi + 0x40], eax
   mov eax, dr7
   mov [edi + 0x44], eax
-  mov eax, esp              ;this is the current stack pointer. BUT we must subtract one pointer from it (our own return address)
-  sub eax, 0x08
-  mov [edi + 0x48], eax     ;process stack pointer when we entered the interrupt handler (see notes)
+  mov eax, [ebp+0x14]  ;ESP from the preceding stack frame
+  mov [edi + 0x48], eax
+  mov eax, [ebp+0x08]  ;EIP from the preceding stack frame
+  mov [edi + 0x4C], eax
 
-  ; OK, now we have saved the registers switch into kernel context
 
-  mov ax, 0x10  ;FIXME direct reference to kernel data seg
-  mov ds, ax
-  mov es, ax
-  mov fs, ax
-  mov gs, ax
-  mov ss, ax
+.no_process:
+add esp, 0x20  ;clean up the stack from pushad
+extern dump_process_struct
+sub edi, 0x28            ;offset of SavedRegisterStates32 in the struct
+push edi
+call dump_process_struct
+add esp, 4
 
-  pop edi            ;grab the return address from the stack
-  mov eax,  0x3000  ;FIXME direct reference to kernel paging directory location as defined in mmgr.c
-  mov cr3, eax
-  ;NOTE stack pointer is invalid at this point
-  mov esp, [saved_stack_pointer]  ;this was set when we exited kernel mode last
-  push edi           ;put the return address down onto the stack pointer
+pop ebp
+pop edi         ;pop the return address from the stack
 
-  ;Now we are in kernel context, copy the register state over to the process table
-  call get_current_process    ;eax should hold the address of the process struct. C function so can't rely on registers now.
-  mov edi, eax
-  add edi, 0x24               ;offset of SavedRegisterStates32 in the struct (destination pointer)
-  mov esi, CurrentProcessRegisterScratch  ;source pointer
-  mov ecx, 0x13               ; 0x4c bytes = 0x13 dwords
-  rep movsd                   ; copy the data across
+mov eax, 0x3000 ;FIXME: direct reference to kernel paging directory
+mov cr3, eax    ;switch to kernel page directory
 
-  ;we've messed around with some of the registers, so restore their values to what they were when we entered
-  mov esi, CurrentProcessRegisterScratch 
-  mov eax, [esi + 0x00]   ;restore the value of eax which was present before
-  mov ecx, [esi + 0x08]
-  mov edi, [esi + 0x18]
-  mov esi, [esi + 0x14]
+mov esp, [saved_stack_pointer] ;restore the kernel stack pointer. This is still necessary because the kernel stack is in a different place to the app stack
 
-  ret                ;return to the interrupt handler
+push edi         ;push the return address back onto the stack
+ret                ;return to the interrupt handler
 
 section .data
 saved_stack_pointer dd 0x0
