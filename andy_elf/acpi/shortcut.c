@@ -2,7 +2,6 @@
 #include <acpi/rsdt.h>
 #include <acpi/fadt.h>
 #include <memops.h>
-#include <memory.h>
 
 struct AcpiTableShortcut *acpi_shortcut_list_end(struct AcpiTableShortcut *list) 
 {
