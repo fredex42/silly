@@ -20,9 +20,6 @@ exit_to_process:
   mov [saved_stack_pointer], eax    ;save the stack pointer to our data area so that we can get it back easily
   
   mov edi, [esp+4]  ;grab the first argument from the stack (pointer to ProcessTableEntry)
-  push edi
-  call dump_process_struct
-  add esp, 4
 
   ;Set up registers for the process based on saved state in the process struct
   add edi, 0x28       ;Location of SavedRegisterStates32 within the ProcessTableEntry
@@ -169,9 +166,6 @@ switch_out_process:
   test eax, eax
   jz .no_process            ;if no current process, just return
   mov edi, eax
-  push edi
-  call dump_process_struct
-  add esp, 4
 
   add edi, 0x28            ;offset of SavedRegisterStates32 in the struct
   mov eax, [ebp-0x20]  ;EAX
@@ -220,11 +214,6 @@ switch_out_process:
 
 .no_process:
 add esp, 0x20  ;clean up the stack from pushad
-extern dump_process_struct
-sub edi, 0x28            ;offset of SavedRegisterStates32 in the struct
-push edi
-call dump_process_struct
-add esp, 4
 
 pop ebp
 pop edi         ;pop the return address from the stack

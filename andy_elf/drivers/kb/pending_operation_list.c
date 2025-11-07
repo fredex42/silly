@@ -8,7 +8,6 @@
 static spinlock_t kb_pending_operation_lock;
 
 void init_kb_pending_ops() {
-    kprintf("DEBUG kb_pending_operation_lock at 0x%x\r\n", &kb_pending_operation_lock);
     kb_pending_operation_lock = 0;
     mb();
 }
@@ -114,16 +113,12 @@ PendingOperationList *kb_pop_pending_operation(PendingOperationList **start)
 PendingOperationList *kb_push_pending_operation(PendingOperationList **start, struct ProcessTableEntry *p, struct FilePointer *fp) 
 {
     PendingOperationList *last = *start;
-    kprintf("DEBUG POL start at 0x%x\r\n", start);
 
-    kputs("DEBUG kb_push_pending_operation malloc\r\n");
     PendingOperationList *new_entry = (PendingOperationList *)malloc(sizeof(PendingOperationList));
     if(!new_entry) {
         k_panic("Not enough memory to allocate a pending operation!\r\n");
     }
     memset((void *)new_entry, 0, sizeof(PendingOperationList));
-
-    kprintf("DEBUG kb_push_pending_operation entry is at 0x%x\r\n", new_entry);
 
     new_entry->process = p;
     new_entry->fp = fp;
@@ -131,7 +126,6 @@ PendingOperationList *kb_push_pending_operation(PendingOperationList **start, st
     acquire_spinlock(&kb_pending_operation_lock);
     //find the end of the list
     while(last && last->next) {
-        kprintf("DEBUG walk POL at 0x%x\r\n", last);
         last=last->next;
     }
 

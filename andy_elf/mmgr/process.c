@@ -336,12 +336,13 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
 
   #ifdef PROCESS_VERBOSE
   kprintf("DEBUG new_process unmapping process stack at 0x%x from kernel\r\n", new_entry->stack_kmem_ptr);
+  dump_process_struct(new_entry);
   #endif
   k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
   new_entry->stack_kmem_ptr = NULL;
 
   new_entry->status = PROCESS_READY;
-  dump_process_struct(new_entry);
+
   
   sti();
   #ifdef PROCESS_VERBOSE
