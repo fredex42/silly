@@ -175,7 +175,11 @@ void enter_next_process()
   active_process = temp;
   kprintf("DEBUG process saved esp 0x%x\r\n", process->saved_regs.esp);
   kprintf("DEBUG Exiting into process 0x%x\r\n", process);
+
+  //Update the system state to reflect the process switch
   set_current_process_id(process->pid);
+  //Update the process status so it does not accidentally get re-scheduled while running
+  process->status = PROCESS_BUSY;
   exit_to_process(process);
 }
 
