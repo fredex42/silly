@@ -321,8 +321,18 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
 
   unmap_app_pagingdir(mapped_pagedirs);
   
-  process_initial_stack(new_entry, elf->file_header);
+  //process_initial_stack(new_entry, elf->file_header);
   //the stack should now be ready for `iret`, we don't need access to it any more.
+
+  new_entry->saved_regs.eip = elf->file_header->i386_subheader.entrypoint;
+  new_entry->saved_regs.cs = GDT_USER_CS | 3;
+  new_entry->saved_regs.ds = GDT_USER_DS | 3;
+  new_entry->saved_regs.es = GDT_USER_DS | 3;
+  new_entry->saved_regs.fs = GDT_USER_DS | 3;
+  new_entry->saved_regs.gs = GDT_USER_DS | 3;
+  new_entry->saved_regs.eflags = 0x202; //set IF flag
+  new_entry->saved_regs.esp = 0xFFFFFFF8;
+  new_entry->saved_regs.ebp = 0;
 
   #ifdef PROCESS_VERBOSE
   kprintf("DEBUG new_process unmapping process stack at 0x%x from kernel\r\n", new_entry->stack_kmem_ptr);
@@ -331,6 +341,8 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
   new_entry->stack_kmem_ptr = NULL;
 
   new_entry->status = PROCESS_READY;
+  dump_process_struct(new_entry);
+  
   sti();
   #ifdef PROCESS_VERBOSE
   kprintf("DEBUG new_process process initialised at 0x%x\r\n", new_entry);

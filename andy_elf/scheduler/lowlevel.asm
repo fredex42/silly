@@ -15,6 +15,71 @@ extern idle_loop            ;defined in kickoss.s. NOT a function, this is our "
 ;Does not return (to the kernel, at least!)
 exit_to_process:
   cli
+
+  mov eax, 0x7FFF8                  ;We are exiting the kernel, so re-set the stack to the bottom for when we re-enter
+  mov [saved_stack_pointer], eax    ;save the stack pointer to our data area so that we can get it back easily
+  
+  mov edi, [esp+4]  ;grab the first argument from the stack (pointer to ProcessTableEntry)
+  push edi
+  call dump_process_struct
+  add esp, 4
+
+  ;Set up registers for the process based on saved state in the process struct
+  add edi, 0x28       ;Location of SavedRegisterStates32 within the ProcessTableEntry
+
+  mov eax, [edi+0x44] ;DR7
+  mov dr7, eax
+  mov eax, [edi+0x40] ;DR6
+  mov dr6, eax
+  mov eax, [edi+0x3C] ;DR3
+  mov dr3, eax
+  mov eax, [edi+0x38] ;DR2
+  mov dr2, eax
+  mov eax, [edi+0x34] ;DR1
+  mov dr1, eax
+  mov eax, [edi+0x30] ;DR0
+  mov dr0, eax
+  mov ax, word [edi+0x28] ;GS
+  mov gs, ax
+  mov ax, word [edi+0x26] ;FS
+  mov fs, ax
+  mov ax, word [edi+0x24] ;ES
+  mov es, ax
+  mov ax, word [edi+0x22] ;DS
+  mov ds, ax
+  mov esi, [edi+0x14] ;ESI
+  mov ebp, [edi+0x10] ;EBP
+  mov edx, [edi+0x0C] ;EDX
+  mov ecx, [edi+0x08] ;ECX
+  mov ebx, [edi+0x04] ;EBX
+
+  ;Get hold of the application paging directory physical address and activate it.
+  ;This will remove access to the kernel stack.
+  sub edi, 0x28       ;Location of SavedRegisterStates32 within the ProcessTableEntry
+  mov eax, [edi+0x0C] ;Location of Page Directory Physical Address within the ProcessTableEntry
+  mov cr3, eax
+
+  add edi, 0x28       ;Location of SavedRegisterStates32 within the ProcessTableEntry
+  ;Set up a stack frame to return to the user-mode process.  This consists of EIP, CS, EFLAGS, ESP, SS
+  mov eax, 0x33      ;FIXME: direct reference to user data seg OR DPL 3
+  push eax
+  mov eax, [edi+0x48] ;ESP
+  push eax
+  mov eax, [edi+0x1C] ;EFLAGS
+  push eax
+  xor eax, eax
+  mov ax, word [edi+0x20] ;CS
+  push eax
+  mov eax, [edi+0x4C] ;EIP
+  push eax
+
+
+  ;now set eax and edi prior to return
+  mov eax, [edi+0x00] ;EAX
+  mov edi, [edi+0x18] ;EDI
+  iret ;go back to process
+
+temp_old:
   xor eax, eax
 
   mov ax, 0x33      ;FIXME: direct reference to user data seg OR DPL 3
