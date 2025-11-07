@@ -175,7 +175,7 @@ void enter_next_process()
   active_process = temp;
   kprintf("DEBUG process saved esp 0x%x\r\n", process->saved_regs.esp);
   kprintf("DEBUG Exiting into process 0x%x\r\n", process);
-
+  set_current_process_id(process->pid);
   exit_to_process(process);
 }
 
