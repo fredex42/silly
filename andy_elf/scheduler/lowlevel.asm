@@ -51,7 +51,6 @@ exit_to_process:
   mov ebx, [edi+0x04] ;EBX
 
   ;Get hold of the application paging directory physical address and activate it.
-  ;This will remove access to the kernel stack.
   sub edi, 0x28       ;Location of SavedRegisterStates32 within the ProcessTableEntry
   mov eax, [edi+0x0C] ;Location of Page Directory Physical Address within the ProcessTableEntry
   mov cr3, eax
@@ -75,83 +74,6 @@ exit_to_process:
   mov eax, [edi+0x00] ;EAX
   mov edi, [edi+0x18] ;EDI
   iret ;go back to process
-
-temp_old:
-  xor eax, eax
-
-  mov ax, 0x33      ;FIXME: direct reference to user data seg OR DPL 3
-  mov ds, ax
-  mov es, ax
-  mov fs, ax
-  mov gs, ax
-
-  mov edi, [esp+4]  ;grab the first argument from the stack
-  ;Set the current stack pointer in the TSS TO THE APPLICATION STACK. When we return to the kernel we
-  ;will effectively have exited from this function. in the stack context of the application.
-  ;Get the application stack pointer and store it in a register
-  mov esi, edi
-  add esi, 0x28       ;Location of SavedRegisterStates32 within the ProtessTableEntry
-  mov ebx, [esi+0x48] ;location of ESP in SavedRegisterStates32
-
-
-  ;Set up a stack frame so we can return to the kernel easily after an int call. CPU expects to pop EIP, CS, EFLAGS in that order
-  pushf
-  mov ax, cs
-  push eax
-  mov eax, idle_loop ;idle_loop is a label defined in kickoff.s and it's where we want to get back to
-  push eax
-
-  mov eax, 0x7FFF8                      ;We are exiting the kernel, so re-set the stack to the bottom for when we re-enter
-  mov [saved_stack_pointer], eax    ;save the stack pointer to our data area so that we can get it back easily
-
-  mov esi, FullTSS
-  mov DWORD [esi+0x04], ebx
-
-  ;Get hold of the application paging directory physical address and activate it.
-  ;This will remove access to the kernel stack.
-  mov eax, [edi+0x0C]
-  mov cr3, eax
-  ;set the stack pointer
-  mov esp, ebx
-
-  ;restore the register states from the process struct
-  ;first, deal with EFLAGS
-  mov eax, [esi+0x1C]
-  push eax
-  popf
-  ;now get the ESI value we want and put that on the stack for when we have finished
-  mov eax, [esi+0x14]
-  push eax
-
-  ;ignore segment selector registers as there is no other valid value for them to have
-
-  ;debug registers
-  mov eax, [esi+0x30]
-  mov dr0, eax
-  mov eax, [esi+0x34]
-  mov dr1, eax
-  mov eax, [esi+0x38]
-  mov dr2, eax
-  mov eax, [esi+0x3C]
-  mov dr3, eax
-  mov eax, [esi+0x40]
-  mov dr6, eax
-  mov eax, [esi+0x44]
-  mov dr7, eax
-
-  ;general-use registers
-  mov eax, [esi+0x00]
-  mov ebx, [esi+0x04]
-  mov ecx, [esi+0x08]
-  mov edx, [esi+0x0C]
-  mov ebp, [esi+0x10]
-  ;can't set esi yet, come back to it!
-  mov edi, [esi+0x18]
-
-
-  ;finally, restore esi from the stack
-  pop esi
-  iret
 
 ;Purpose: Saves the current process state into its ProcessTableEntry and switches to kernel context.
 ; Note: assumes that the preceding stack frame is that of an interrupt handler, so the stack pointer
