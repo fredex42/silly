@@ -973,6 +973,7 @@ uint32_t *initialise_app_pagingdir(void **phys_ptr_list, size_t phys_ptr_count)
   uint32_t *stack_paging_table_virt = (uint32_t *) (temp_ptr + (2*PAGE_SIZE));  
   uint32_t *stack_initial_page_virt = (uint32_t *) (temp_ptr + (3*PAGE_SIZE)); 
 
+  memset_dw(root_dir_virt, 0, PAGE_SIZE_DWORDS);
   //POTENTIAL BUG - by copying the kernel paging directory here, the page table entries get freed when the process exits
   //and then the kernel crashes when it tries to access them.  This is now prevented by ensuring that the kernel page tables are
   //marked as MP_GLOBAL so the freeing process will skip them.

@@ -86,6 +86,43 @@ struct ProcessTableEntry* get_current_process()
   return get_process(get_current_processid());
 }
 
+void dump_process_struct(struct ProcessTableEntry *p)
+{
+  if(!p) {
+    kputs("dump_process_struct: NULL process pointer\r\n");
+    return;
+  }
+  kprintf("Process Table Entry at 0x%x\r\n", p);
+  kprintf(" Magic: 0x%x\r\n", p->magic);
+  kprintf(" PID: %d\r\n", p->pid);
+  kprintf(" Status: %d\r\n", (uint16_t)p->status);
+  kprintf(" Stack Page Count: %d\r\n", (uint16_t)p->stack_page_count);
+  kprintf(" Root Paging Directory (phys): 0x%x\r\n", p->root_paging_directory_phys);
+  kprintf(" Root Paging Directory (kmem): 0x%x\r\n", p->root_paging_directory_kmem);
+  kprintf(" Heap Start: 0x%x\r\n", p->heap_start);
+  kprintf(" Heap Allocated: %l bytes\r\n", p->heap_allocated);
+  kprintf(" Heap Used: %l bytes\r\n", p->heap_used);
+  kprintf(" Stack Phys Ptr: 0x%x\r\n", p->stack_phys_ptr);
+  kprintf(" Stack Kmem Ptr: 0x%x\r\n", p->stack_kmem_ptr);
+  kprintf(" Saved Registers:\r\n");
+  kprintf("  EAX: 0x%x\r\n", p->saved_regs.eax);
+  kprintf("  EBX: 0x%x\r\n", p->saved_regs.ebx);
+  kprintf("  ECX: 0x%x\r\n",  p->saved_regs.ecx);
+  kprintf("  EDX: 0x%x\r\n", p->saved_regs.edx);
+  kprintf("  EBP: 0x%x\r\n", p->saved_regs.ebp);
+  kprintf("  ESI: 0x%x\r\n", p->saved_regs.esi);
+  kprintf("  EDI: 0x%x\r\n", p->saved_regs.edi);
+  kprintf("  EFLAGS: 0x%x\r\n", p->saved_regs.eflags);
+  kprintf("  CS: 0x%x\r\n", p->saved_regs.cs);
+  kprintf("  DS: 0x%x\r\n", p->saved_regs.ds);
+  kprintf("  ES: 0x%x\r\n", p->saved_regs.es);
+  kprintf("  FS: 0x%x\r\n", p->saved_regs.fs);
+  kprintf("  GS: 0x%x\r\n", p->saved_regs.gs);
+  kprintf("  ESP: 0x%x\r\n", p->saved_regs.esp);
+  kprintf("  EIP: 0x%x\r\n", p->saved_regs.eip);
+  
+}
+
 //INTERNAL USE ONLY! Called when entering kernel context.
 uint16_t set_current_process_id(uint16_t pid)
 {
@@ -284,16 +321,29 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
 
   unmap_app_pagingdir(mapped_pagedirs);
   
-  process_initial_stack(new_entry, elf->file_header);
+  //process_initial_stack(new_entry, elf->file_header);
   //the stack should now be ready for `iret`, we don't need access to it any more.
+
+  new_entry->saved_regs.eip = elf->file_header->i386_subheader.entrypoint;
+  new_entry->saved_regs.cs = GDT_USER_CS | 3;
+  new_entry->saved_regs.ds = GDT_USER_DS | 3;
+  new_entry->saved_regs.es = GDT_USER_DS | 3;
+  new_entry->saved_regs.fs = GDT_USER_DS | 3;
+  new_entry->saved_regs.gs = GDT_USER_DS | 3;
+  new_entry->saved_regs.eflags = 0x202; //set IF flag
+  new_entry->saved_regs.esp = 0xFFFFFFF8;
+  new_entry->saved_regs.ebp = 0;
 
   #ifdef PROCESS_VERBOSE
   kprintf("DEBUG new_process unmapping process stack at 0x%x from kernel\r\n", new_entry->stack_kmem_ptr);
+  dump_process_struct(new_entry);
   #endif
   k_unmap_page_ptr(NULL, new_entry->stack_kmem_ptr);
   new_entry->stack_kmem_ptr = NULL;
 
   new_entry->status = PROCESS_READY;
+
+  
   sti();
   #ifdef PROCESS_VERBOSE
   kprintf("DEBUG new_process process initialised at 0x%x\r\n", new_entry);
