@@ -45,6 +45,7 @@ typedef struct fat_fs {
 
 /* Public functions */
 FATFS* new_fat_fs(uint8_t drive_nr);
+void vfat_mount(FATFS *new_fs, void *volmgr_volume, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
 
 typedef struct mount_transient_data {
   void *extradata;
@@ -58,5 +59,6 @@ typedef struct mount_transient_data {
 #define SECTOR_FOR_CLUSTER(fs_ptr, cluster_num) ((uint32_t)cluster_num * (uint32_t)fs_ptr->bpb->logical_sectors_per_cluster)
 
 #define ERR_FS_BUSY   1
+
 
 #endif

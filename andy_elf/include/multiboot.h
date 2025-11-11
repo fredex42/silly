@@ -157,4 +157,20 @@ struct MultibootTagPhysAddr {
     uint32_t image_addr;
 } __attribute__((packed));
 
+/**
+ * Early-init for multiboot2. This function is called to determine if we have multiboot2 metadata, and if so to initialise
+ * core services like the memory manager.
+ */
+uint32_t init_multiboot_system(uint32_t magic, uint32_t addr);
+
+/**
+ * Late-init for multiboot2. This function is called to get multiboot2 metadata after the core services like the memory manager are up and running.
+ */
+uint32_t multiboot2_late_init(uint32_t magic, uint32_t addr);
+
+/**
+ * Returns a pointer to the kernel configuration structure, or NULL if not available.
+ * The returned pointer is owned by the kernel and should not be freed nor modified.
+ */
+const struct KernelConfig *get_kernel_config();
 #endif
