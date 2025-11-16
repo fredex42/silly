@@ -111,6 +111,7 @@ uint8_t volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector
     return E_OK;
 }
 
+
 /**
  * Public function that starts a read operation on the given volume pointer
  */
@@ -196,7 +197,7 @@ uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk) {
     }
 }
 
-uint8_t volmgr_intialise_disk(struct VolMgr_Disk *disk) {
+uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk) {
     switch(disk->type) {
         case DISK_TYPE_ISA_IDE:
             //Initialise ISA IDE disk

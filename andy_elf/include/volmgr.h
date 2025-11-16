@@ -32,9 +32,8 @@ void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*call
 void * volmgr_open_file(uint8_t vol_id, const char *filename);
 
 /**
- * Start a read operation on the given volume.  This is a public function used by FS layers
+ * Public function that starts a read operation on the given volume pointer
  */
 int8_t volmgr_vol_start_read(struct VolMgr_Volume *vol, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
 int8_t volmgr_vol_start_write(struct VolMgr_Volume *vol, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
-
 #endif

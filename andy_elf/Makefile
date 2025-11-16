@@ -1,4 +1,4 @@
-.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api
+.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api volmgr
 
 all: test.elf kernel.map
 
@@ -30,6 +30,8 @@ exceptions.o: exceptions.s
 cfuncs.o: cfuncs.s
 	nasm -f elf32 cfuncs.s
 
+config.o: config.c
+	gcc -c ${CFLAGS} config.c
 
 stdio_funcs.o: stdio_funcs.c
 	gcc -c ${CFLAGS} stdio_funcs.c
@@ -89,7 +91,7 @@ volmgr:
 
 test.elf: multiboot.o kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o mmgr 8259pic acpi drivers scheduler fs process utils native_api volmgr
+		cpuid.o config.o mmgr 8259pic acpi drivers scheduler fs process utils native_api volmgr
 	ld -b elf32-i386 multiboot.o kickoff.o exceptions.o basic_console.o config.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o fs/fs.o \
 		-L mmgr/ -lmmgr \

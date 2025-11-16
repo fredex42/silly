@@ -1,12 +1,12 @@
 #ifndef __VOLMGR_INTERNAL_H
 #define __VOLMGR_INTERNAL_H
 
-#include <volmgr.h>
-#include <fs.h>
-
 // Forward declarations for internal use
 struct VolMgr_Disk;
 struct VolMgr_Volume;
+
+#include <volmgr.h>
+#include <fs.h>
 
 // Function prototypes for internal and external linkage
 void kputs(const char *fmt, ...);
