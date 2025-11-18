@@ -27,7 +27,7 @@ void ata_service_interrupt(uint8_t bus_nr)
   }
   
   // Check if bus_nr is valid
-  if(bus_nr >= 2) {  // Assuming max 2 ATA buses
+  if(bus_nr >= 4) {  // Assuming max 4 ATA buses
     kprintf("ERROR invalid bus_nr %d\r\n", bus_nr);
     return;
   }
@@ -62,6 +62,9 @@ void ata_service_interrupt(uint8_t bus_nr)
     case ATA_OP_IGNORE:
       kputs("DEBUG Ignoring ATA operation as requested\r\n");
       op->type = ATA_OP_NONE;
+      return;
+    default:
+      kprintf("ERROR Unknown ATA operation type %d\r\n", (uint16_t)op->type);
       return;
   }
 }

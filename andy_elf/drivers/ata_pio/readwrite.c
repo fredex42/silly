@@ -133,6 +133,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint16_t secto
   outb(ATA_LBA_MID(base_addr), LBA28_LMID(lba_address));
   outb(ATA_LBA_HI(base_addr), LBA28_HMID(lba_address));
   outb(ATA_COMMAND(base_addr), ATA_CMD_READ_SECTORS);
+  return E_OK;
 }
 
 int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))

@@ -14,6 +14,8 @@ global SimpleTSS	;we need to set the current ESP in TSS when we move to ring3
 %include "memlayout.asm"
 %include "exceptions.inc"
 
+extern validate_kernel_memory_allocations
+
 ; We start off using the GDT which was configured by PMLDR, then later on the GDT is shifted to "FullGDT" which
 ; includes ring3 code/data selectors and a Task Segment Selector as well.
 
@@ -311,15 +313,14 @@ call initialise_ata_driver
 extern init_native_api
 call init_native_api
 
-extern mount_root_device
-call mount_root_device
+; extern mount_root_device
+; call mount_root_device
 
 ;make sure that there are no left-over memory allocations
-extern validate_kernel_memory_allocations
-xor eax,eax
-push ax
-call validate_kernel_memory_allocations
-pop ax
+; xor eax,eax
+; push ax
+; call validate_kernel_memory_allocations
+; pop ax
 
 extern scheduler_tick
 extern enter_next_process

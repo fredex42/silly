@@ -13,7 +13,10 @@ struct VolMgr_GlobalState *volmgr_state = NULL;
 volatile spinlock_t volmgr_lock = 0;
 
 void volmgr_init() {
+    kputs("volmgr: Initialising Volume Manager\r\n");
     volmgr_state = (struct VolMgr_GlobalState *)malloc(sizeof(struct VolMgr_GlobalState));
+    kprintf("volmgr: Allocated global state at 0x%x\r\n", volmgr_state);
+    memset(volmgr_state, 0, sizeof(struct VolMgr_GlobalState));
     volmgr_state->disk_list = NULL;
     volmgr_state->disk_count = 0;
     volmgr_state->internal_counter = 0;
@@ -100,6 +103,7 @@ uint8_t volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector
     new_volume->start_sector = start_sector;
     new_volume->sector_count = sector_count;
     acquire_spinlock(&volmgr_lock);
+    volmgr_disk_ref(disk);  //The volume holds a strong ref to the disk
     new_volume->disk = disk;
     new_volume->next = disk->volumes;
     new_volume->part_type = (enum PartitionType)partition_type;
@@ -152,24 +156,25 @@ uint8_t volmgr_get_disk_count() {
  *  */
 void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
     struct VolMgr_Disk *disk = (struct VolMgr_Disk *)extradata;
-    kputs("volmgr: Boot sector loaded callback for 0x%x\r\n", disk);
+    kprintf("volmgr: Boot sector loaded callback for 0x%x\r\n", disk);
     //Parse partition table from buffer
     uint8_t *boot_sector = (uint8_t *)buffer;
     if(boot_sector[510] != 0x55 || boot_sector[511] != 0xAA) {
         kputs("volmgr: Invalid boot sector signature\r\n");
         free(buffer);
+        volmgr_disk_unref(disk);
         return;
     }
-    disk->optional_signature = *((uint32_t *)&boot_sector[0x1B8]);
-    kprintf("volmgr: Disk signature: 0x%X\r\n", disk->optional_signature);
+    disk->optional_signature = (uint32_t)boot_sector[0x1B8];
+    kprintf("volmgr: Disk signature: 0x%x\r\n", disk->optional_signature);
     
     for(int i=0; i<4; i++) {
         uint8_t *part_entry = &boot_sector[0x1BE + (i * 16)];
         uint8_t part_type = part_entry[4];
         if(part_type == PARTTYPE_EMPTY)
             continue;
-        uint32_t start_sector = *((uint32_t *)&part_entry[8]);
-        uint32_t sector_count = *((uint32_t *)&part_entry[12]);
+        uint32_t start_sector = (uint32_t)part_entry[8];
+        uint32_t sector_count = (uint32_t)part_entry[12];
         kprintf("volmgr: Found partition %d: Type 0x%x, Start Sector %d, Sector Count %d\r\n", i+1, part_type, start_sector, sector_count);
         volmgr_add_volume(disk, start_sector, sector_count, part_type);
         disk->partition_count++;
@@ -201,11 +206,18 @@ uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk) {
     switch(disk->type) {
         case DISK_TYPE_ISA_IDE:
             //Initialise ISA IDE disk
-            kputs("volmgr: Initialising ISA IDE disk at 0x%x\r\n", disk);
+            kprintf("volmgr: Initialising ISA IDE disk at 0x%x\r\n", disk);
             void * buffer = malloc(512); //Temporary buffer for boot sector
             uint8_t disk_num = volmgr_isa_disk_number(disk);
-            volmgr_disk_ref(disk);
-            ata_pio_start_read(disk_num, 0, 1, buffer, (void *)disk, &volmgr_boot_sector_loaded);
+            kprintf("volmgr: ISA IDE disk number %d\r\n", disk_num);
+            volmgr_disk_ref(disk);  //Reference for the async read
+            int8_t rc = ata_pio_start_read(disk_num, 0, 1, buffer, (void *)disk, &volmgr_boot_sector_loaded);
+            if(rc != E_OK) {
+                kprintf("volmgr: Error starting boot sector read for disk 0x%x: %d\r\n", disk, rc);
+                free(buffer);
+                volmgr_disk_unref(disk);
+                return rc;
+            }
             return 0;
         case DISK_TYPE_PCI_IDE:
             //Initialise PCI IDE disk
