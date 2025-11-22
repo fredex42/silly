@@ -16,6 +16,7 @@ void volmgr_init() {
     kputs("volmgr: Initialising Volume Manager\r\n");
     volmgr_state = (struct VolMgr_GlobalState *)malloc(sizeof(struct VolMgr_GlobalState));
     kprintf("volmgr: Allocated global state at 0x%x\r\n", volmgr_state);
+    kprintf("volmgr: spinlock at 0x%x\r\n", &volmgr_lock);
     memset(volmgr_state, 0, sizeof(struct VolMgr_GlobalState));
     volmgr_state->disk_list = NULL;
     volmgr_state->disk_count = 0;
@@ -23,8 +24,17 @@ void volmgr_init() {
     volmgr_lock = 0;
 }
 
+/*
+(Internal) - Called when the vfat_mount operation in volmgr_mount_volume completes, and relays information back to the original caller
+*/
 void vol_mounted_cb(uint8_t status, void *fs_ptr, void *extradata) {
     kputs("volmgr: Volume mounted callback invoked\r\n");
+    if(extradata==NULL) {
+        kputs("volmgr: vol_mounted_cb called with NULL extradata\r\n");
+        if(fs_ptr) free(fs_ptr);
+        return;
+    }
+
     struct volmgr_internal_mount_data *mount_data = (struct volmgr_internal_mount_data *)extradata;
     switch(status) {
         case E_OK:
@@ -43,8 +53,38 @@ void vol_mounted_cb(uint8_t status, void *fs_ptr, void *extradata) {
     }
 }
 
+/**
+ * Called when the mount operation for a volume completes.
+ */
+void mount_volume_completed(uint8_t status, void *fs_ptr, void *extradata) {
+    kputs("volmgr: mount_volume_completed invoked\r\n");
+    if(extradata==NULL) {
+        kputs("volmgr: mount_volume_completed called with NULL extradata\r\n");
+        if(fs_ptr) free(fs_ptr);
+        return;
+    }
+    struct volmgr_internal_mount_data *mount_data = (struct volmgr_internal_mount_data *)extradata;
+
+    if(status==E_OK) {
+        kprintf("volmgr: Volume mounted successfully: FS ptr 0x%x\r\n", fs_ptr);
+        mount_data->volume->fs_ptr = fs_ptr;
+    }
+}
+
 void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*callback)(uint8_t status, void *fs_ptr, void *extradata))
 {
+    struct volmgr_internal_mount_data *mount_data = (struct volmgr_internal_mount_data *)malloc(sizeof(struct volmgr_internal_mount_data));
+    if(!mount_data) {
+        kputs("volmgr: Unable to allocate memory for mount data\r\n");
+        callback(E_NOMEM, NULL, extradata);
+        return;
+    }
+
+    memset(mount_data, 0, sizeof(struct volmgr_internal_mount_data));
+    mount_data->extradata = extradata;
+    mount_data->callback = callback;
+    mount_data->volume = vol;
+
     switch(vol->part_type) {
         case PARTTYPE_FAT12:
         case PARTTYPE_FAT16_SMALL:
@@ -61,17 +101,6 @@ void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*call
                 return;
             }
             memset(new_fs, 0, sizeof(struct fat_fs));
-            struct volmgr_internal_mount_data *mount_data = (struct volmgr_internal_mount_data *)malloc(sizeof(struct volmgr_internal_mount_data));
-            if(!mount_data) {
-                kputs("volmgr: Unable to allocate memory for mount data\r\n");
-                free(new_fs);
-                callback(E_NOMEM, NULL, extradata);
-                return;
-            }
-            memset(mount_data, 0, sizeof(struct volmgr_internal_mount_data));
-            mount_data->extradata = extradata;
-            mount_data->callback = callback;
-            mount_data->volume = vol;
 
             //Start the mount operation.  On completion, vol_mounted_cb will be called with either an error code or the populated new_fs
             vfat_mount((FATFS *)new_fs, (void *)vol, (void *)mount_data, &vol_mounted_cb);
@@ -79,31 +108,31 @@ void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*call
         case PARTTYPE_NTFS:
             //Mount NTFS filesystem
             kputs("volmgr: NTFS mounting not yet implemented\r\n");
-            callback(0xFF, NULL, extradata);
+            callback(0xFF, NULL, mount_data);
             break;
         default:
             kprintf("volmgr: Unsupported partition type 0x%x\r\n", vol->part_type);
-            callback(0xFF, NULL, extradata);
+            callback(0xFF, NULL, mount_data);
             break;
     }
 }
 
-uint8_t volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type) {
+struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type) {
     struct VolMgr_Disk *disk = (struct VolMgr_Disk *)disk_ptr;
     if(!disk) {
         kputs("volmgr: volmgr_add_volume called with NULL disk pointer\r\n");
-        return E_PARAMS;
+        return NULL;
     }
     struct VolMgr_Volume *new_volume = (struct VolMgr_Volume *)malloc(sizeof(struct VolMgr_Volume));
     if(!new_volume) {
         kputs("volmgr: Unable to allocate memory for new volume\r\n");
-        return E_NOMEM;
+        return NULL;
     }
     memset(new_volume,0, sizeof(struct VolMgr_Volume));
     new_volume->start_sector = start_sector;
     new_volume->sector_count = sector_count;
-    acquire_spinlock(&volmgr_lock);
     volmgr_disk_ref(disk);  //The volume holds a strong ref to the disk
+    acquire_spinlock(&volmgr_lock);
     new_volume->disk = disk;
     new_volume->next = disk->volumes;
     new_volume->part_type = (enum PartitionType)partition_type;
@@ -112,7 +141,7 @@ uint8_t volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector
     disk->volume_count++;
     release_spinlock(&volmgr_lock);
     kprintf("volmgr: Added volume to disk 0x%x: Start Sector %d, Sector Count %d\r\n", disk, start_sector, sector_count);
-    return E_OK;
+    return new_volume;
 }
 
 
@@ -176,8 +205,13 @@ void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
         uint32_t start_sector = (uint32_t)part_entry[8];
         uint32_t sector_count = (uint32_t)part_entry[12];
         kprintf("volmgr: Found partition %d: Type 0x%x, Start Sector %d, Sector Count %d\r\n", i+1, part_type, start_sector, sector_count);
-        volmgr_add_volume(disk, start_sector, sector_count, part_type);
+        struct VolMgr_Volume *vol = volmgr_add_volume(disk, start_sector, sector_count, part_type);
+        if(!vol) {
+            kputs("volmgr: Error adding volume\r\n");
+            continue;
+        }
         disk->partition_count++;
+        volmgr_mount_volume(vol, NULL, &vol_mounted_cb);
     }
     free(buffer);
     volmgr_disk_unref(disk);

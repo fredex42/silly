@@ -25,7 +25,7 @@ uint8_t volmgr_get_disk_count();
 void *volmgr_disk_for_id(uint32_t id);
 
 //Called internally to add a new disk
-uint8_t volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type);
+struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type);
 
 void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*callback)(uint8_t status, void *fs_ptr, void *extradata));
 //This function passes down to the underlying FS driver
