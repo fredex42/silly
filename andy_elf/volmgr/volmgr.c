@@ -153,6 +153,7 @@ int8_t volmgr_vol_start_read(struct VolMgr_Volume *vol, uint64_t lba_address, ui
     if(!vol || !buffer || sector_count==0) {
         return E_PARAMS;
     }
+    kprintf("volmgr: volmgr_vol_start_read: Volume 0x%x, LBA 0x%x, Sector Count 0x%x\r\n", vol, (uint32_t)lba_address, sector_count);
     uint64_t physical_lba = lba_address + vol->start_sector;
     return volmgr_disk_start_read(vol->disk, physical_lba, sector_count, buffer, extradata, callback);
 }
@@ -198,16 +199,24 @@ void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
     kprintf("volmgr: Disk signature: 0x%x\r\n", disk->optional_signature);
     
     for(int i=0; i<4; i++) {
-        uint8_t *part_entry = &boot_sector[0x1BE + (i * 16)];
-        uint8_t part_type = part_entry[4];
+        uint32_t base_offset = 0x1BE + (i * 16);
+        //uint8_t *part_entry = &boot_sector[0x1BE + (i * 16)];
+        uint8_t part_type = boot_sector[base_offset + 4];
         if(part_type == PARTTYPE_EMPTY)
             continue;
-        uint32_t start_sector = (uint32_t)part_entry[8];
-        uint32_t sector_count = (uint32_t)part_entry[12];
-        kprintf("volmgr: Found partition %d: Type 0x%x, Start Sector %d, Sector Count %d\r\n", i+1, part_type, start_sector, sector_count);
+        for(int j=0; j<16; j++) {
+            kprintf(" %x", (uint32_t)(boot_sector[base_offset + j] & 0xFF));
+        }
+        uint32_t start_sector = *(uint32_t *)&boot_sector[base_offset + 8];
+        uint32_t sector_count = *(uint32_t *)&boot_sector[base_offset + 12];
+        kprintf("\r\nvolmgr: Found partition %d: Type 0x%x, Start Sector %l, Sector Count %l\r\n", i+1, (uint32_t)part_type, start_sector, sector_count);
         struct VolMgr_Volume *vol = volmgr_add_volume(disk, start_sector, sector_count, part_type);
         if(!vol) {
             kputs("volmgr: Error adding volume\r\n");
+            continue;
+        }
+        if(sector_count==0) {
+            kputs("volmgr: Warning - volume has zero sectors, skipping mount\r\n");
             continue;
         }
         disk->partition_count++;
@@ -274,6 +283,9 @@ int8_t volmgr_disk_start_read(struct VolMgr_Disk *disk, uint64_t lba_address, ui
         return E_PARAMS;
     }
 
+    kprintf("volmgr: volmgr_disk_start_read: Disk 0x%x, LBA 0x%x, Sector Count 0x%x\r\n", disk, (uint32_t)lba_address, sector_count);
+    kprintf("volmgr: Disk type: 0x%x\r\n", disk->type);
+
     switch(disk->type) {
         case DISK_TYPE_ISA_IDE:
             uint8_t disk_num = volmgr_isa_disk_number(disk);
@@ -319,6 +331,24 @@ int8_t volmgr_disk_start_write(struct VolMgr_Disk *disk, uint64_t lba_address, u
             kprintf("ERROR: volmr_disk_write invalid disk type 0x%x for 0x%x\r\n", disk->type, disk);
             return E_INVALID_DEVICE;
     }
+}
+
+void volmgr_vol_ref(struct VolMgr_Volume *vol) {
+    acquire_spinlock(&volmgr_lock);
+    vol->refcount++;
+    release_spinlock(&volmgr_lock);
+}
+void volmgr_vol_unref(struct VolMgr_Volume *vol) {
+    acquire_spinlock(&volmgr_lock);
+    if(vol->refcount>0) {
+        vol->refcount--;
+    } else {
+        kprintf("volmgr: Freeing volume 0x%x\r\n", vol);
+        free(vol->fs_ptr);
+        volmgr_disk_unref(vol->disk);
+        free(vol);
+    }
+    release_spinlock(&volmgr_lock);
 }
 
 void volmgr_disk_ref(struct VolMgr_Disk *disk) {

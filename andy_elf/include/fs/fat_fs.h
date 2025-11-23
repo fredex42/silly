@@ -19,8 +19,8 @@ typedef struct fat_fs {
   void (*unmount)(struct fat_fs *fs_ptr);
   //void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
 
-  void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata);
-  void *did_mount_cb_extradata;
+  // void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata);
+  // void *did_mount_cb_extradata;
 
   struct generic_storage_driver *storage;
 

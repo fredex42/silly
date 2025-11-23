@@ -32,7 +32,7 @@ qemu-img create -f raw "$IMAGE" "$IMAGE_SIZE"
 
 echo "Creating partition table..."
 parted -s "$IMAGE" mklabel msdos
-parted -s "$IMAGE" mkpart primary ext2 1MiB 100%
+parted -s "$IMAGE" mkpart primary fat32 1MiB 100%
 parted -s "$IMAGE" set 1 boot on
 
 # ============================================================

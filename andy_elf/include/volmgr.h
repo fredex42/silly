@@ -24,6 +24,9 @@ uint32_t volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags
 uint8_t volmgr_get_disk_count();
 void *volmgr_disk_for_id(uint32_t id);
 
+void volmgr_vol_unref(struct VolMgr_Volume *vol);
+void volmgr_vol_ref(struct VolMgr_Volume *vol);
+
 //Called internally to add a new disk
 struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type);
 

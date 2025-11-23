@@ -12,12 +12,20 @@
 #include <panic.h>
 #include <volmgr.h>
 
+struct transient_mount_data {
+  struct VolMgr_Volume *volmgr_volume;
+  FATFS *new_fs;
+  void *extradata;
+  void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata);
+};
+
 /**
 Step four - now the cluster map is loaded, we should be ready to go
 */
 void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extradata)
 {
-  FATFS* new_fs = (FATFS *)extradata;
+  struct transient_mount_data *mount_data = (struct transient_mount_data *)extradata;
+  FATFS* new_fs = mount_data->new_fs;
   uint8_t *buffer = (uint8_t *)untyped_buffer;
 
   if(status!=0) {
@@ -25,7 +33,9 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
     if(buffer) free(buffer);
     //free(new_fs->mount_data_ptr);
     new_fs->mount_data_ptr = NULL;
-    new_fs->did_mount_cb(new_fs, status, new_fs->did_mount_cb_extradata);
+    mount_data->callback(new_fs, status, mount_data->extradata);
+    volmgr_vol_unref(mount_data->volmgr_volume);
+    free(mount_data);
     return;
   }
 
@@ -33,7 +43,8 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
     kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
     if(buffer) free(buffer);
     new_fs->mount_data_ptr = NULL;
-    new_fs->did_mount_cb(new_fs, E_VFAT_NOT_RECOGNIZED, new_fs->did_mount_cb_extradata);
+    mount_data->callback(new_fs, E_VFAT_NOT_RECOGNIZED, mount_data->extradata);
+    free(mount_data);
     return;
   }
   //see https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system, under "File allocation table"
@@ -50,41 +61,50 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
     kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
     if(buffer) free(buffer);
     new_fs->mount_data_ptr = NULL;
-    new_fs->did_mount_cb(new_fs, E_VFAT_NOT_RECOGNIZED, new_fs->did_mount_cb_extradata);
+    mount_data->callback(new_fs, E_VFAT_NOT_RECOGNIZED, mount_data->extradata);
   }
   size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
   size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
-  new_fs->did_mount_cb(new_fs, 0, new_fs->did_mount_cb_extradata);
+  mount_data->callback(new_fs, E_OK, mount_data->extradata);
+  free(mount_data);
 }
 
 /**
 Step three - once the basic parameters are loaded, we want to cache the cluster map in memory.
 */
-void vfat_load_cluster_map(FATFS* new_fs)
+void vfat_load_cluster_map(struct transient_mount_data *mount_data)
 {
+  FATFS* new_fs = mount_data->new_fs;
   size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
   size_t fat_region_length_bytes   = fat_region_length_sectors * 512; //assume sector size of 512 bytes
   kprintf("INFO Cluster map region starts at sector 0x%x and is 0x%x sectors long\r\n", new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors);
 
   new_fs->cluster_map = (VFatClusterMap *)malloc(sizeof(VFatClusterMap));
   if(!new_fs->cluster_map) {
-    new_fs->did_mount_cb(new_fs, E_NOMEM, NULL);
+    mount_data->callback(new_fs, E_NOMEM, mount_data->extradata);
+    volmgr_vol_unref(mount_data->volmgr_volume);
+    free(mount_data);
     return;
   }
 
   new_fs->cluster_map->buffer = (uint8_t*)malloc(fat_region_length_bytes);
-  kprintf("DEBUG allocated cluster map buffer at 0x%x, size 0x%x\r\n", new_fs->cluster_map->buffer, fat_region_length_bytes);
+
   if(!new_fs->cluster_map->buffer) {
+    kputs("ERROR Unable to allocate memory for cluster map buffer\r\n");
     free(new_fs->cluster_map);
-    new_fs->did_mount_cb(new_fs, E_NOMEM, NULL);
+    mount_data->callback(new_fs, E_NOMEM, mount_data->extradata);
+    volmgr_vol_unref(mount_data->volmgr_volume);
+    free(mount_data);
     return;
   }
 
+  kprintf("DEBUG allocated cluster map buffer at 0x%x, size 0x%x\r\n", new_fs->cluster_map->buffer, fat_region_length_bytes);
   new_fs->cluster_map->buffer_size = fat_region_length_bytes;
   new_fs->cluster_map->parent_fs = new_fs;
   new_fs->cluster_map->bitsize = 0; //we don't know the bit-size yet
 
-  ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)new_fs, &_vfat_loaded_cluster_map);
+  //ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)new_fs, &_vfat_loaded_cluster_map);
+  volmgr_vol_start_read(mount_data->volmgr_volume, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)mount_data, &_vfat_loaded_cluster_map);
 }
 
 /**
@@ -92,14 +112,17 @@ Step two - once bootsector is loaded, divvy it up into the right chunks for the 
 */
 void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
 {
-  FATFS* new_fs = (FATFS *)extradata;
+  struct transient_mount_data *mount_data = (struct transient_mount_data *)extradata;
+  FATFS* new_fs = mount_data->new_fs;
 
+  kprintf("DEBUG _vfat_loaded_bootsector called with status %d buffer 0x%x extradata 0x%x\r\n", status, buffer, extradata);
   if(status!=0) {
     kprintf("ERROR vfat_mount bootsector load failed\r\n");
     if(buffer) free(buffer);
-    //free(new_fs->mount_data_ptr);
     new_fs->mount_data_ptr = NULL;
-    new_fs->did_mount_cb(new_fs, status, new_fs->did_mount_cb_extradata);
+    mount_data->callback(new_fs, status, mount_data->extradata);
+    volmgr_vol_unref(mount_data->volmgr_volume);
+    free(mount_data);
     return;
   }
 
@@ -139,7 +162,7 @@ void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
   if(new_fs->f32bpb) {
     kprintf("INFO FS is a FAT32 type\r\n");
   }
-  vfat_load_cluster_map(new_fs);
+  vfat_load_cluster_map(mount_data);
 }
 
 /**
@@ -149,23 +172,35 @@ void vfat_mount(FATFS *new_fs, void *volmgr_volume, void *extradata, void (*call
 {
   void *bootsector = malloc(512);
   if(!bootsector) {
-    new_fs->did_mount_cb(new_fs, E_NOMEM, new_fs->did_mount_cb_extradata);
+    callback(new_fs, E_NOMEM, extradata);
     return;
   }
   if(!volmgr_volume) {
     kputs("ERROR vfat_mount called with NULL volmgr_volume\r\n");
     free(bootsector);
-    new_fs->did_mount_cb(new_fs, E_PARAMS, new_fs->did_mount_cb_extradata);
+    callback(new_fs, E_PARAMS, extradata);
     return;
   }
   if(!new_fs) {
     kputs("ERROR vfat_mount called with NULL new_fs\r\n");
     free(bootsector);
-    new_fs->did_mount_cb(new_fs, E_PARAMS, new_fs->did_mount_cb_extradata);
+    callback(new_fs, E_PARAMS, extradata);
     return;
   }
+  struct transient_mount_data *mount_data = (struct transient_mount_data *)malloc(sizeof(struct transient_mount_data));
+  if(!mount_data) {
+    kputs("ERROR vfat_mount unable to allocate mount_data\r\n");
+    free(bootsector);
+    callback(new_fs, E_NOMEM, extradata);
+    return;
+  }
+  volmgr_vol_ref((struct VolMgr_Volume *)volmgr_volume);
+  mount_data->volmgr_volume = volmgr_volume;
+  mount_data->new_fs = new_fs;
+  mount_data->extradata = extradata;
+  mount_data->callback = callback;
 
-  volmgr_vol_start_read((struct VolMgr_Volume *)volmgr_volume, 0, 1, bootsector, (void*)new_fs, &_vfat_loaded_bootsector);
+  volmgr_vol_start_read((struct VolMgr_Volume *)volmgr_volume, 0, 1, bootsector, (void*)mount_data, &_vfat_loaded_bootsector);
 }
 
 void vfat_unmount(struct fat_fs *fs_ptr)
@@ -187,8 +222,8 @@ FATFS* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struc
   memset(root_fs, 0, sizeof(FATFS));
   root_fs->mount = &vfat_mount;
   root_fs->unmount = &vfat_unmount;
-  root_fs->did_mount_cb = did_mount_cb;
-  root_fs->did_mount_cb_extradata = extradata;
+  // root_fs->did_mount_cb = did_mount_cb;
+  // root_fs->did_mount_cb_extradata = extradata;
   root_fs->drive_nr = drive_nr;
 
   return root_fs;
