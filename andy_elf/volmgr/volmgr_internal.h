@@ -15,7 +15,7 @@ void volmgr_disk_ref(struct VolMgr_Disk *disk);
 void volmgr_disk_unref(struct VolMgr_Disk *disk);
 uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk);
 uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk);
-void vol_mounted_cb(uint8_t status, void *fs_ptr, void *extradata);
+void vol_mounted_cb(FATFS *fs_ptr, uint8_t status, void *extradata);
 
 struct VolMgr_Disk {
     struct VolMgr_Disk *next;
@@ -29,6 +29,7 @@ struct VolMgr_Disk {
     uint32_t optional_signature;
     uint8_t partition_count;
     struct VolMgr_Volume *volumes;
+    char base_name[8];
 };
 
 struct VolMgr_Volume {
@@ -40,6 +41,7 @@ struct VolMgr_Volume {
     struct VolMgr_Disk *disk;
     enum PartitionType part_type;
     void *fs_ptr; //Pointer to filesystem instance - type is determined by PartitionType
+    char name[8];
 };
 
 struct VolMgr_GlobalState {

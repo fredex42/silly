@@ -87,7 +87,7 @@ void vfat_load_cluster_map(struct transient_mount_data *mount_data)
     return;
   }
 
-  new_fs->cluster_map->buffer = (uint8_t*)malloc(fat_region_length_bytes);
+  new_fs->cluster_map->buffer = (uint8_t*)malloc(fat_region_length_bytes / new_fs->bpb->fat_count);
 
   if(!new_fs->cluster_map->buffer) {
     kputs("ERROR Unable to allocate memory for cluster map buffer\r\n");
@@ -98,13 +98,13 @@ void vfat_load_cluster_map(struct transient_mount_data *mount_data)
     return;
   }
 
-  kprintf("DEBUG allocated cluster map buffer at 0x%x, size 0x%x\r\n", new_fs->cluster_map->buffer, fat_region_length_bytes);
-  new_fs->cluster_map->buffer_size = fat_region_length_bytes;
+  kprintf("DEBUG allocated cluster map buffer at 0x%x, size 0x%x\r\n", new_fs->cluster_map->buffer, fat_region_length_bytes / new_fs->bpb->fat_count);
+  new_fs->cluster_map->buffer_size = fat_region_length_bytes / new_fs->bpb->fat_count;
   new_fs->cluster_map->parent_fs = new_fs;
   new_fs->cluster_map->bitsize = 0; //we don't know the bit-size yet
 
   //ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)new_fs, &_vfat_loaded_cluster_map);
-  volmgr_vol_start_read(mount_data->volmgr_volume, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)mount_data, &_vfat_loaded_cluster_map);
+  volmgr_vol_start_read(mount_data->volmgr_volume, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors / new_fs->bpb->fat_count, new_fs->cluster_map->buffer, (void*)mount_data, &_vfat_loaded_cluster_map);
 }
 
 /**

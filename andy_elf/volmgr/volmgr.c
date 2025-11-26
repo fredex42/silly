@@ -27,7 +27,7 @@ void volmgr_init() {
 /*
 (Internal) - Called when the vfat_mount operation in volmgr_mount_volume completes, and relays information back to the original caller
 */
-void vol_mounted_cb(uint8_t status, void *fs_ptr, void *extradata) {
+void vol_mounted_cb(FATFS *fs_ptr, uint8_t status, void *extradata) {
     kputs("volmgr: Volume mounted callback invoked\r\n");
     if(extradata==NULL) {
         kputs("volmgr: vol_mounted_cb called with NULL extradata\r\n");
@@ -40,14 +40,14 @@ void vol_mounted_cb(uint8_t status, void *fs_ptr, void *extradata) {
         case E_OK:
             kprintf("volmgr: Volume 0x%x mounted successfully: FS ptr 0x%x\r\n", mount_data->volume, fs_ptr);
             mount_data->volume->fs_ptr = fs_ptr;
-            mount_data->callback(E_OK, fs_ptr, mount_data->extradata);
+            mount_data->callback(E_OK, fs_ptr, mount_data);
             free(mount_data);
             break;
         default:
             kprintf("volmgr: Volume 0x%x mount failed with status %d\r\n", mount_data->volume, status);
             if(fs_ptr) free(fs_ptr);
             void *extradata = mount_data->extradata;
-            mount_data->callback(status, NULL, mount_data->extradata);
+            mount_data->callback(status, NULL, mount_data);
             free(mount_data);
             break;
     }
@@ -108,16 +108,16 @@ void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*call
         case PARTTYPE_NTFS:
             //Mount NTFS filesystem
             kputs("volmgr: NTFS mounting not yet implemented\r\n");
-            callback(0xFF, NULL, mount_data);
+            callback(NULL, E_NOT_SUPPORTED,mount_data);
             break;
         default:
             kprintf("volmgr: Unsupported partition type 0x%x\r\n", vol->part_type);
-            callback(0xFF, NULL, mount_data);
+            callback(NULL, E_NOT_SUPPORTED, mount_data);
             break;
     }
 }
 
-struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type) {
+struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, uint32_t sector_count, uint8_t partition_type, uint8_t partition_number) {
     struct VolMgr_Disk *disk = (struct VolMgr_Disk *)disk_ptr;
     if(!disk) {
         kputs("volmgr: volmgr_add_volume called with NULL disk pointer\r\n");
@@ -137,6 +137,9 @@ struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, u
     new_volume->next = disk->volumes;
     new_volume->part_type = (enum PartitionType)partition_type;
     new_volume->fs_ptr = NULL; //To be initialised when the FS is mounted
+    strncpy(new_volume->name, disk->base_name, 8);
+    new_volume->name[3] = 'p';
+    new_volume->name[4] = '0' + partition_number;
     disk->volumes = new_volume;
     disk->volume_count++;
     release_spinlock(&volmgr_lock);
@@ -210,7 +213,7 @@ void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
         uint32_t start_sector = *(uint32_t *)&boot_sector[base_offset + 8];
         uint32_t sector_count = *(uint32_t *)&boot_sector[base_offset + 12];
         kprintf("\r\nvolmgr: Found partition %d: Type 0x%x, Start Sector %l, Sector Count %l\r\n", i+1, (uint32_t)part_type, start_sector, sector_count);
-        struct VolMgr_Volume *vol = volmgr_add_volume(disk, start_sector, sector_count, part_type);
+        struct VolMgr_Volume *vol = volmgr_add_volume(disk, start_sector, sector_count, part_type, i);
         if(!vol) {
             kputs("volmgr: Error adding volume\r\n");
             continue;
@@ -220,7 +223,7 @@ void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
             continue;
         }
         disk->partition_count++;
-        volmgr_mount_volume(vol, NULL, &vol_mounted_cb);
+        volmgr_mount_volume(vol, NULL, &mount_volume_completed);
     }
     free(buffer);
     volmgr_disk_unref(disk);
@@ -252,7 +255,10 @@ uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk) {
             kprintf("volmgr: Initialising ISA IDE disk at 0x%x\r\n", disk);
             void * buffer = malloc(512); //Temporary buffer for boot sector
             uint8_t disk_num = volmgr_isa_disk_number(disk);
-            kprintf("volmgr: ISA IDE disk number %d\r\n", disk_num);
+            strncpy(disk->base_name, "ide", 8);
+            disk->base_name[3] = '0' + disk_num;
+            disk->base_name[4] = '\0';
+            kprintf("volmgr: initialising disk %s\r\n", disk->base_name);
             volmgr_disk_ref(disk);  //Reference for the async read
             int8_t rc = ata_pio_start_read(disk_num, 0, 1, buffer, (void *)disk, &volmgr_boot_sector_loaded);
             if(rc != E_OK) {
@@ -362,10 +368,66 @@ void volmgr_disk_unref(struct VolMgr_Disk *disk) {
     if(disk->refcount>0) {
         disk->refcount--;
     } else {
-        //FIXME - check for dependent objects to free
+        for(struct VolMgr_Volume *vol = disk->volumes; vol!=NULL; vol=vol->next) {
+            kprintf("volmgr: Unref volume 0x%x from disk 0x%x\r\n", vol, disk);
+            volmgr_vol_unref(vol);
+        }
         free(disk);
     }
     release_spinlock(&volmgr_lock);
+}
+
+void *volmgr_get_volume_by_name(const char *name) {
+    char maybe_marker = name[4];
+    if(maybe_marker != 'p' && maybe_marker != 'P') {
+        //Not a valid volume name
+        return NULL;
+    }
+    char maybe_partnum_char = name[5];
+    if(maybe_partnum_char < '0' || maybe_partnum_char > '9') {
+        //Not a valid volume name
+        return NULL;
+    }
+
+    uint8_t partnum = (uint8_t)(maybe_partnum_char - '0');
+    char disk_name[8];
+    strncpy(disk_name, name, 4);
+    struct VolMgr_Disk *disk = (struct VolMgr_Disk *)volmgr_get_disk_by_name(disk_name);
+
+    if(!disk) {
+        kprintf("volmgr: unable to find disk with name %s\r\n", disk_name);
+        return NULL;
+    }
+
+    acquire_spinlock(&volmgr_lock);
+    if(partnum >= disk->partition_count) {
+        kprintf("volmgr: requested partition %d but disk only has %d partitions\r\n", partnum, disk->partition_count);
+        release_spinlock(&volmgr_lock);
+        return NULL;
+    }
+    for(struct VolMgr_Volume *vol = disk->volumes; vol!=NULL; vol=vol->next) {
+        if(strncmp(vol->name, name, 8)==0) {
+            release_spinlock(&volmgr_lock);
+            return (void *)vol;
+        }
+    }
+    release_spinlock(&volmgr_lock);
+    return NULL;
+}
+
+/**
+ * Returns a pointer to the disk structure with the given name, or NULL if not found
+ */
+void* volmgr_get_disk_by_name(const char *name) {
+    acquire_spinlock(&volmgr_lock);
+    for(struct VolMgr_Disk *disk = volmgr_state->disk_list; disk!=NULL; disk=disk->next) {
+        if(strncmp(disk->base_name, name, 8)==0) {
+            release_spinlock(&volmgr_lock);
+            return (void *)disk;
+        }
+    }
+    release_spinlock(&volmgr_lock);
+    return NULL;
 }
 
 uint32_t volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags) {

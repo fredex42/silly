@@ -39,4 +39,10 @@ void * volmgr_open_file(uint8_t vol_id, const char *filename);
  */
 int8_t volmgr_vol_start_read(struct VolMgr_Volume *vol, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
 int8_t volmgr_vol_start_write(struct VolMgr_Volume *vol, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
+
+/**
+ * Returns a pointer to the disk structure with the given name, or NULL if not found
+ */
+void* volmgr_get_disk_by_name(const char *name);
+
 #endif

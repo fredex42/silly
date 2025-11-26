@@ -55,7 +55,8 @@ sleep 1
 # ============================================================
 
 echo "Creating ext2 filesystem..."
-sudo mkfs.vfat -F32 "$PART_DEV"
+# -s4 => 4 sectors per cluster (2KB clusters on 512B sectors); typical for FAT16/FAT32 <= 128Mb
+sudo mkfs.vfat -F32 -s4 "$PART_DEV"
 
 sudo mkdir -p "$MOUNTDIR"
 sudo mount "$PART_DEV" "$MOUNTDIR"
