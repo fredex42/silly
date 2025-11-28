@@ -248,9 +248,9 @@ IPrimaryATA:             ;IRQ14 Primary IDE
   push ebp
   
   mov ebx, 0
-  push bx
+  push ebx
   call ata_service_interrupt  ;tell the ATA driver that this cane from bus 0 (primary)
-  add esp, 2
+  add esp, 4                  ;all pushes are 32 bits
 
   mov ebx, 14
   push ebx
@@ -278,9 +278,9 @@ ISecondaryATA:             ;IRQ15 Secondary IDE
   push ebp
 
   mov ebx, 1
-  push bx
+  push ebx
   call ata_service_interrupt ;tell the ATA driver that this cane from bus 1 (secondary)
-  add esp, 2
+  add esp, 4                  ;all pushes are 32 bits
 
   mov ebx, 15
   push ebx

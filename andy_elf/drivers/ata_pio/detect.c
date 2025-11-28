@@ -179,6 +179,8 @@ void initialise_ata_driver()
     master_driver_state->pending_disk_operation[i]->type = ATA_OP_NONE;
   }
 
+  kprintf("INFO Active bus mask is 0x%x\r\n", master_driver_state->active_bus_mask);
+
   if(master_driver_state->active_bus_mask & 0x1) {
     info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_MASTER);
     if(info!=NULL) {
@@ -186,34 +188,38 @@ void initialise_ata_driver()
       master_driver_state->disk_identity[0] = info;
       print_drive_info(0);
       //FIXME: parse disk identity data and drive capabilities to get LBA modes, etc.
-      volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_PRIMARY_BASE, DF_IDE_MASTER);
     }
-  //   info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_SLAVE);
-  //   if(info!=NULL) {
-  //     kprintf("\tFound ATA Primary Slave, data at 0x%x\r\n", info);
-  //     master_driver_state->disk_identity[1] = info;
-  //     print_drive_info(1);
-  //     volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_PRIMARY_BASE, DF_IDE_SLAVE);
-  //   }
-  // }
-  // if(master_driver_state->active_bus_mask & 0x2) {
-  //   info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_MASTER);
-  //   if(info!=NULL) {
-  //     kputs("\tFound ATA Secondary Master\r\n");
-  //     master_driver_state->disk_identity[2] = info;
-  //     print_drive_info(2);
-  //     volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_SECONDARY_BASE, DF_IDE_MASTER);
-  //   }
-  //   info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_SLAVE);
-  //   if(info!=NULL) {
-  //     kputs("\tFound ATA Secondary Slave\r\n");
-  //     master_driver_state->disk_identity[3] = info;
-  //     print_drive_info(3);
-  //   }
+    info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_SLAVE);
+    if(info!=NULL) {
+      kprintf("\tFound ATA Primary Slave, data at 0x%x\r\n", info);
+      master_driver_state->disk_identity[1] = info;
+      print_drive_info(1);
+    }
+  }
+  if(master_driver_state->active_bus_mask & 0x2) {
+    info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_MASTER);
+    if(info!=NULL) {
+      kputs("\tFound ATA Secondary Master\r\n");
+      master_driver_state->disk_identity[2] = info;
+      print_drive_info(2);
+    }
+    info = identify_drive(ATA_SECONDARY_BASE, ATA_SELECT_SLAVE);
+    if(info!=NULL) {
+      kputs("\tFound ATA Secondary Slave\r\n");
+      master_driver_state->disk_identity[3] = info;
+      print_drive_info(3);
+    }
   }
 
   if(master_driver_state->active_drive_count==0) {
     kputs("\tWARNING - did not detect any hard disks!\r\n");
+  }
+
+  if(master_driver_state->disk_identity[0]!=NULL) {
+    volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_PRIMARY_BASE, DF_IDE_MASTER);
+  }
+  if(master_driver_state->disk_identity[2]!=NULL) {
+    volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_SECONDARY_BASE, DF_IDE_MASTER);
   }
 
   kputs("ATA: Drive detection done.\r\n");
