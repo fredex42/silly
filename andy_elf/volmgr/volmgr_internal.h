@@ -16,6 +16,20 @@ void volmgr_disk_unref(struct VolMgr_Disk *disk);
 uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk);
 uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk);
 void vol_mounted_cb(FATFS *fs_ptr, uint8_t status, void *extradata);
+enum PendingOperationType {
+        VOLMGR_OP_NONE = 0,
+        VOLMGR_OP_READ,
+        VOLMGR_OP_WRITE
+};
+
+struct VolMgr_PendingOperation {
+    enum PendingOperationType type;
+    void *buffer;
+    void *extradata;
+    uint16_t sector_count;
+    uint64_t lba_address;
+    void (*callback)(uint8_t status, void *buffer, void *extradata);
+};
 
 struct VolMgr_Disk {
     struct VolMgr_Disk *next;
@@ -30,6 +44,9 @@ struct VolMgr_Disk {
     uint8_t partition_count;
     struct VolMgr_Volume *volumes;
     char base_name[8];
+    struct VolMgr_PendingOperation *pending_operations;
+    size_t pending_operation_count;
+    size_t pending_operation_hand;
 };
 
 struct VolMgr_Volume {

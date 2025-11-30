@@ -259,8 +259,7 @@ uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk) {
             disk->base_name[3] = '0' + disk_num;
             disk->base_name[4] = '\0';
             kprintf("volmgr: initialising disk %s\r\n", disk->base_name);
-            volmgr_disk_ref(disk);  //Reference for the async read
-            int8_t rc = ata_pio_start_read(disk_num, 0, 1, buffer, (void *)disk, &volmgr_boot_sector_loaded);
+            int8_t rc = volmgr_disk_start_read(disk, 0, 1, buffer, (void *)disk, &volmgr_boot_sector_loaded);
             if(rc != E_OK) {
                 kprintf("volmgr: Error starting boot sector read for disk 0x%x: %d\r\n", disk, rc);
                 free(buffer);
@@ -299,7 +298,17 @@ int8_t volmgr_disk_start_read(struct VolMgr_Disk *disk, uint64_t lba_address, ui
                 kprintf("ERROR: invalid flags for ISA disk 0x%x\r\n", disk);
                 return E_PARAMS;
             }
+            volmgr_disk_ref(disk);  //Reference for the async read
             int8_t rc = ata_pio_start_read(disk_num, lba_address, sector_count, buffer, extradata, callback);
+            if(rc==E_BUSY) {
+                //Enqueue the operation for when the disk is free
+                kputs("volmgr: Disk is busy, queuing read operation\r\n");
+                uint8_t rc2 = volmgr_disk_stash_pending_operation(disk, VOLMGR_OP_READ, buffer, extradata, sector_count, lba_address, callback);
+                if(rc2 != E_OK) {
+                    kprintf("volmgr: Failed to queue read operation for disk 0x%x\r\n", disk);
+                }
+                return rc2;
+            }
             return rc;
         case DISK_TYPE_PCI_IDE:
             kputs("ERROR: volmgr_disk_read not yet implemented for PCI IDE\r\n");
@@ -415,6 +424,78 @@ void *volmgr_get_volume_by_name(const char *name) {
     return NULL;
 }
 
+uint8_t volmgr_disk_stash_pending_operation(struct VolMgr_Disk *disk, enum PendingOperationType type, void *buffer, void *extradata, uint16_t sector_count, uint64_t lba_address, void (*callback)(uint8_t status, void *buffer, void *extradata)) {
+    acquire_spinlock(&volmgr_lock);
+    for(size_t i=0; i<disk->pending_operation_count; i++) {
+        if(disk->pending_operations[i].type == VOLMGR_OP_NONE) {
+            disk->pending_operations[i].type = type;
+            disk->pending_operations[i].buffer = buffer;
+            disk->pending_operations[i].extradata = extradata;
+            disk->pending_operations[i].sector_count = sector_count;
+            disk->pending_operations[i].lba_address = lba_address;
+            disk->pending_operations[i].callback = callback;
+            release_spinlock(&volmgr_lock);
+            return E_OK;
+        }
+    }
+    kputs("volmgr: Warning - no free pending operation slots available\r\n");
+    disk->pending_operation_count+=10;
+    disk->pending_operations = (struct VolMgr_PendingOperation *)realloc(disk->pending_operations, sizeof(struct VolMgr_PendingOperation) * disk->pending_operation_count);
+    if(disk->pending_operations == NULL) {
+        kputs("volmgr: Error reallocating pending operations array\r\n");
+        release_spinlock(&volmgr_lock);
+        return E_NOMEM;
+    }
+    memset(&disk->pending_operations[disk->pending_operation_count - 10], 0, sizeof(struct VolMgr_PendingOperation) * 10);
+    disk->pending_operations[disk->pending_operation_count - 10].type = type;
+    disk->pending_operations[disk->pending_operation_count - 10].buffer = buffer;
+    disk->pending_operations[disk->pending_operation_count - 10].extradata = extradata;
+    disk->pending_operations[disk->pending_operation_count - 10].sector_count = sector_count;
+    disk->pending_operations[disk->pending_operation_count - 10].lba_address = lba_address;
+    disk->pending_operations[disk->pending_operation_count - 10].callback = callback;
+    release_spinlock(&volmgr_lock);
+    return E_OK;
+}
+
+void volmgr_disk_process_pending_operation(struct VolMgr_Disk *disk) {
+    acquire_spinlock(&volmgr_lock);
+    for(size_t i=disk->pending_operation_hand; i<disk->pending_operation_count; i++) {
+        if(disk->pending_operations[i].type != VOLMGR_OP_NONE) {
+            struct VolMgr_PendingOperation *op = &disk->pending_operations[i];
+            //Found a pending operation
+            switch(op->type) {
+                case VOLMGR_OP_READ:
+                    kputs("volmgr: Processing pending read operation\r\n");
+                    release_spinlock(&volmgr_lock);
+                    uint8_t rc =  volmgr_disk_start_read(disk, op->lba_address, op->sector_count, op->buffer, op->extradata, op->callback);
+                    volmgr_disk_ref(disk);  //Reference for the async read
+                    if(rc == E_OK) {
+                        //Clear the pending operation slot
+                        op->type = VOLMGR_OP_NONE;
+                        op->buffer = NULL;
+                        op->extradata = NULL;
+                        op->sector_count = 0;
+                        op->lba_address = 0;
+                        op->callback = NULL;
+                    } else {
+                        kprintf("volmgr: Failed to start pending read operation, rc=0x%x\r\n", rc);
+                    }
+                    release_spinlock(&volmgr_lock);
+                    return; //Only process one at a time
+                case VOLMGR_OP_WRITE:
+                    kputs("volmgr: Processing pending write operation\r\n");
+                    //Similar to read, but for write
+                    //Not yet implemented
+                    release_spinlock(&volmgr_lock);
+                    return;
+                default:
+                    kputs("volmgr: Unknown pending operation type\r\n");
+                    break;
+            }
+        }
+    }
+    release_spinlock(&volmgr_lock);
+}
 /**
  * Returns a pointer to the disk structure with the given name, or NULL if not found
  */
@@ -441,6 +522,11 @@ uint32_t volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags
     new_disk->partition_count = 0;
     new_disk->optional_signature = 0;
     new_disk->volumes = NULL;
+    new_disk->pending_operation_count = 10;
+    new_disk->pending_operation_hand = 0;
+    new_disk->pending_operations = (struct VolMgr_PendingOperation *)malloc(sizeof(struct VolMgr_PendingOperation) * new_disk->pending_operation_count);
+    memset(new_disk->pending_operations, 0, sizeof(struct VolMgr_PendingOperation) * new_disk->pending_operation_count);
+
     acquire_spinlock(&volmgr_lock);
     new_disk->next = volmgr_state->disk_list;
     volmgr_state->disk_list = new_disk;
