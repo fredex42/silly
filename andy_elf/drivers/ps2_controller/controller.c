@@ -1,4 +1,5 @@
 #include <types.h>
+#include <sys/ioports.h>
 #include <sys/mmgr.h>
 #include "lowlevel.h"
 #include <acpi/fadt.h>

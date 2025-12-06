@@ -48,9 +48,6 @@ inkernel_memory_tests.o: inkernel_memory_tests.c include/sys/mmgr.h include/type
 memops.o: memops.asm
 	nasm -f elf32 memops.asm
 
-ioports.o: ioports.asm
-	nasm -f elf32 ioports.asm
-
 cpuid.o: cpuid.asm
 	nasm -f elf32 cpuid.asm
 
@@ -90,10 +87,10 @@ volmgr:
 	make -C volmgr
 
 test.elf: multiboot.o kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
-		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
+		c_exceptions.o panic.o inkernel_memory_tests.o memops.o \
 		cpuid.o config.o mmgr 8259pic acpi drivers scheduler fs process utils native_api volmgr
 	ld -b elf32-i386 multiboot.o kickoff.o exceptions.o basic_console.o config.o cfuncs.o stdio_funcs.o \
-		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o fs/fs.o \
+		c_exceptions.o panic.o inkernel_memory_tests.o memops.o cpuid.o fs/fs.o \
 		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
 		-Ldrivers/ps2_controller -lps2_controller \
