@@ -8,14 +8,6 @@ struct VolMgr_Volume;
 #include <volmgr.h>
 #include <fs.h>
 
-// Function prototypes for internal and external linkage
-void kputs(const char *fmt, ...);
-void kprintf(const char *fmt, ...);
-void volmgr_disk_ref(struct VolMgr_Disk *disk);
-void volmgr_disk_unref(struct VolMgr_Disk *disk);
-uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk);
-uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk);
-void vol_mounted_cb(FATFS *fs_ptr, uint8_t status, void *extradata);
 enum PendingOperationType {
         VOLMGR_OP_NONE = 0,
         VOLMGR_OP_READ,
@@ -81,5 +73,14 @@ struct volmgr_internal_mount_data {
 int8_t volmgr_disk_start_read(struct VolMgr_Disk *disk, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
 int8_t volmgr_disk_start_write(struct VolMgr_Disk *disk, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
 
+// Function prototypes for internal and external linkage
+void kputs(const char *fmt, ...);
+void kprintf(const char *fmt, ...);
+void volmgr_disk_ref(struct VolMgr_Disk *disk);
+void volmgr_disk_unref(struct VolMgr_Disk *disk);
+uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk);
+uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk);
+void vol_mounted_cb(FATFS *fs_ptr, uint8_t status, void *extradata);
+uint8_t volmgr_disk_stash_pending_operation(struct VolMgr_Disk *disk, enum PendingOperationType type, void *buffer, void *extradata, uint16_t sector_count, uint64_t lba_address, void (*callback)(uint8_t status, void *buffer, void *extradata));
 
 #endif

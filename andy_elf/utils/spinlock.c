@@ -4,7 +4,7 @@
 /** 
  * Atomically acquire the given lock if it's free, or loop until it is available
 */
-void acquire_spinlock(spinlock_t *lock) {
+void acquire_spinlock(volatile spinlock_t *lock) {
     #ifdef SPINLOCK_DEBUG
     kprintf("DEBUG acquiring spinlock 0x%x\r\n", lock);
     #endif
@@ -25,7 +25,7 @@ void acquire_spinlock(spinlock_t *lock) {
     );
 }
 
-void release_spinlock(spinlock_t *lock) {
+void release_spinlock(volatile spinlock_t *lock) {
     #ifdef SPINLOCK_DEBUG
     kprintf("DEBUG acquiring spinlock 0x%x\r\n", lock);
     #endif
