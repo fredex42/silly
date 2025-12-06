@@ -94,7 +94,7 @@ uint32_t init_multiboot_system(uint32_t magic, uint32_t addr) {
         tag = (struct MultibootTagHeader *)((uint32_t)tag + ((tag->size + 7) & ~7));
     }
 
-    validate_kernel_memory_allocations(0); // Check for any memory leaks at this point
+    //validate_kernel_memory_allocations(0); // Check for any memory leaks at this point
     //Once we have core services like the memory manager up and running, we can do more detailed multiboot2 processing
     multiboot2_late_init(magic, addr);
     return 1; // Successfully processed multiboot2 info

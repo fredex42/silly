@@ -17,10 +17,6 @@ also encapsulate the filesystem data
 typedef struct fat_fs {
   void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
   void (*unmount)(struct fat_fs *fs_ptr);
-  //void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
-
-  // void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata);
-  // void *did_mount_cb_extradata;
 
   struct generic_storage_driver *storage;
 
@@ -28,7 +24,6 @@ typedef struct fat_fs {
 
   uint8_t reserved[16];
   size_t open_file_count;
-  uint8_t drive_nr;
   BootSectorStart *start;
   BIOSParameterBlock *bpb;
   ExtendedBiosParameterBlock *ebpb;
@@ -41,6 +36,7 @@ typedef struct fat_fs {
 
   struct vfat_directory_cache *directory_cache;
 
+  struct VolMgr_Volume *volume;
 } FATFS;
 
 /* Public functions */

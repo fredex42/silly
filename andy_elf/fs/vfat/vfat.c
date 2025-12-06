@@ -114,8 +114,11 @@ void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
 {
   struct transient_mount_data *mount_data = (struct transient_mount_data *)extradata;
   FATFS* new_fs = mount_data->new_fs;
+  char vol_name[8];
 
-  kprintf("DEBUG _vfat_loaded_bootsector called with status %d buffer 0x%x extradata 0x%x\r\n", status, buffer, extradata);
+  volmgr_get_volume_name(new_fs->volume, vol_name, 8);
+
+  //kprintf("DEBUG _vfat_loaded_bootsector called with status %d buffer 0x%x extradata 0x%x\r\n", status, buffer, extradata);
   if(status!=0) {
     kprintf("ERROR vfat_mount bootsector load failed\r\n");
     if(buffer) free(buffer);
@@ -131,17 +134,17 @@ void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
   new_fs->bpb = (BIOSParameterBlock*) malloc(sizeof(BIOSParameterBlock));
   memcpy(new_fs->bpb, buffer + 0x0B, sizeof(BIOSParameterBlock));
   if(new_fs->bpb->total_logical_sectors==0 && new_fs->bpb->logical_sectors_per_fat==0) {
-    kprintf("INFO vfat filesystem on drive %d is probably FAT32\r\n", new_fs->drive_nr);
+    kprintf("INFO vfat filesystem on drive %s is probably FAT32\r\n", vol_name);
     new_fs->f32bpb = (FAT32ExtendedBiosParameterBlock *)malloc(sizeof(FAT32ExtendedBiosParameterBlock));
     memcpy(new_fs->f32bpb, buffer + 0x24, sizeof(FAT32ExtendedBiosParameterBlock));
   } else {
-    kprintf("INFO vfat filesystem on drive %d is probably not FAT32\r\n", new_fs->drive_nr);
+    kprintf("INFO vfat filesystem on drive %s is probably not FAT32\r\n", vol_name);
     new_fs->ebpb = (ExtendedBiosParameterBlock *) malloc(sizeof(ExtendedBiosParameterBlock));
     memcpy(new_fs->ebpb, buffer + 0x24, sizeof(ExtendedBiosParameterBlock));
   }
   free(buffer);
 
-  kprintf("INFO Loading vfat filesystem from drive %d\r\n", new_fs->drive_nr);
+  kprintf("INFO Loading vfat filesystem from drive %s\r\n", vol_name);
   /*
   uint16_t bytes_per_logical_sector;  //Bytes per logical sector; the most common value is 512.
                                       // logical sector size is often identical to a disk's physical sector size, but can be larger or smaller in some scenarios.
@@ -195,6 +198,7 @@ void vfat_mount(FATFS *new_fs, void *volmgr_volume, void *extradata, void (*call
     return;
   }
   volmgr_vol_ref((struct VolMgr_Volume *)volmgr_volume);
+  new_fs->volume = (struct VolMgr_Volume *)volmgr_volume;
   mount_data->volmgr_volume = volmgr_volume;
   mount_data->new_fs = new_fs;
   mount_data->extradata = extradata;
@@ -209,22 +213,22 @@ void vfat_unmount(struct fat_fs *fs_ptr)
 }
 
 /**
-Initialises a new FATFS structure, ready for mounting.  You should only initialise
-one per drive_nr.
-*/
-FATFS* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
-{
-  FATFS* root_fs = (FATFS* )malloc(sizeof(FATFS));
-  if(!root_fs) {
-    k_panic("Unable to allocate memory to mount root FS\r\n");
-  }
+// Initialises a new FATFS structure, ready for mounting.  You should only initialise
+// one per drive_nr.
+// */
+// FATFS* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
+// {
+//   FATFS* root_fs = (FATFS* )malloc(sizeof(FATFS));
+//   if(!root_fs) {
+//     k_panic("Unable to allocate memory to mount root FS\r\n");
+//   }
 
-  memset(root_fs, 0, sizeof(FATFS));
-  root_fs->mount = &vfat_mount;
-  root_fs->unmount = &vfat_unmount;
-  // root_fs->did_mount_cb = did_mount_cb;
-  // root_fs->did_mount_cb_extradata = extradata;
-  root_fs->drive_nr = drive_nr;
+//   memset(root_fs, 0, sizeof(FATFS));
+//   root_fs->mount = &vfat_mount;
+//   root_fs->unmount = &vfat_unmount;
+//   // root_fs->did_mount_cb = did_mount_cb;
+//   // root_fs->did_mount_cb_extradata = extradata;
+//   root_fs->drive_nr = drive_nr;
 
-  return root_fs;
-}
+//   return root_fs;
+// }

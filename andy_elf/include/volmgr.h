@@ -44,5 +44,5 @@ int8_t volmgr_vol_start_write(struct VolMgr_Volume *vol, uint64_t lba_address, u
  * Returns a pointer to the disk structure with the given name, or NULL if not found
  */
 void* volmgr_get_disk_by_name(const char *name);
-
+void volmgr_get_volume_name(struct VolMgr_Volume *vol, char *out_name, size_t max_len);
 #endif

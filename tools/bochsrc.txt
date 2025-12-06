@@ -5,16 +5,15 @@ display_library: sdl2
 memory: guest=32, host=32, block_size=128
 romimage: file="/usr/local/share/bochs/BIOS-bochs-latest", address=0x00000000, options=none, flash_data=none
 vgaromimage: file="/usr/local/share/bochs/VGABIOS-lgpl-latest.bin"
-boot: cdrom
+boot: disk
 floppy_bootsig_check: disabled=0
 floppya: type=1_44
 # no floppyb
 ata0: enabled=true, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
-#ata0-master: type=none, path=test.fat, mode=flat, cylinders=306, heads=4, spt=17, translation=none
-ata0-master: type=cdrom, path=silly.iso, mode=flat, status=inserted
+ata0-master: type=disk, path=disk.img, mode=flat, cylinders=306, heads=4, spt=17, translation=none
 ata0-slave: type=none
 ata1: enabled=true, ioaddr1=0x170, ioaddr2=0x370, irq=15
-ata1-master: type=none
+ata1-master: type=disk, path=disk2.img, mode=flat, cylinders=306, heads=4, spt=17, translation=none
 ata1-slave: type=none
 ata2: enabled=false
 ata3: enabled=false
@@ -39,7 +38,7 @@ clock: sync=none, time0=local, rtc_sync=0
 # no cmosimage
 log: -
 logprefix: %t%e%d
-debug: action=ignore, cpu0=report
+debug: action=ignore, harddrv=report,cpu0=report
 info: action=report
 error: action=report
 panic: action=ask

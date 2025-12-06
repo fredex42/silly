@@ -97,8 +97,8 @@ test.elf: multiboot.o kickoff.o exceptions.o basic_console.o cfuncs.o stdio_func
 		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
 		-Ldrivers/ps2_controller -lps2_controller \
-		-Ldrivers/early_serial -learly_serial -Lnative_api -lnative_api -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
-		-Ldrivers/cmos -lcmos -Ldrivers/pci -lpci -Ldrivers/kb -lkb -Lvolmgr -lvolmgr \
+		-Ldrivers/early_serial -learly_serial -Lnative_api -lnative_api -Lvolmgr -lvolmgr -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
+		-Ldrivers/cmos -lcmos -Ldrivers/pci -lpci -Ldrivers/kb -lkb \
 		-T linker.ld \
 		-static -z nodefaultlib -nostdlib -o test.elf
 

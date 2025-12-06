@@ -246,10 +246,6 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
   //each sector is 512 bytes (or 256 words)
   uint16_t *buf = (uint16_t *)op->buffer;
   
-  // Ultra-minimal debug output only every 500 sectors
-  if((op->sectors_read % 500) == 0) {
-    kprintf("s=%d ", (uint16_t)op->sectors_read);
-  }
   
   // Quick sanity check
   size_t expected_buffer_loc = (size_t)op->sectors_read * 256;

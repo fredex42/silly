@@ -7,7 +7,6 @@
 #include <errors.h>
 #include "volmgr_internal.h"
 #include "../drivers/ata_pio/ata_pio.h"
-// #include "../drivers/ata_pio/ata_readwrite.h"
 
 struct VolMgr_GlobalState *volmgr_state = NULL;
 volatile spinlock_t volmgr_lock = 0;
@@ -138,8 +137,8 @@ struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, u
     new_volume->part_type = (enum PartitionType)partition_type;
     new_volume->fs_ptr = NULL; //To be initialised when the FS is mounted
     strncpy(new_volume->name, disk->base_name, 8);
-    new_volume->name[3] = 'p';
-    new_volume->name[4] = '0' + partition_number;
+    new_volume->name[4] = 'p';
+    new_volume->name[5] = '0' + partition_number;
     disk->volumes = new_volume;
     disk->volume_count++;
     release_spinlock(&volmgr_lock);
@@ -537,4 +536,12 @@ uint32_t volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags
         kprintf("volmgr: Warning - disk initialisation returned error code 0x%x\r\n", rc);
     }
     return new_disk->disk_id;
+}
+
+void volmgr_get_volume_name(struct VolMgr_Volume *vol, char *out_name, size_t max_len) {
+    if(!vol || !out_name || max_len==0) {
+        return;
+    }
+    size_t len = max_len < 8 ? max_len : 8; //name is defined as an 8 byte buffer
+    strncpy(out_name, vol->name, len);
 }

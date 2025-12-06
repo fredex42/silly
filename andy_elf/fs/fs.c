@@ -100,12 +100,13 @@ void _fs_root_device_mounted(struct fat_fs *fs_ptr, uint8_t status, void *extrad
 
 void mount_root_device()
 {
-  kprintf("INFO Initialising FS of device 0\r\n");
-  FATFS* root_fs = fs_vfat_new(0, NULL, &_fs_root_device_mounted);
-  if(!root_fs) {
-    k_panic("Unable to intialise root filesystem descriptor\r\n");
-  }
-  device_fs_map[0] = root_fs;
-  kprintf("INFO Starting mount of device 0\r\n");
-  root_fs->mount(root_fs, 0, NULL, &_fs_root_device_mounted);
+  kputs("mount_root_device: pending deprecation");
+  // kprintf("INFO Initialising FS of device 0\r\n");
+  // FATFS* root_fs = fs_vfat_new(0, NULL, &_fs_root_device_mounted);
+  // if(!root_fs) {
+  //   k_panic("Unable to intialise root filesystem descriptor\r\n");
+  // }
+  // device_fs_map[0] = root_fs;
+  // kprintf("INFO Starting mount of device 0\r\n");
+  // root_fs->mount(root_fs, 0, NULL, &_fs_root_device_mounted);
 }
