@@ -5,13 +5,16 @@
 #include <fs/vfat.h>
 #include <fs/fat_fs.h>
 #include <errors.h>
+#include <kernel_config.h>
+#include <panic.h>
+#include <string.h>
 #include "volmgr_internal.h"
 #include "../drivers/ata_pio/ata_pio.h"
 
 struct VolMgr_GlobalState *volmgr_state = NULL;
 volatile spinlock_t volmgr_lock = 0;
 
-void volmgr_init() {
+void volmgr_init(struct KernelConfig *config) {
     kputs("volmgr: Initialising Volume Manager\r\n");
     volmgr_state = (struct VolMgr_GlobalState *)malloc(sizeof(struct VolMgr_GlobalState));
     kprintf("volmgr: Allocated global state at 0x%x\r\n", volmgr_state);
@@ -20,6 +23,18 @@ void volmgr_init() {
     volmgr_state->disk_list = NULL;
     volmgr_state->disk_count = 0;
     volmgr_state->internal_counter = 0;
+    if(config!=NULL) {
+        volmgr_state->root_device = config_root_device(config);
+    } else {
+        kputs("WARNING: volmgr was not supplied with kernel configuration\r\n");
+        volmgr_state->root_device = (char *)malloc(8);
+        if(!volmgr_state->root_device) {
+            k_panic("Not enough memory to store root device string");
+            return; //yeah this won't actually happen as 'k_panic' locks us
+        }
+        kputs("Falling back to $ide0p0");
+        strncpy(volmgr_state->root_device, "$ide0p0", 8);
+    }
     volmgr_lock = 0;
 }
 

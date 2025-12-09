@@ -92,6 +92,7 @@ uint32_t init_multiboot_system(uint32_t magic, uint32_t addr) {
         }
         // Move to the next tag, ensuring 8-byte alignment
         tag = (struct MultibootTagHeader *)((uint32_t)tag + ((tag->size + 7) & ~7));
+
     }
 
     //validate_kernel_memory_allocations(0); // Check for any memory leaks at this point
@@ -179,8 +180,8 @@ uint32_t multiboot2_late_init(uint32_t magic, uint32_t addr) {
         tag = (struct MultibootTagHeader *)((uint32_t)tag + ((tag->size + 7) & ~7));
     }
 
-    //Initialise the volume manager. TODO: pass in relevant commandline params (e.g., boot volume)
-    volmgr_init();
+    //Initialise the volume manager.
+    volmgr_init(kernel_config_ptr);
     return 1; // Successfully processed multiboot2 info
 }
 

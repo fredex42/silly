@@ -3,6 +3,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <stdio.h>
+#include <cfuncs.h>
 
 struct KernelConfig *new_kernel_config() {
     struct KernelConfig *cfg = (struct KernelConfig *)malloc(sizeof(struct KernelConfig));
@@ -111,7 +112,7 @@ void free_command_line(struct ParsedCommandLine *cmdline) {
  * Returns the value of the given command line parameter key, or NULL if not found.
  * The returned pointer is owned by the KernelConfig structure and should not be freed.
  */
-const char* get_commandline_param(struct KernelConfig* cfg, const char *key) {
+const char* config_commandline_param(struct KernelConfig* cfg, const char *key) {
     if(cfg==NULL || key==NULL || cfg->cmdline==NULL) return NULL;
 
     struct ParsedCommandLine *current = cfg->cmdline;
@@ -122,4 +123,57 @@ const char* get_commandline_param(struct KernelConfig* cfg, const char *key) {
         current = current->next;
     }
     return NULL;
+}
+
+/**
+ * Uses the kernel configuration to try to obtain a boot device string.
+ * The returned string is dynamically allocated and should be freed by the caller.
+ * 
+ * - If a root= param is supplied in the kernel commandline, this is used without validation
+ * - Otherwise, if a fixed-disk is determined by the bios, we use ide{n} where {n} is the bios boot disk.  This is not guaranteed to work
+ * - If a non-fixed disk is determined by the bios, we use fd{n} where {n} is the bios boot disk.  This is not guaranteed to work
+ * - If no boot device is specified, we default to ide0p0.
+ */
+const char* config_root_device(struct KernelConfig* cfg) {
+    if(cfg==NULL) return NULL;
+    char temp[32];
+    char *buf = (char *)malloc(32);
+    if(buf==NULL) {
+        kputs("WARNING Could not allocate memory for root device string\r\n");
+        return NULL;
+    }
+    memset(buf, 0, 32);
+
+    const char *boot_device = config_commandline_param(cfg, "root");
+    if(boot_device) {
+        strncpy(buf, boot_device, 31);
+        buf[31] = '\0'; // Ensure null-termination
+        kprintf("Using root device from command line: %s\r\n", buf);
+        return buf;
+    }
+
+    //If no root device is specified, use the BIOS boot device
+    if(cfg->bios_boot_device!=0) {
+        if(cfg->bios_boot_device & 0x80) {  //fixed disk
+            strncpy(buf, "$ide", 5);
+            longToString((int32_t)cfg->bios_boot_device & 0x7F, temp, 10);
+            strncpy(buf[4], temp, 3);
+            size_t newlen = strlen(buf);
+            buf[newlen] = 'p';
+            buf[newlen+1] = '\0';
+            longToString((int32_t)cfg->bios_partition, temp, 10);
+            strncpy(buf[newlen+1], temp, 3);
+            kprintf("Using root device %s (BIOS boot device %d, partition %d)\r\n", buf, cfg->bios_boot_device, cfg->bios_partition);
+        } else { //assume floppy
+            strncpy(buf, "$fd", 4);
+            longToString((int32_t)cfg->bios_boot_device & 0x7F, temp, 10);
+            strncpy(buf[3], temp, 3);
+            kprintf("Using root device %s (BIOS boot device %d)\r\n", buf, cfg->bios_boot_device);
+        }
+        return buf;
+    } else {
+        kprintf("Unable to determine root device, falling back to ide0p0\r\n");
+        strncpy(buf, "$ide0p0", 8); // Default to ide0p0 if no boot device is specified
+    }
+    return buf;
 }

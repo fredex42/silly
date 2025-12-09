@@ -57,6 +57,7 @@ struct VolMgr_GlobalState {
     struct VolMgr_Disk *disk_list;
     uint8_t disk_count;
     uint32_t internal_counter;
+    char *root_device; //Dynamically allocated string for root device
 };
 
 struct volmgr_internal_mount_data {

@@ -20,7 +20,8 @@ struct KernelConfig {
 struct KernelConfig *new_kernel_config();
 struct ParsedCommandLine *parse_command_line(const char *cmdline);
 void free_command_line(struct ParsedCommandLine *cmdline);
-const char* get_commandline_param(struct KernelConfig* cfg, const char *key);
+const char* config_commandline_param(struct KernelConfig* cfg, const char *key);
+const char* config_root_device(struct KernelConfig* cfg);
 
 /* Functions in multiboot.c */
 /**
