@@ -560,3 +560,40 @@ void volmgr_get_volume_name(struct VolMgr_Volume *vol, char *out_name, size_t ma
     size_t len = max_len < 8 ? max_len : 8; //name is defined as an 8 byte buffer
     strncpy(out_name, vol->name, len);
 }
+
+void *volmgr_resolve_path_to_fs(const char *path) {
+    struct VolMgr_Volume *vol = (struct VolMgr_Volume *)volmgr_resolve_path_to_volume(path);
+    if(!vol) {
+        kprintf("ERROR volmgr_resolve_path_to_fs: could not resolve path %s to volume\r\n", path);
+        return NULL;
+    }
+    if(!vol->fs_ptr) {
+        kprintf("ERROR volmgr_resolve_path_to_fs: volume 0x%x has no filesystem mounted\r\n", vol);
+        volmgr_vol_unref(vol);
+        return NULL;
+    }
+    void *ptr = vol->fs_ptr;
+    volmgr_vol_unref(vol);
+    return ptr;
+}
+
+/**
+ * Returns a pointer to the volume structure for the given path, or NULL if not found.
+ * The returned volume has its reference count incremented, and must be unref'd by the caller.
+ */
+void *volmgr_resolve_path_to_volume(const char *path) {
+    const char *path_start = strchr(path, ':');
+    if(!path_start) {
+        kprintf("ERROR volmgr_resolve_path_to_volume: path %s is not valid (no colon found)\r\n", path);
+        return NULL;
+    }
+    ++path_start;  //skip the colon
+
+    struct VolMgr_Volume *vol = (struct VolMgr_Volume *)volmgr_get_volume_by_name(path_start);
+    if(!vol) {
+        kprintf("ERROR volmgr_resolve_path_to_volume: could not resolve path %s to volume\r\n", path);
+        return NULL;
+    }
+    volmgr_vol_ref(vol);
+    return (void *)vol;
+}

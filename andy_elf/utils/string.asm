@@ -4,6 +4,7 @@ section .text
 
 global strncmp
 global strncpy
+global strchr
 
 ;Purpose - copies the ASCIIZ string `src` to the ASCIIZ string `dest`, up to a maximum
 ;of `len` characters. Ensures that `dest` is zero-terminated.
@@ -74,5 +75,29 @@ strncmp:
 
   _strncmp_done:
   ; OK, so if AL=0 we have identical, Otherwise it's a difference
+  pop ebp
+  ret
+
+;Purpose: finds the first occurrence of the character `ch` in the ASCIIZ string `str`. Returns a pointer to `ch` in the string.
+;It's assumed that both are in the data segment.
+strchr:
+  push ebp
+  mov ebp, esp
+  mov edi, dword [ss:ebp+8]  ;ARG 1 - `str`
+  mov al, byte [ss:ebp+12]   ;ARG 2 - `ch`
+  .strchr_next_char:
+  mov bl, byte [edi]
+  cmp bl, al
+  je .strchr_found
+  test bl, bl
+  jz .strchr_not_found
+  inc edi
+  jmp .strchr_next_char
+  .strchr_found:
+  mov eax, edi
+  pop ebp
+  ret
+  .strchr_not_found:
+  xor eax, eax
   pop ebp
   ret

@@ -13,7 +13,7 @@ struct find_8point3_file_transient_data {
   char filename[9];
   char xtn[4];
   void *extradata;
-  void (*callback)(uint8_t status, DirectoryEntry *dir_entry, char *extradata);
+  void (*callback)(uint8_t status, FATFS *fs_ptr, DirectoryEntry *dir_entry, char *extradata);
 };
 
 void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, void* extradata)
@@ -21,12 +21,13 @@ void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir
   struct find_8point3_file_transient_data* transient = (struct find_8point3_file_transient_data *)extradata;
   size_t i=0;
   char printable[64];
-
+  FATFS *fs_ptr = fp->parent_fs;
+  
   if(status!=0) {
     if(dir!=NULL) vfat_dir_close(dir);
     if(fp!=NULL) vfat_close(fp);
 
-    transient->callback(status, NULL, transient->extradata);
+    transient->callback(status, fs_ptr, NULL, transient->extradata);
     free(transient);
     return;
   }
@@ -48,7 +49,7 @@ void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir
       memcpy(copied_entry, entry, sizeof(DirectoryEntry));
       vfat_dir_close(dir);
       vfat_close(fp);
-      transient->callback(E_OK, copied_entry, extradata);
+      transient->callback(E_OK, fs_ptr, copied_entry, transient->extradata);
       free(transient);
       return;
     }
@@ -58,15 +59,15 @@ void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir
   //we did not find anything :(
   vfat_dir_close(dir);
   vfat_close(fp);
-  transient->callback(E_OK, NULL, extradata);
+  transient->callback(E_OK, fs_ptr, NULL, transient->extradata);
   free(transient);
 }
 
-void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, char *xtn, void *extradata, void (*callback)(uint8_t status, DirectoryEntry *dir_entry, char *extradata))
+void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, char *xtn, void *extradata, void (*callback)(uint8_t status, FATFS *fs_ptr, DirectoryEntry *dir_entry, char *extradata))
 {
   struct find_8point3_file_transient_data* transient = (struct find_8point3_file_transient_data *)malloc(sizeof(struct find_8point3_file_transient_data));
   if(!transient) {
-    callback(E_NOMEM, NULL, extradata);
+    callback(E_NOMEM, NULL, NULL, extradata);
     return;
   }
 

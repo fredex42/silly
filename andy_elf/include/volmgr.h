@@ -45,4 +45,7 @@ int8_t volmgr_vol_start_write(struct VolMgr_Volume *vol, uint64_t lba_address, u
  */
 void* volmgr_get_disk_by_name(const char *name);
 void volmgr_get_volume_name(struct VolMgr_Volume *vol, char *out_name, size_t max_len);
+
+void *volmgr_resolve_path_to_fs(const char *path);
+void *volmgr_resolve_path_to_volume(const char *path);
 #endif

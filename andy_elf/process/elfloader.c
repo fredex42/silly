@@ -338,9 +338,8 @@ void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read
 }
 
 
-void elf_load_and_parse(uint8_t device_index, DirectoryEntry *file, void *extradata, void (*callback)(uint8_t status, ElfParsedData* something, void *extradata))
+void elf_load_and_parse(FATFS* fs_ptr, DirectoryEntry *file, void *extradata, void (*callback)(uint8_t status, ElfParsedData* something, void *extradata))
 {
-  const FATFS* fs_ptr = fs_for_device(device_index);
   if(!fs_ptr) {
     callback(E_INVALID_DEVICE, NULL, extradata);
     return;
