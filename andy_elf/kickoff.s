@@ -313,6 +313,8 @@ call initialise_ata_driver
 extern init_native_api
 call init_native_api
 
+extern defer_launch_shell
+call defer_launch_shell
 ; extern mount_root_device
 ; call mount_root_device
 

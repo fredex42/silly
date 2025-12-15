@@ -80,8 +80,20 @@ void mount_volume_completed(uint8_t status, void *fs_ptr, void *extradata) {
     struct volmgr_internal_mount_data *mount_data = (struct volmgr_internal_mount_data *)extradata;
 
     if(status==E_OK) {
-        kprintf("volmgr: Volume mounted successfully: FS ptr 0x%x\r\n", fs_ptr);
+        kprintf("volmgr: Volume %s mounted successfully\r\n", mount_data->volume->name);
         mount_data->volume->fs_ptr = fs_ptr;
+
+        volmgr_internal_trigger_callbacks(CB_MOUNT, E_OK, mount_data->volume->name, mount_data->volume);
+
+        if(strncmp(mount_data->volume->name, volmgr_state->root_device, 8)==0) {
+            kputs("volmgr: This is the root device, mounting as root filesystem\r\n");
+            //This is the root device, set up any necessary root FS pointers here
+            volmgr_internal_register_alias("#root", mount_data->volume->name);
+            volmgr_internal_trigger_callbacks(CB_MOUNT, E_OK, "#root", mount_data->volume);
+        }
+    } else {
+        kprintf("volmgr: Volume %s mount failed with status %d\r\n", mount_data->volume->name, status);
+        volmgr_internal_trigger_callbacks(CB_MOUNT, status, mount_data->volume->name, mount_data->volume);
     }
 }
 
@@ -152,8 +164,8 @@ struct VolMgr_Volume* volmgr_add_volume(void *disk_ptr, uint32_t start_sector, u
     new_volume->part_type = (enum PartitionType)partition_type;
     new_volume->fs_ptr = NULL; //To be initialised when the FS is mounted
     strncpy(new_volume->name, disk->base_name, 8);
-    new_volume->name[4] = 'p';
-    new_volume->name[5] = '0' + partition_number;
+    new_volume->name[5] = 'p';
+    new_volume->name[6] = '0' + partition_number;
     disk->volumes = new_volume;
     disk->volume_count++;
     release_spinlock(&volmgr_lock);
@@ -269,9 +281,9 @@ uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk) {
             kprintf("volmgr: Initialising ISA IDE disk at 0x%x\r\n", disk);
             void * buffer = malloc(512); //Temporary buffer for boot sector
             uint8_t disk_num = volmgr_isa_disk_number(disk);
-            strncpy(disk->base_name, "ide", 8);
-            disk->base_name[3] = '0' + disk_num;
-            disk->base_name[4] = '\0';
+            strncpy(disk->base_name, "$ide", 8);
+            disk->base_name[4] = '0' + disk_num;
+            disk->base_name[5] = '\0';
             kprintf("volmgr: initialising disk %s\r\n", disk->base_name);
             int8_t rc = volmgr_disk_start_read(disk, 0, 1, buffer, (void *)disk, &volmgr_boot_sector_loaded);
             if(rc != E_OK) {
@@ -596,4 +608,150 @@ void *volmgr_resolve_path_to_volume(const char *path) {
     }
     volmgr_vol_ref(vol);
     return (void *)vol;
+}
+
+/**
+ * Registers the given alias name to point to the specified target device name.
+ */
+uint8_t volmgr_internal_register_alias(char *alias_name, char *target_name) {
+    if(alias_name==NULL || target_name==NULL) {
+        return E_PARAMS;
+    }
+    if(alias_name[0]!='#' || target_name[0]!='$') {
+        kputs("volmgr: Alias names must start with '#' and target names with '$'\r\n");
+        return E_PARAMS;
+    }
+
+    struct VolMgr_Alias *new_alias = (struct VolMgr_Alias *)malloc(sizeof(struct VolMgr_Alias));
+    if(!new_alias) {
+        kputs("volmgr: Unable to allocate memory for alias\r\n");
+        return E_NOMEM;
+    }
+    memset(new_alias, 0, sizeof(struct VolMgr_Alias));
+    strncpy(new_alias->alias_name, alias_name, 32);
+    strncpy(new_alias->device_name, target_name, 32);
+
+    acquire_spinlock(&volmgr_lock);
+    new_alias->next = volmgr_state->alias_table;
+    volmgr_state->alias_table = new_alias;
+    release_spinlock(&volmgr_lock);
+    return E_OK;
+}
+
+/**
+ * Internal function to unregister an alias by name.
+ * Returns E_OK if successful, E_PARAMS if the alias name was not valid or E_NOT_SUPPORTED if the alias was not found.
+ */
+uint8_t volmgr_internal_unregister_alias(char *alias_name) {
+    if(alias_name==NULL || alias_name[0]!='#') {
+        return E_PARAMS;
+    }
+    acquire_spinlock(&volmgr_lock);
+    struct VolMgr_Alias *prev = NULL;
+    for(struct VolMgr_Alias *alias = volmgr_state->alias_table; alias!=NULL; alias=alias->next) {
+        if(strncmp(alias->alias_name, alias_name, 32)==0) {
+            //Found the alias to remove
+            if(prev==NULL) {
+                volmgr_state->alias_table = alias->next;
+            } else {
+                prev->next = alias->next;
+            }
+            free(alias);
+            release_spinlock(&volmgr_lock);
+            return E_OK;
+        }
+        prev = alias;
+    }
+    release_spinlock(&volmgr_lock);
+    return E_NOT_SUPPORTED;
+}
+
+void volmgr_internal_trigger_callbacks(uint8_t event_flag, uint8_t status, const char *target, void *volume) {
+    struct VolMgr_CallbackList *call_list = (struct VolMgr_CallbackList *)malloc(sizeof(struct VolMgr_CallbackList) * 16);
+    size_t call_list_count = 0;
+    
+    acquire_spinlock(&volmgr_lock);
+    for(struct VolMgr_CallbackList *cb = volmgr_state->mount_callbacks; cb!=NULL; cb=cb->next) {
+        if(strncmp(cb->target, target, 32)==0 && (cb->flags & event_flag)) {
+            if(cb->callback==NULL) {
+                kputs("volmgr: Warning - callback entry has NULL function pointer, skipping\r\n");
+                continue;
+            }
+            //Copy the callback to a temporary list so we can invoke it outside the lock
+            memcpy(&call_list[call_list_count], cb, sizeof(struct VolMgr_CallbackList));
+            ++call_list_count;
+            if(call_list_count >= 16) {
+                kputs("volmgr: Warning - callback list overflow, some callbacks may not be invoked\r\n");
+                break;
+            }
+        }
+    }
+    release_spinlock(&volmgr_lock);
+
+    for(size_t i=0; i<call_list_count; i++) {
+        const struct VolMgr_CallbackList *cb = &call_list[i];
+        kprintf("volmgr: Invoking callback 0x%x for target %s (label: %s)\r\n", cb->callback, cb->target, cb->label);
+        cb->callback(status, target, volume, cb->extradata);
+        if(cb->flags & CB_ONESHOT) {
+            kputs("volmgr: Unregistering one-shot callback\r\n");
+            volmgr_unregister_callback(cb->target, cb->callback);
+        }
+    }
+
+    free(call_list);
+}
+
+/**
+ * Registers a callback to be invoked when a volume on the given target is mounted.
+ * Strings are copied into the callback structure so they do not need to remain valid after this call.
+ * The extradata pointer is NOT copied and must remain valid until the callback is invoked.
+ * The target may be a disk or a volume name.
+ * The optional label is for debugging purposes only.
+ */
+void volmgr_register_callback(char *target, char *opt_label, uint8_t flags, void *extradata, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata)) {
+    struct VolMgr_CallbackList *new_cb = (struct VolMgr_CallbackList *)malloc(sizeof(struct VolMgr_CallbackList));
+    if(!new_cb) {
+        kputs("volmgr: Unable to allocate memory for callback registration\r\n");
+        return;
+    }
+    memset(new_cb, 0, sizeof(struct VolMgr_CallbackList));
+    strncpy(new_cb->target, target, 32);
+    if(opt_label) {
+        strncpy(new_cb->label, opt_label, 12);
+    } else {
+        memset(new_cb->label, 0, 12);
+    }
+    new_cb->flags = flags;
+    new_cb->callback = callback;
+    new_cb->extradata = extradata;
+
+    acquire_spinlock(&volmgr_lock);
+    new_cb->next = volmgr_state->mount_callbacks;
+    volmgr_state->mount_callbacks = new_cb;
+    release_spinlock(&volmgr_lock);
+}
+
+/**
+ * Removes the given callback for the specified target.
+ * Returns E_OK if successful, or E_NOT_SUPPORTED if the callback was not found.
+ */
+uint8_t volmgr_unregister_callback(char *target, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata)) {
+    acquire_spinlock(&volmgr_lock);
+    struct VolMgr_CallbackList *prev = NULL;
+    for(struct VolMgr_CallbackList *cb = volmgr_state->mount_callbacks; cb!=NULL; cb=cb->next) {
+        if(strncmp(cb->target, target, 32)==0 && cb->callback == callback) {
+            //Found the callback to remove
+            if(prev==NULL) {
+                volmgr_state->mount_callbacks = cb->next;
+            } else {
+                prev->next = cb->next;
+            }
+            free(cb);
+            release_spinlock(&volmgr_lock);
+            return E_OK;
+        }
+        prev = cb;
+    }
+    release_spinlock(&volmgr_lock);
+    return E_NOT_SUPPORTED;
 }

@@ -17,6 +17,13 @@ enum disk_type {
 #define DF_IDE_MASTER   1<<30
 #define DF_IDE_SLAVE    1<<31
 
+//Callback flags
+#define CB_ONESHOT 0x80
+#define CB_MOUNT 0x01
+#define CB_UNMOUNT 0x02
+#define CB_DISK_ADDED 0x04
+#define CB_DISK_REMOVED 0x08
+
 void volmgr_init();
 //When a disk is added, the partitions are automatically enumerated and added as volumes
 //This is called by hardware init/scan code including PCI, ACPI and ISA bus code
@@ -48,4 +55,30 @@ void volmgr_get_volume_name(struct VolMgr_Volume *vol, char *out_name, size_t ma
 
 void *volmgr_resolve_path_to_fs(const char *path);
 void *volmgr_resolve_path_to_volume(const char *path);
+
+/**
+ * Registers a callback to be invoked when a volume on the given target is mounted.
+ * Strings are copied into the callback structure so they do not need to remain valid after this call.
+ * The extradata pointer is NOT copied and must remain valid until the callback is invoked.
+ * The target may be a disk or a volume name.
+ * The optional label is for debugging purposes only.
+ */
+void volmgr_register_callback(char *target, char *opt_label, uint8_t flags, void *extradata, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata));
+
+/**
+ * Removes the given callback for the specified target.
+ * Returns E_OK if successful, or E_NOT_SUPPORTED if the callback was not found.
+ */
+uint8_t volmgr_unregister_callback(char *target, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata));
+
+/**
+ * Registers the given alias name to point to the specified target device name.
+ */
+uint8_t volmgr_internal_register_alias(char *alias_name, char *target_name);
+
+/**
+ * Internal function to unregister an alias by name.
+ * Returns E_OK if successful, E_PARAMS if the alias name was not valid or E_NOT_SUPPORTED if the alias was not found.
+ */
+uint8_t volmgr_internal_unregister_alias(char *alias_name);
 #endif

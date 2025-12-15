@@ -18,7 +18,7 @@ the interrupt handler so care should be taken not to block un-necessarily
 void ata_service_interrupt(uint8_t bus_nr)
 {
   SchedulerTask *t;
-  //kprintf("ata_service_interrupt master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, bus_nr);
+  //kprintf("ata_service_interrupt master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
   
   // Check if master_driver_state is accessible
   if(!master_driver_state) {
@@ -32,7 +32,8 @@ void ata_service_interrupt(uint8_t bus_nr)
     return;
   }
   
-  //kprintf("About to access pending_disk_operation[%d]\r\n", bus_nr);
+  //kprintf("About to access pending_disk_operation[%d]\r\n", (uint16_t)bus_nr);
+  kprintf("master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
   ATAPendingOperation *op = master_driver_state->pending_disk_operation[bus_nr];
   
   if(op==NULL || op->type==ATA_OP_NONE) {
@@ -42,8 +43,10 @@ void ata_service_interrupt(uint8_t bus_nr)
 
   switch(op->type) {
     case ATA_OP_READ:
+        kputs("Setting up new task\r\n");
         //set up a lower-half to complete the read operation
         t = new_scheduler_task(TASK_ASAP, &ata_complete_read_lowerhalf, op);
+        //kprintf("Created new task at 0x%x\r\n", t);
         if(t==NULL) {
           k_panic("ERROR Could not create schedule task to implement lower-half of ata interrupt\r\n");
           return;

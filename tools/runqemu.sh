@@ -9,4 +9,4 @@ if [ ! -f disk.img ]; then
     exit 1
 fi
 
-qemu-system-i386 -hda disk.img -hdc disk2.img -m 64 -cpu athlon -serial stdio
+qemu-system-i386 -hda disk.img -m 64 -cpu athlon -serial stdio

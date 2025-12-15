@@ -158,11 +158,11 @@ const char* config_root_device(struct KernelConfig* cfg) {
             strncpy(buf, "$ide", 5);
             longToString((int32_t)cfg->bios_boot_device & 0x7F, temp, 10);
             strncpy(&buf[4], temp, 3);
-            size_t newlen = strlen(buf);
-            buf[newlen] = 'p';
-            buf[newlen+1] = '\0';
+            buf[5] = 'p';
+            buf[6] = '\0';
             longToString((int32_t)cfg->bios_partition, temp, 10);
-            strncpy(&buf[newlen+1], temp, 3);
+            strncpy(&buf[6], temp, 3);
+            buf[7] = '\0';
             kprintf("Using root device %s (BIOS boot device %d, partition %d)\r\n", buf, cfg->bios_boot_device, cfg->bios_partition);
         } else { //assume floppy
             strncpy(buf, "$fd", 4);

@@ -69,6 +69,9 @@ strncmp:
   test al, al
   jnz _strncmp_done ;we found a difference
 
+  cmp byte [edi], 0
+  jz _strncmp_done ;we reached the end of the strings (both are identical so both are null)
+
   inc edi
   dec ecx
   jmp _strncmp_next_byte

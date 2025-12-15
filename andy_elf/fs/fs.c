@@ -9,6 +9,7 @@
 #include "../drivers/ata_pio/ata_pio.h"
 #include <fs.h>
 #include <errors.h>
+#include <volmgr.h>
 #include "../mmgr/process.h"
 #include "../process/elfloader.h"
 
@@ -74,11 +75,18 @@ void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extrad
   elf_load_and_parse(0, dir_entry, NULL, &_fs_shell_app_loaded);
 }
 
-void _fs_root_device_mounted(struct fat_fs *fs_ptr, uint8_t status, void *extradata)
+void _fs_root_device_mounted(uint8_t status, const char *target, void *volume, void *extradata)
 {
   kprintf("INFO Root FS mount completed with status %d\r\n", status);
 
-  vfat_find_8point3_in_root_dir(fs_ptr, "SHELL", "APP", NULL, &_fs_shell_app_found);
+  if(volume==NULL) {
+    kprintf("ERROR Root volume pointer was NULL\r\n");
+    return;
+  }
+
+  kprintf("INFO Starting search for SHELL.APP in %s\r\n", target);
+
+  //vfat_find_8point3_in_root_dir(fs_ptr, "SHELL", "APP", NULL, &_fs_shell_app_found);
 }
 
 void mount_root_device()
@@ -178,4 +186,8 @@ void spawn_process(const char *path, void *extradata, void (*callback)(uint8_t s
   t->callback = callback;
 
   fs_resolve_path(path, (void *)t, &_fs_spawn_process_file_found);
+}
+
+void defer_launch_shell() {
+  volmgr_register_callback("#root", "launch_shell", CB_MOUNT | CB_ONESHOT, NULL, &_fs_root_device_mounted);
 }

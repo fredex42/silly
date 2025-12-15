@@ -53,11 +53,32 @@ struct VolMgr_Volume {
     char name[8];
 };
 
+//TODO: implement alias table as a hash table for performance
+struct VolMgr_Alias {
+    struct VolMgr_Alias *next;
+    char alias_name[32];
+    char device_name[32];
+    struct VolMgr_Volume *volume;
+};
+
+typedef (VolMgr_Public_CallbackFunc)(uint8_t status, const char *target, void *volume, void *extradata);
+
+struct VolMgr_CallbackList {
+    struct VolMgr_CallbackList *next;
+    char target[32]; //Target device or alias name
+    char label[12]; //Optional label for debugging
+    uint8_t flags;  //CB_XXX flags
+    VolMgr_Public_CallbackFunc *callback; 
+    void *extradata;
+};
+
 struct VolMgr_GlobalState {
     struct VolMgr_Disk *disk_list;
     uint8_t disk_count;
     uint32_t internal_counter;
     char *root_device; //Dynamically allocated string for root device
+    struct VolMgr_Alias *alias_table;
+    struct VolMgr_CallbackList *mount_callbacks;
 };
 
 struct volmgr_internal_mount_data {
@@ -83,5 +104,6 @@ uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk);
 uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk);
 void vol_mounted_cb(FATFS *fs_ptr, uint8_t status, void *extradata);
 uint8_t volmgr_disk_stash_pending_operation(struct VolMgr_Disk *disk, enum PendingOperationType type, void *buffer, void *extradata, uint16_t sector_count, uint64_t lba_address, void (*callback)(uint8_t status, void *buffer, void *extradata));
+void volmgr_internal_trigger_callbacks(uint8_t event_flag, uint8_t status, const char *target, void *volume);
 
 #endif
