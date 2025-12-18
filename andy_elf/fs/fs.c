@@ -75,6 +75,23 @@ void _fs_shell_app_found(uint8_t status, DirectoryEntry *dir_entry, char *extrad
   elf_load_and_parse(0, dir_entry, NULL, &_fs_shell_app_loaded);
 }
 
+/**
+ * This callback is invoked when the shell process has either been set 
+ * up and is ready to run, or has failed to be created for some reason.
+ * `status` is a code from errors.h and will be E_OK on success.
+ */
+void _fs_shell_spawn_cb(uint8_t status, pid_t pid, void *extradata) {
+  if(status!=E_OK) {
+    kprintf("ERROR Could not spawn shell process: error %d\r\n", (uint16_t)status);
+    return;
+  }
+  kprintf("Shell process spawned with PID %d\r\n", pid);
+}
+
+/**
+ * This callback is invoked when the root device has been mounted, via a call
+ * in `defer_launch_shell`.
+ */
 void _fs_root_device_mounted(uint8_t status, const char *target, void *volume, void *extradata)
 {
   kprintf("INFO Root FS mount completed with status %d\r\n", status);
@@ -86,20 +103,7 @@ void _fs_root_device_mounted(uint8_t status, const char *target, void *volume, v
 
   kprintf("INFO Starting search for SHELL.APP in %s\r\n", target);
 
-  //vfat_find_8point3_in_root_dir(fs_ptr, "SHELL", "APP", NULL, &_fs_shell_app_found);
-}
-
-void mount_root_device()
-{
-  kputs("mount_root_device: pending deprecation");
-  // kprintf("INFO Initialising FS of device 0\r\n");
-  // FATFS* root_fs = fs_vfat_new(0, NULL, &_fs_root_device_mounted);
-  // if(!root_fs) {
-  //   k_panic("Unable to intialise root filesystem descriptor\r\n");
-  // }
-  // device_fs_map[0] = root_fs;
-  // kprintf("INFO Starting mount of device 0\r\n");
-  // root_fs->mount(root_fs, 0, NULL, &_fs_root_device_mounted);
+  spawn_process("#root:/SHELL.APP", NULL, &_fs_shell_spawn_cb);
 }
 
 /*
@@ -128,14 +132,17 @@ uint8_t fs_resolve_path(const char *path, void *extradata, void (*callback)(uint
   }
   ++path_start;  //skip the colon
 
+  if(path_start[0]=='/') {
+    ++path_start;  //skip the slash
+  }
+
   FATFS *fs = volmgr_resolve_path_to_fs(path);
   if(!fs) {
     kprintf("ERROR fs_resolve_path: could not resolve path %s to fs\r\n", path);
     return E_INVALID_FILE;
   }
 
-  const char *xtn = strchr(path_start, '.');
-  vfat_find_8point3_in_root_dir(fs, (char *)path_start, xtn ? (char *)(xtn + 1) : "", extradata, callback);
+  vfat_find_8point3_in_root_dir(fs, (char *)path_start, extradata, callback);
   return E_OK;
 }
 
@@ -146,6 +153,10 @@ void _fs_spawn_process_elf_loaded(uint8_t status, struct elf_parsed_data* parsed
   if(status!=E_OK) {
     kprintf("ERROR Could not load process ELF: error %d\r\n", (uint16_t)status);
     t->callback(status, -1, t->extradata);
+    free(t);
+    return;
+  } else {
+    t->callback(E_OK, internal_create_process(parsed_app), t->extradata);
     free(t);
     return;
   }

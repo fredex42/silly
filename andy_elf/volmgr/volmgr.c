@@ -182,7 +182,7 @@ int8_t volmgr_vol_start_read(struct VolMgr_Volume *vol, uint64_t lba_address, ui
     if(!vol || !buffer || sector_count==0) {
         return E_PARAMS;
     }
-    kprintf("volmgr: volmgr_vol_start_read: Volume 0x%x, LBA 0x%x, Sector Count 0x%x\r\n", vol, (uint32_t)lba_address, sector_count);
+    //kprintf("volmgr: volmgr_vol_start_read: Volume 0x%x, LBA 0x%x, Sector Count 0x%x\r\n", vol, (uint32_t)lba_address, sector_count);
     uint64_t physical_lba = lba_address + vol->start_sector;
     return volmgr_disk_start_read(vol->disk, physical_lba, sector_count, buffer, extradata, callback);
 }
@@ -314,8 +314,8 @@ int8_t volmgr_disk_start_read(struct VolMgr_Disk *disk, uint64_t lba_address, ui
         return E_PARAMS;
     }
 
-    kprintf("volmgr: volmgr_disk_start_read: Disk 0x%x, LBA 0x%x, Sector Count 0x%x\r\n", disk, (uint32_t)lba_address, sector_count);
-    kprintf("volmgr: Disk type: 0x%x\r\n", disk->type);
+    //kprintf("volmgr: volmgr_disk_start_read: Disk 0x%x, LBA 0x%x, Sector Count 0x%x\r\n", disk, (uint32_t)lba_address, sector_count);
+    //kprintf("volmgr: Disk type: 0x%x\r\n", disk->type);
 
     switch(disk->type) {
         case DISK_TYPE_ISA_IDE:
@@ -413,12 +413,12 @@ void volmgr_disk_unref(struct VolMgr_Disk *disk) {
 }
 
 void *volmgr_get_volume_by_name(const char *name) {
-    char maybe_marker = name[4];
+    char maybe_marker = name[5];
     if(maybe_marker != 'p' && maybe_marker != 'P') {
         //Not a valid volume name
         return NULL;
     }
-    char maybe_partnum_char = name[5];
+    char maybe_partnum_char = name[6];
     if(maybe_partnum_char < '0' || maybe_partnum_char > '9') {
         //Not a valid volume name
         return NULL;
@@ -426,7 +426,7 @@ void *volmgr_get_volume_by_name(const char *name) {
 
     uint8_t partnum = (uint8_t)(maybe_partnum_char - '0');
     char disk_name[8];
-    strncpy(disk_name, name, 4);
+    strncpy(disk_name, name, 6);
     struct VolMgr_Disk *disk = (struct VolMgr_Disk *)volmgr_get_disk_by_name(disk_name);
 
     if(!disk) {
@@ -526,8 +526,10 @@ void volmgr_disk_process_pending_operation(struct VolMgr_Disk *disk) {
  * Returns a pointer to the disk structure with the given name, or NULL if not found
  */
 void* volmgr_get_disk_by_name(const char *name) {
+    kprintf("debug: volmgr_get_disk_by_name: searching for %s\r\n", name);
     acquire_spinlock(&volmgr_lock);
     for(struct VolMgr_Disk *disk = volmgr_state->disk_list; disk!=NULL; disk=disk->next) {
+        kprintf("debug: checking disk %s\r\n", disk->base_name);
         if(strncmp(disk->base_name, name, 8)==0) {
             release_spinlock(&volmgr_lock);
             return (void *)disk;
@@ -601,7 +603,27 @@ void *volmgr_resolve_path_to_volume(const char *path) {
     }
     ++path_start;  //skip the colon
 
-    struct VolMgr_Volume *vol = (struct VolMgr_Volume *)volmgr_get_volume_by_name(path_start);
+    size_t dev_len = (size_t)path_start - (size_t)path;
+    char device_name[32];
+    strncpy(device_name, path, dev_len > 32 ? 32 : dev_len);
+    
+    if(path[0] == '#') {
+        kprintf("DEBUG: checking alias %s\r\n", device_name);
+        //Check for alias
+        acquire_spinlock(&volmgr_lock);
+        struct VolMgr_Alias *alias = volmgr_state->alias_table;
+        while(alias!=NULL) {
+            if(strncmp(alias->alias_name, device_name, 32)==0) {
+                kprintf("DEBUG: resolved alias %s to device %s\r\n", device_name, alias->device_name);
+                strncpy(device_name, alias->device_name, 32);
+                break;
+            }
+            alias = alias->next;
+        }
+        release_spinlock(&volmgr_lock);
+    }
+
+    struct VolMgr_Volume *vol = (struct VolMgr_Volume *)volmgr_get_volume_by_name(device_name);
     if(!vol) {
         kprintf("ERROR volmgr_resolve_path_to_volume: could not resolve path %s to volume\r\n", path);
         return NULL;

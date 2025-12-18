@@ -33,7 +33,7 @@ void ata_service_interrupt(uint8_t bus_nr)
   }
   
   //kprintf("About to access pending_disk_operation[%d]\r\n", (uint16_t)bus_nr);
-  kprintf("master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
+  //kprintf("master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
   ATAPendingOperation *op = master_driver_state->pending_disk_operation[bus_nr];
   
   if(op==NULL || op->type==ATA_OP_NONE) {
@@ -43,7 +43,7 @@ void ata_service_interrupt(uint8_t bus_nr)
 
   switch(op->type) {
     case ATA_OP_READ:
-        kputs("Setting up new task\r\n");
+        //kputs("Setting up new task\r\n");
         //set up a lower-half to complete the read operation
         t = new_scheduler_task(TASK_ASAP, &ata_complete_read_lowerhalf, op);
         //kprintf("Created new task at 0x%x\r\n", t);
