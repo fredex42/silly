@@ -12,7 +12,8 @@ global switch_paging_directory_if_required
 ;this module contains basic memset, memcpy implementations.
 
 mb:
-  mfence
+  ;mfence is only for SSE2-capable CPUs, so we use a more basic method
+  lock add dword [esp], 0
   ret
 
 ;sets the given memory buffer to the provided byte value
