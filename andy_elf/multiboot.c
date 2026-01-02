@@ -8,6 +8,9 @@
 //defined in acpi/rsdp.c
 void load_acpi_data();
 
+// Maintain a global pointer to the kernel configuration structure.  This is treated as immutable,
+// except for in this module, during initialisation
+// External modules should not use the pointer directly; instead they should use the get_kernel_config() function.
 struct KernelConfig *kernel_config_ptr;
 
 // Multiboot structures are defined inline and placed in their own
@@ -152,6 +155,7 @@ uint32_t multiboot2_late_init(uint32_t magic, uint32_t addr) {
                 break;
             case MB_TAG_RSDP_NEW:
                 kputs("ACPI RSDP 2.0 found\r\n");
+                //TODO - should pass the RSDP address to the ACPI loader so it does not need to traverse for it
                 load_acpi_data();
                 break;
             case MB_TAG_RSDP_OLD:

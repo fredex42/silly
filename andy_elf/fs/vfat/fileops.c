@@ -165,8 +165,6 @@ void _vfat_next_block_read(uint8_t status, void *buffer, void *extradata)
     } else {
       fp->byte_offset_in_sector = 0;
       uint64_t next_sector_number = (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster + fp->fs_sector_offset;
-      //FIXME need to check return value for E_BUSY and reschedule if so
-      //ata_pio_start_read(fp->parent_fs->drive_nr, next_sector_number, 1, buffer, (void *)t, &_vfat_next_block_read);
       int8_t rc = volmgr_vol_start_read(fp->parent_fs->volume, next_sector_number, 1, buffer, (void *)t, &_vfat_next_block_read);
       if(rc!=E_OK) {
         kprintf("ERROR volmgr_vol_start_read returned error %d\r\n", rc);
@@ -208,7 +206,6 @@ void vfat_read_async(VFatOpenFile *fp, void* buf, size_t length, void* extradata
 
   uint64_t initial_sector = (fp->current_cluster_number * fp->parent_fs->bpb->logical_sectors_per_cluster) + fp->sector_offset_in_cluster + fp->fs_sector_offset;
 
-  //ata_pio_start_read(fp->parent_fs->drive_nr, initial_sector, 1, sector_buffer, (void*) t, &_vfat_next_block_read);
   int8_t rc = volmgr_vol_start_read(fp->parent_fs->volume, initial_sector, 1, sector_buffer, (void*) t, &_vfat_next_block_read);
   if(rc!=E_OK) {
     kprintf("ERROR volmgr_vol_start_read returned error %d\r\n", rc);

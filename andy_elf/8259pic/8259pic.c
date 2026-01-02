@@ -38,6 +38,7 @@ void legacy_pic_remap(int offset1, int offset2)
 	outb(PIC1_DATA, 0);   // enable all.
 	io_wait();
 	outb(PIC2_DATA, 0);
+	io_wait();
   kputs("done.\r\n");
 }
 

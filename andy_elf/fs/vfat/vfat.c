@@ -31,8 +31,6 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
   if(status!=0) {
     kprintf("ERROR vfat_mount clustermap load failed\r\n");
     if(buffer) free(buffer);
-    //free(new_fs->mount_data_ptr);
-    new_fs->mount_data_ptr = NULL;
     mount_data->callback(new_fs, status, mount_data->extradata);
     volmgr_vol_unref(mount_data->volmgr_volume);
     free(mount_data);
@@ -42,7 +40,6 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
   if(buffer[0]<0xF0) {
     kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
     if(buffer) free(buffer);
-    new_fs->mount_data_ptr = NULL;
     mount_data->callback(new_fs, E_VFAT_NOT_RECOGNIZED, mount_data->extradata);
     free(mount_data);
     return;
@@ -60,7 +57,6 @@ void _vfat_loaded_cluster_map(uint8_t status, void *untyped_buffer, void *extrad
   } else {
     kprintf("ERROR Could not recognise FAT type. Header bytes were 0x%x 0x%x 0x%x 0x%x\r\n", (uint32_t)buffer[0], (uint32_t)buffer[1], (uint32_t)buffer[2], (uint32_t)buffer[3]);
     if(buffer) free(buffer);
-    new_fs->mount_data_ptr = NULL;
     mount_data->callback(new_fs, E_VFAT_NOT_RECOGNIZED, mount_data->extradata);
   }
   size_t fat_region_length_sectors = new_fs->bpb->fat_count * (new_fs->f32bpb ? new_fs->f32bpb->logical_sectors_per_fat : new_fs->bpb->logical_sectors_per_fat);
@@ -102,8 +98,6 @@ void vfat_load_cluster_map(struct transient_mount_data *mount_data)
   new_fs->cluster_map->buffer_size = fat_region_length_bytes / new_fs->bpb->fat_count;
   new_fs->cluster_map->parent_fs = new_fs;
   new_fs->cluster_map->bitsize = 0; //we don't know the bit-size yet
-
-  //ata_pio_start_read(new_fs->drive_nr, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors, new_fs->cluster_map->buffer, (void*)new_fs, &_vfat_loaded_cluster_map);
   volmgr_vol_start_read(mount_data->volmgr_volume, new_fs->bpb->reserved_logical_sectors, fat_region_length_sectors / new_fs->bpb->fat_count, new_fs->cluster_map->buffer, (void*)mount_data, &_vfat_loaded_cluster_map);
 }
 
@@ -118,11 +112,9 @@ void _vfat_loaded_bootsector(uint8_t status, void *buffer, void *extradata)
 
   volmgr_get_volume_name(new_fs->volume, vol_name, 8);
 
-  //kprintf("DEBUG _vfat_loaded_bootsector called with status %d buffer 0x%x extradata 0x%x\r\n", status, buffer, extradata);
   if(status!=0) {
     kprintf("ERROR vfat_mount bootsector load failed\r\n");
     if(buffer) free(buffer);
-    new_fs->mount_data_ptr = NULL;
     mount_data->callback(new_fs, status, mount_data->extradata);
     volmgr_vol_unref(mount_data->volmgr_volume);
     free(mount_data);
@@ -212,23 +204,4 @@ void vfat_unmount(struct fat_fs *fs_ptr)
   kprintf("ERROR vfat_unmount not implemented yet!\r\n");
 }
 
-/**
-// Initialises a new FATFS structure, ready for mounting.  You should only initialise
-// one per drive_nr.
-// */
-// FATFS* fs_vfat_new(uint8_t drive_nr, void *extradata, void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata))
-// {
-//   FATFS* root_fs = (FATFS* )malloc(sizeof(FATFS));
-//   if(!root_fs) {
-//     k_panic("Unable to allocate memory to mount root FS\r\n");
-//   }
 
-//   memset(root_fs, 0, sizeof(FATFS));
-//   root_fs->mount = &vfat_mount;
-//   root_fs->unmount = &vfat_unmount;
-//   // root_fs->did_mount_cb = did_mount_cb;
-//   // root_fs->did_mount_cb_extradata = extradata;
-//   root_fs->drive_nr = drive_nr;
-
-//   return root_fs;
-// }

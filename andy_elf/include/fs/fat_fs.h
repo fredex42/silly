@@ -32,8 +32,6 @@ typedef struct fat_fs {
   uint32_t reserved_sectors;
   struct vfat_cluster_map *cluster_map;
 
-  struct mount_transient_data *mount_data_ptr;
-
   struct vfat_directory_cache *directory_cache;
 
   struct VolMgr_Volume *volume;

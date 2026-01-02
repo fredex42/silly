@@ -8,6 +8,8 @@ struct VolMgr_Volume;
 #include <volmgr.h>
 #include <fs.h>
 
+#define MOUNT_CALLBACK_LIST_SIZE 16
+
 enum PendingOperationType {
         VOLMGR_OP_NONE = 0,
         VOLMGR_OP_READ,
@@ -39,6 +41,8 @@ struct VolMgr_Disk {
     struct VolMgr_PendingOperation *pending_operations;
     size_t pending_operation_count;
     size_t pending_operation_hand;
+
+    //FIXME - add a per-disk spinlock for pending ops
 };
 
 struct VolMgr_Volume {
@@ -96,8 +100,6 @@ int8_t volmgr_disk_start_read(struct VolMgr_Disk *disk, uint64_t lba_address, ui
 int8_t volmgr_disk_start_write(struct VolMgr_Disk *disk, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata));
 
 // Function prototypes for internal and external linkage
-void kputs(const char *fmt, ...);
-void kprintf(const char *fmt, ...);
 void volmgr_disk_ref(struct VolMgr_Disk *disk);
 void volmgr_disk_unref(struct VolMgr_Disk *disk);
 uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk);

@@ -88,6 +88,11 @@ void initialise_mmgr(struct MemoryMapEntry memmap[], uint32_t entries, void *mul
 
 void idmap_multiboot_data(void *multiboot_ptr, size_t length_bytes)
 {
+  if(multiboot_ptr==NULL || length_bytes==0) return;
+  if(length_bytes > 0x10000) {
+    kputs("WARNING multiboot length exceeds 64k, truncating identity map\r\n");
+    length_bytes = 0x10000;
+  }
   //we need to identity-map the multiboot data so we can access it
   size_t pages = (length_bytes / PAGE_SIZE) + 1;
   vaddr start_page = (vaddr)multiboot_ptr & MP_ADDRESS_MASK;

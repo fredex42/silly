@@ -43,10 +43,8 @@ void ata_service_interrupt(uint8_t bus_nr)
 
   switch(op->type) {
     case ATA_OP_READ:
-        //kputs("Setting up new task\r\n");
         //set up a lower-half to complete the read operation
         t = new_scheduler_task(TASK_ASAP, &ata_complete_read_lowerhalf, op);
-        //kprintf("Created new task at 0x%x\r\n", t);
         if(t==NULL) {
           k_panic("ERROR Could not create schedule task to implement lower-half of ata interrupt\r\n");
           return;

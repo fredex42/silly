@@ -8,6 +8,7 @@
 #include <kernel_config.h>
 #include <panic.h>
 #include <string.h>
+#include <stdio.h>
 #include "volmgr_internal.h"
 #include "../drivers/ata_pio/ata_pio.h"
 
@@ -450,8 +451,13 @@ void *volmgr_get_volume_by_name(const char *name) {
     return NULL;
 }
 
+/**
+ * Called if the disk is currently busy, stash the pending operation so we can process it once the disk is idle
+ */
 uint8_t volmgr_disk_stash_pending_operation(struct VolMgr_Disk *disk, enum PendingOperationType type, void *buffer, void *extradata, uint16_t sector_count, uint64_t lba_address, void (*callback)(uint8_t status, void *buffer, void *extradata)) {
+    kputs("volmgr: WARNING stashing pending operation, unstash is not yet connected!\r\n");
     acquire_spinlock(&volmgr_lock);
+    //FIXME - we ignore the current position in the buffer and always start from 0. This can lead to unfair scheduling.
     for(size_t i=0; i<disk->pending_operation_count; i++) {
         if(disk->pending_operations[i].type == VOLMGR_OP_NONE) {
             disk->pending_operations[i].type = type;
@@ -483,6 +489,9 @@ uint8_t volmgr_disk_stash_pending_operation(struct VolMgr_Disk *disk, enum Pendi
     return E_OK;
 }
 
+/**
+ * Iterate the pending operations for the given disk, and start the first one found.  This should be called on return from operation, when we know the disk is idle.
+ */
 void volmgr_disk_process_pending_operation(struct VolMgr_Disk *disk) {
     acquire_spinlock(&volmgr_lock);
     for(size_t i=disk->pending_operation_hand; i<disk->pending_operation_count; i++) {
@@ -689,7 +698,7 @@ uint8_t volmgr_internal_unregister_alias(char *alias_name) {
 }
 
 void volmgr_internal_trigger_callbacks(uint8_t event_flag, uint8_t status, const char *target, void *volume) {
-    struct VolMgr_CallbackList *call_list = (struct VolMgr_CallbackList *)malloc(sizeof(struct VolMgr_CallbackList) * 16);
+    struct VolMgr_CallbackList *call_list = (struct VolMgr_CallbackList *)malloc(sizeof(struct VolMgr_CallbackList) * MOUNT_CALLBACK_LIST_SIZE);
     size_t call_list_count = 0;
     
     acquire_spinlock(&volmgr_lock);
@@ -702,7 +711,7 @@ void volmgr_internal_trigger_callbacks(uint8_t event_flag, uint8_t status, const
             //Copy the callback to a temporary list so we can invoke it outside the lock
             memcpy(&call_list[call_list_count], cb, sizeof(struct VolMgr_CallbackList));
             ++call_list_count;
-            if(call_list_count >= 16) {
+            if(call_list_count >= MOUNT_CALLBACK_LIST_SIZE) {
                 kputs("volmgr: Warning - callback list overflow, some callbacks may not be invoked\r\n");
                 break;
             }
@@ -712,6 +721,10 @@ void volmgr_internal_trigger_callbacks(uint8_t event_flag, uint8_t status, const
 
     for(size_t i=0; i<call_list_count; i++) {
         const struct VolMgr_CallbackList *cb = &call_list[i];
+        if(!cb || !cb->callback) {
+            kprintf("volmgr: Warning - invalid callback entry at index %d, skipping\r\n", i);
+            continue;
+        }
         kprintf("volmgr: Invoking callback 0x%x for target %s (label: %s)\r\n", cb->callback, cb->target, cb->label);
         cb->callback(status, target, volume, cb->extradata);
         if(cb->flags & CB_ONESHOT) {

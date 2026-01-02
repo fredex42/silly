@@ -315,8 +315,6 @@ call init_native_api
 
 extern defer_launch_shell
 call defer_launch_shell
-; extern mount_root_device
-; call mount_root_device
 
 ;make sure that there are no left-over memory allocations
 ; xor eax,eax
