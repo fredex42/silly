@@ -246,9 +246,10 @@ size_t map_physical_memory_map_area(size_t map_start, size_t map_length_pages)
   size_t physical_map_start = directory_phys_base >> 12;
   #ifdef MMGR_VERBOSE
   kprintf("DEBUG physical_map_start 0x%x map_length_pages 0x%x directories_needed 0x%x\r\n", physical_map_start, map_length_pages, directories_needed);
+  kprintf("DEBUG physical_page_count 0x%x\r\n", physical_page_count);
   #endif
   for(size_t i=0;i<map_length_pages+directories_needed;i++) {
-    if(i+physical_map_start >=physical_page_count) {
+    if(i+physical_map_start >physical_page_count) {
       k_panic("ERROR physical map exceeds physical RAM limit\r\n");
     }
     #ifdef MMGR_VERBOSE
@@ -935,23 +936,20 @@ void apply_memory_map_protections(struct MemoryMapEntry memmap[], uint32_t entry
 */
 void allocate_physical_map(struct MemoryMapEntry memmap[], uint32_t entry_count, size_t *area_start_out, size_t *map_length_in_pages_out)
 {
-  register int i;
+  int i;
   //find the highest value in the physical memory map. We must allocate up to here.
 
-  size_t highest_value = 0;
   size_t highest_available = 0;
 
   for(i=0;i<entry_count;i++){
     struct MemoryMapEntry *e = (struct MemoryMapEntry *)&memmap[i];
     size_t entry_limit = (size_t) e->base_addr + (size_t)e->length;
     if(entry_limit>highest_available && e->type==MMAP_TYPE_USABLE) highest_available = entry_limit;
-
-    highest_value += (size_t)e->length;
   }
 
-  physical_page_count = highest_value / PAGE_SIZE;  //4k pages
+  physical_page_count = highest_available / PAGE_SIZE;  //4k pages
 
-  kprintf("Detected %d Mb of physical RAM in %d pages\r\n", highest_value/1048576, physical_page_count);
+  kprintf("Detected %d Mb of physical RAM in %d pages\r\n", highest_available/1048576, physical_page_count);
   kprintf("End of usable RAM at 0x%x\r\n", highest_available);
 
   //how many of our map entries fit in a 4k page?
