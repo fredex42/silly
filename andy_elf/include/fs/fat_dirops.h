@@ -30,6 +30,6 @@ The function will null-terminate it.
 */
 void vfat_decode_attributes(uint8_t attrs, char *buf);
 
-void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, char *xtn, void *extradata, void (*callback)(uint8_t status, DirectoryEntry *dir_entry, char *extradata));
+void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, void *extradata, void (*callback)(uint8_t status, FATFS *fs_ptr, DirectoryEntry *dir_entry, char *extradata));
 
 #endif

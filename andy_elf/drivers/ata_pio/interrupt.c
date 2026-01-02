@@ -18,7 +18,7 @@ the interrupt handler so care should be taken not to block un-necessarily
 void ata_service_interrupt(uint8_t bus_nr)
 {
   SchedulerTask *t;
-  //kprintf("ata_service_interrupt master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, bus_nr);
+  //kprintf("ata_service_interrupt master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
   
   // Check if master_driver_state is accessible
   if(!master_driver_state) {
@@ -27,12 +27,13 @@ void ata_service_interrupt(uint8_t bus_nr)
   }
   
   // Check if bus_nr is valid
-  if(bus_nr >= 2) {  // Assuming max 2 ATA buses
+  if(bus_nr >= 4) {  // Assuming max 4 ATA buses
     kprintf("ERROR invalid bus_nr %d\r\n", bus_nr);
     return;
   }
   
-  //kprintf("About to access pending_disk_operation[%d]\r\n", bus_nr);
+  //kprintf("About to access pending_disk_operation[%d]\r\n", (uint16_t)bus_nr);
+  //kprintf("master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
   ATAPendingOperation *op = master_driver_state->pending_disk_operation[bus_nr];
   
   if(op==NULL || op->type==ATA_OP_NONE) {
@@ -62,6 +63,9 @@ void ata_service_interrupt(uint8_t bus_nr)
     case ATA_OP_IGNORE:
       kputs("DEBUG Ignoring ATA operation as requested\r\n");
       op->type = ATA_OP_NONE;
+      return;
+    default:
+      kprintf("ERROR Unknown ATA operation type %d\r\n", (uint16_t)op->type);
       return;
   }
 }

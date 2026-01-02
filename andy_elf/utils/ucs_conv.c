@@ -1,5 +1,7 @@
 //quick and dirty UTF-16 -> ASCII conversion https://stackoverflow.com/questions/5364977/how-to-convert-utf-16-to-ascii
 #include <string.h>
+#include <malloc.h>
+#include <memops.h>
 #include <types.h>
 
 /**

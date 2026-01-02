@@ -12,4 +12,6 @@ void free_for_process(uint16_t pid, void *ptr);
 //frees from the kernel heap; calls free_for_process with pid=0
 void free(void* ptr);
 void heap_free(struct HeapZoneStart *heap, void *ptr);
+
+void* realloc(void *ptr, size_t new_size);
 #endif

@@ -15,4 +15,5 @@
 #define E_UNSUPPORTED_ELF     0x23
 #define E_MALFORMED_ELF       0x24
 
+#define E_NOT_SUPPORTED       0xFF
 #endif

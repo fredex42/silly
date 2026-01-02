@@ -1,4 +1,4 @@
-.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api
+.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api volmgr
 
 all: test.elf kernel.map
 
@@ -16,6 +16,7 @@ clean:
 	make -C process clean
 	make -C utils clean
 	make -C native_api clean
+	make -C volmgr clean
 
 kickoff.o: kickoff.s
 	nasm -f elf32 kickoff.s
@@ -29,6 +30,8 @@ exceptions.o: exceptions.s
 cfuncs.o: cfuncs.s
 	nasm -f elf32 cfuncs.s
 
+config.o: config.c
+	gcc -c ${CFLAGS} config.c
 
 stdio_funcs.o: stdio_funcs.c
 	gcc -c ${CFLAGS} stdio_funcs.c
@@ -50,6 +53,12 @@ ioports.o: ioports.asm
 
 cpuid.o: cpuid.asm
 	nasm -f elf32 cpuid.asm
+
+multiboot.o: multiboot.c
+	gcc -c ${CFLAGS} multiboot.c
+
+config.o: config.c
+	gcc -c ${CFLAGS} config.c
 
 acpi:
 	make -C acpi
@@ -77,18 +86,21 @@ utils:
 native_api:
 	make -C native_api
 
-test.elf: kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
+volmgr:
+	make -C volmgr
+
+test.elf: multiboot.o kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o mmgr 8259pic acpi drivers scheduler fs process utils native_api
-	ld -b elf32-i386 kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
+		cpuid.o config.o mmgr 8259pic acpi drivers scheduler fs process utils native_api volmgr
+	ld -b elf32-i386 multiboot.o kickoff.o exceptions.o basic_console.o config.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o fs/fs.o \
 		-L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
 		-Ldrivers/ps2_controller -lps2_controller \
-		-Ldrivers/early_serial -learly_serial -Lnative_api -lnative_api -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
+		-Ldrivers/early_serial -learly_serial -Lnative_api -lnative_api -Lvolmgr -lvolmgr -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
 		-Ldrivers/cmos -lcmos -Ldrivers/pci -lpci -Ldrivers/kb -lkb \
-		-Ttext 0x7E00 \
-		-static -z nostartfiles -z nodefaultlib -nostdlib -z nolibc -m elf_i386 --oformat elf32-i386 -o test.elf
+		-T linker.ld \
+		-static -z nodefaultlib -nostdlib -o test.elf
 
 kernel.map: test.elf
 	./gen_bochs_map.sh

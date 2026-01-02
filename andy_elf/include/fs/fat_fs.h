@@ -17,10 +17,6 @@ also encapsulate the filesystem data
 typedef struct fat_fs {
   void (*mount)(struct fat_fs *fs_ptr, uint8_t drive_nr, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
   void (*unmount)(struct fat_fs *fs_ptr);
-  //void (*find_file)(struct fat_fs *fs_ptr, char *path, void (*callback)(struct fat_fs *fs_ptr, DirectoryEntry *entry));
-
-  void (*did_mount_cb)(struct fat_fs *fs_ptr, uint8_t status, void *extradata);
-  void *did_mount_cb_extradata;
 
   struct generic_storage_driver *storage;
 
@@ -28,7 +24,6 @@ typedef struct fat_fs {
 
   uint8_t reserved[16];
   size_t open_file_count;
-  uint8_t drive_nr;
   BootSectorStart *start;
   BIOSParameterBlock *bpb;
   ExtendedBiosParameterBlock *ebpb;
@@ -37,14 +32,14 @@ typedef struct fat_fs {
   uint32_t reserved_sectors;
   struct vfat_cluster_map *cluster_map;
 
-  struct mount_transient_data *mount_data_ptr;
-
   struct vfat_directory_cache *directory_cache;
 
+  struct VolMgr_Volume *volume;
 } FATFS;
 
 /* Public functions */
 FATFS* new_fat_fs(uint8_t drive_nr);
+void vfat_mount(FATFS *new_fs, void *volmgr_volume, void *extradata, void (*callback)(struct fat_fs *fs_ptr, uint8_t status, void *extradata));
 
 typedef struct mount_transient_data {
   void *extradata;
@@ -58,5 +53,6 @@ typedef struct mount_transient_data {
 #define SECTOR_FOR_CLUSTER(fs_ptr, cluster_num) ((uint32_t)cluster_num * (uint32_t)fs_ptr->bpb->logical_sectors_per_cluster)
 
 #define ERR_FS_BUSY   1
+
 
 #endif

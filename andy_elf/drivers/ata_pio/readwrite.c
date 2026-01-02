@@ -133,6 +133,7 @@ int8_t ata_pio_start_read(uint8_t drive_nr, uint64_t lba_address, uint16_t secto
   outb(ATA_LBA_MID(base_addr), LBA28_LMID(lba_address));
   outb(ATA_LBA_HI(base_addr), LBA28_HMID(lba_address));
   outb(ATA_COMMAND(base_addr), ATA_CMD_READ_SECTORS);
+  return E_OK;
 }
 
 int8_t ata_pio_start_write(uint8_t drive_nr, uint64_t lba_address, uint16_t sector_count, void *buffer, void *extradata, void (*callback)(uint8_t status, void *buffer, void *extradata))
@@ -245,10 +246,6 @@ void ata_complete_read_lowerhalf(SchedulerTask *t)
   //each sector is 512 bytes (or 256 words)
   uint16_t *buf = (uint16_t *)op->buffer;
   
-  // Ultra-minimal debug output only every 500 sectors
-  if((op->sectors_read % 500) == 0) {
-    kprintf("s=%d ", (uint16_t)op->sectors_read);
-  }
   
   // Quick sanity check
   size_t expected_buffer_loc = (size_t)op->sectors_read * 256;

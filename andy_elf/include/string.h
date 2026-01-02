@@ -6,5 +6,6 @@
 
 size_t strncpy(char *dest, char *src, size_t len);
 size_t strncmp(char *a, char *b, size_t max);
-
+const char *strchr(const char *s, char c);
+size_t strlen(const char *str);
 #endif

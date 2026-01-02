@@ -49,7 +49,7 @@ static size_t physical_page_count = 0;
 /**
 Kickoff entrypoint
 */
-void initialise_mmgr(struct BiosMemoryMap *ptr)
+void initialise_mmgr(struct MemoryMapEntry memmap[], uint32_t entries, void *multiboot_ptr, size_t multiboot_length)
 {
   uint32_t flags = cpuid_edx_features();
   if(flags & CPUID_FEAT_EDX_PAE) {
@@ -65,24 +65,45 @@ void initialise_mmgr(struct BiosMemoryMap *ptr)
   kprintf("DEBUG memlock at 0x%x\r\n", &memlock);
   kprintf("DEBUG physlock at 0x%x\r\n", &physlock);
 
-  parse_memory_map(ptr);
+  parse_memory_map(memmap, entries);
   kputs("Allocating physical map space...\r\n");
   size_t physical_map_start=0, physical_map_pages=0;
-  allocate_physical_map(ptr, &physical_map_start, &physical_map_pages);
+  allocate_physical_map(memmap, entries, &physical_map_start, &physical_map_pages);
 
   kputs("Setup paging....\r\n");
   setup_paging();
   kputs("Initialising pagetables area");
   initialise_flat_pagetables();
   map_physical_memory_map_area(physical_map_start, physical_map_pages);
+  idmap_multiboot_data(multiboot_ptr, multiboot_length); //the multiboot data contains our memory map, so we need to be able to access it!
   kputs("Applying memory map protections...\r\n");
-  apply_memory_map_protections(ptr);
+  apply_memory_map_protections(memmap, entries);
   kputs("Memory manager initialised.\r\n");
   initialise_process_table(kernel_paging_directory);
   void *heap_ptr = initialise_heap(get_process(0), MIN_ZONE_SIZE_PAGES*4);
   if(heap_ptr==NULL) {
     k_panic("Unable to allocate initial heap");
   }
+}
+
+void idmap_multiboot_data(void *multiboot_ptr, size_t length_bytes)
+{
+  if(multiboot_ptr==NULL || length_bytes==0) return;
+  if(length_bytes > 0x10000) {
+    kputs("WARNING multiboot length exceeds 64k, truncating identity map\r\n");
+    length_bytes = 0x10000;
+  }
+  //we need to identity-map the multiboot data so we can access it
+  size_t pages = (length_bytes / PAGE_SIZE) + 1;
+  vaddr start_page = (vaddr)multiboot_ptr & MP_ADDRESS_MASK;
+  kputs("INFO Identity-mapping multiboot data...\r\n");
+  for(size_t i=0;i<pages;i++) {
+    vaddr phys_page = start_page + i*PAGE_SIZE;
+    reserve_physical_page(phys_page);
+    kprintf("  DEBUG Mapping 0x%x to 0x%x...\r\n", phys_page, phys_page);
+    k_map_page_bytes(kernel_paging_directory, phys_page, phys_page, MP_PRESENT|MP_READWRITE);
+  }
+  kputs("Done.\r\n");
 }
 
 /**
@@ -301,6 +322,24 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks)
   }
   release_spinlock(&physlock);
   return found_pages; //we ran out of memory. Return the number of pages that we managed to get.
+}
+
+void reserve_physical_page(void *phys_addr)
+{
+  size_t page_idx = (size_t)phys_addr / PAGE_SIZE;
+  if(page_idx==0) {
+    k_panic("ERROR attempt to reserve page 0! That shouldn't happen\r\n");
+  }
+  #ifdef MMGR_VERBOSE
+  kprintf("DEBUG reserving physical 0x%x (0x%x)\r\n", phys_addr, page_idx);
+  #endif
+  if(page_idx>=physical_page_count) {
+    kprintf("WARNING attempt to reserve page 0x%x which is beyond physical RAM limit of 0x%x pages\r\n", page_idx, physical_page_count);
+    return;
+  }
+  acquire_spinlock(&physlock);
+  physical_memory_map[page_idx].in_use=1;
+  release_spinlock(&physlock);
 }
 
 /**
@@ -800,13 +839,11 @@ Params:
   to start with a 1-byte word containing the number of records and then a number
   of 24-byte records conforming to struct MemoryMapEntry
 */
-void parse_memory_map(struct BiosMemoryMap *ptr)
+void parse_memory_map(struct MemoryMapEntry memmap[], uint32_t entries)
 {
-  uint8_t entry_count = ptr->entries;
-
-  kprintf("Detected memory map has %d entries:\r\n", entry_count);
-  for(register int i=0;i<entry_count;i++){
-    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+  kprintf("Detected memory map has %d entries:\r\n", entries);
+  for(register int i=0;i<entries;i++){
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&memmap[i];
     uint32_t page_count = e->length / 4096;
     kprintf("%x | %x | %d: ", (size_t)e->base_addr, (size_t)e->length, page_count);
     switch (e->type) {
@@ -835,13 +872,12 @@ void parse_memory_map(struct BiosMemoryMap *ptr)
 /**
  * Scans the BIOS memory map to find the highest address of free memory
 */
-size_t highest_free_memory(struct BiosMemoryMap *ptr)
+size_t highest_free_memory(struct MemoryMapEntry memmap[], uint32_t entries)
 {
-  uint8_t entry_count = ptr->entries;
   size_t highest_range_end = 0;
 
-  for(register int i=0;i<entry_count;i++) {
-    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+  for(register int i=0;i<entries;i++) {
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&memmap[i];
     switch(e->type) {
       case MMAP_TYPE_USABLE:
         highest_range_end = (size_t)e->base_addr + (size_t)e->length;
@@ -870,13 +906,12 @@ void _reserve_memory_block(size_t base_addr, uint32_t page_count) {
 /**
 sets the "readonly" and "dirty" flag on the protected memory regions
 */
-void apply_memory_map_protections(struct BiosMemoryMap *ptr)
+void apply_memory_map_protections(struct MemoryMapEntry memmap[], uint32_t entry_count)
 {
-  uint8_t entry_count = ptr->entries;
   kputs("Applying memory protections\r\n");
 
   for(register int i=0;i<entry_count;i++){
-    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&memmap[i];
     uint32_t page_count = e->length / 4096;
 
     switch(e->type) {
@@ -898,17 +933,16 @@ void apply_memory_map_protections(struct BiosMemoryMap *ptr)
  * Returns the byte address of the start of the physical RAM area AND the length of the map area in pages.
  * You must pass in pointers to size_t to obtain these values.
 */
-void allocate_physical_map(struct BiosMemoryMap *ptr, size_t *area_start_out, size_t *map_length_in_pages_out)
+void allocate_physical_map(struct MemoryMapEntry memmap[], uint32_t entry_count, size_t *area_start_out, size_t *map_length_in_pages_out)
 {
   register int i;
   //find the highest value in the physical memory map. We must allocate up to here.
-  uint8_t entry_count = ptr->entries;
 
   size_t highest_value = 0;
   size_t highest_available = 0;
 
   for(i=0;i<entry_count;i++){
-    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&ptr[2+i*24];
+    struct MemoryMapEntry *e = (struct MemoryMapEntry *)&memmap[i];
     size_t entry_limit = (size_t) e->base_addr + (size_t)e->length;
     if(entry_limit>highest_available && e->type==MMAP_TYPE_USABLE) highest_available = entry_limit;
 
@@ -1159,7 +1193,11 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
         if(page & MP_PRESENT) {
           vaddr page_phys = page & MP_ADDRESS_MASK;
           size_t phys_index = page_phys >> 12;
-          acquire_spinlock(&physlock);
+          if(phys_index > physical_page_count) {
+            kprintf("ERROR page %d/%d (0x%x) references physical address 0x%x which is beyond the end of RAM\r\n",i, j, (i<<22) | (j<<12), page_phys);
+            continue;
+          }
+          //acquire_spinlock(&physlock);
           if(!physical_memory_map[phys_index].in_use) {
             vaddr virt = (vaddr)(i<<22) | (vaddr)(j<<12);
             #ifdef MMGR_VERBOSE
@@ -1178,7 +1216,7 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
             kprintf("ERROR physical 0x%x is index %d which is not present!\r\n", page_phys, phys_index);
             k_panic("Attempt to use physical RAM that is not present\r\n");
           }
-          release_spinlock(&physlock);
+          //release_spinlock(&physlock);
         }
       }
     }

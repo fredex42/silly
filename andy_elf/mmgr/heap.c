@@ -590,6 +590,122 @@ void* malloc(size_t bytes)
     return malloc_for_process(0, bytes);
 }
 
+void *realloc(void *ptr, size_t new_size)
+{
+  if(!ptr) return NULL;
+  if(new_size==0) {
+    free(ptr);
+    return NULL;
+  }
+
+  struct PointerHeader *hdr = (struct PointerHeader *)((char *)ptr - sizeof(struct PointerHeader));
+  if(hdr->magic != HEAP_PTR_SIG) {
+    kprintf("ERROR realloc: pointer 0x%x is not valid, magicnumber not present\r\n", ptr);
+    return NULL;
+  }
+
+  #ifdef MMGR_VALIDATE_PRE
+  void *z = _zone_for_ptr(get_process(0)->heap_start, ptr);
+  if(z) {
+    kprintf("DEBUG !! Pre-realloc\r\n");
+    validate_zone((struct HeapZoneStart*)z);
+  }
+  #endif
+
+  size_t old_len = hdr->block_length;
+
+  if(old_len > new_size) {
+    // SHRINK CASE
+    size_t remaining = old_len - new_size;
+    if(remaining >= sizeof(struct PointerHeader) + 1) {
+      kprintf("DEBUG realloc: shrinking block to %l and creating new free block of %l\r\n", new_size, remaining - sizeof(struct PointerHeader));
+      struct PointerHeader* new_ptr = (struct PointerHeader *)((char*)ptr + new_size);
+      new_ptr->magic = HEAP_PTR_SIG;
+      new_ptr->block_length = remaining - sizeof(struct PointerHeader);
+      new_ptr->in_use = 0;
+      new_ptr->next_ptr = hdr->next_ptr;
+      hdr->next_ptr = new_ptr;
+    } else {
+      kputs("DEBUG realloc: shrinking block but not enough space to create new free block\r\n");
+    }
+    hdr->block_length = new_size;
+    
+    #ifdef MMGR_VALIDATE_POST
+    void *z = _zone_for_ptr(get_process(0)->heap_start, ptr);
+    if(z) {
+      kprintf("DEBUG !! Post-realloc\r\n");
+      validate_zone((struct HeapZoneStart*)z);
+    }
+    #endif
+    return ptr;
+    
+  } else if(old_len < new_size) {
+    // EXPAND CASE
+    // Try to expand in place if next block is free and large enough
+    if(hdr->next_ptr && hdr->next_ptr->in_use == 0) {
+      kprintf("DEBUG realloc: trying to expand block in place from %l to %l\r\n", old_len, new_size);
+      size_t combined_length = old_len + sizeof(struct PointerHeader) + hdr->next_ptr->block_length;
+      
+      if(combined_length >= new_size) {
+        kprintf("DEBUG realloc: expanding block in place from %l to %l\r\n", old_len, new_size);
+        size_t remaining = combined_length - new_size;
+        
+        if(remaining > sizeof(struct PointerHeader)) {
+          // Create new free block in remaining space
+          struct PointerHeader* new_ptr = (struct PointerHeader *)((char*)hdr + sizeof(struct PointerHeader) + new_size);
+          new_ptr->magic = HEAP_PTR_SIG;
+          new_ptr->block_length = remaining - sizeof(struct PointerHeader);
+          new_ptr->in_use = 0;
+          new_ptr->next_ptr = hdr->next_ptr->next_ptr;
+          hdr->next_ptr = new_ptr;
+          hdr->block_length = new_size;
+        } else {
+          kprintf("DEBUG realloc: absorbing entire next block (%l bytes leftover)\r\n", remaining);
+          // Absorb the whole next block
+          hdr->block_length = combined_length;
+          hdr->next_ptr = hdr->next_ptr->next_ptr;
+        }
+        
+        kprintf("DEBUG realloc: expanded block in place to %l\r\n", hdr->block_length);
+        #ifdef MMGR_VALIDATE_POST
+        void *z = _zone_for_ptr(get_process(0)->heap_start, ptr);
+        if(z) {
+          kprintf("DEBUG !! Post-realloc\r\n");
+          validate_zone((struct HeapZoneStart*)z);
+        }
+        #endif
+        return ptr;
+      }
+    }
+    
+    // Cannot expand in place: allocate new block, copy, and free old
+    kprintf("DEBUG realloc: cannot expand in place, allocating new block\r\n");
+    void *new_ptr = malloc(new_size);
+    if(!new_ptr) {
+      kprintf("ERROR realloc: allocation of new block of size %l failed\r\n", new_size);
+      return NULL;
+    }
+    
+    // Copy old data (only copy old_len bytes, not more)
+    memcpy(new_ptr, ptr, old_len);
+    free(ptr);
+    
+    #ifdef MMGR_VALIDATE_POST
+    void *z = _zone_for_ptr(get_process(0)->heap_start, new_ptr);
+    if(z) {
+      kprintf("DEBUG !! Post-realloc\r\n");
+      validate_zone((struct HeapZoneStart*)z);
+    }
+    #endif
+    return new_ptr;
+    
+  } else {
+    // SAME SIZE - no-op
+    kprintf("DEBUG realloc: requested size is same as current size %l, nothing to do\r\n", new_size);
+    return ptr;
+  }
+}
+
 void free_for_process(uint16_t pid, void *ptr)
 {
   // Validate parameters

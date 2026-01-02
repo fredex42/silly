@@ -7,6 +7,7 @@
 #include <panic.h>
 #include <errors.h>
 #include <drivers/generic_storage.h>
+#include <volmgr.h>
 #include "ata_pio.h"
 #include "../../mmgr/heap.h"
 
@@ -87,20 +88,6 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
     if(! (st & 0x80) ) break; //poll the status until BSY bit clears (bit 7)
   }
 
-  //Check LBAmid and LBAhi ports. If they are not 0 then this is not an ATA drive and we should stop.
-  // st = inb(ATA_LBA_MID(base_addr));
-  // if(st!=0) {
-  //   kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
-  //   master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
-  //   return NULL;
-  // }
-  // st = inb(ATA_LBA_HI(base_addr));
-  // if(st!=0) {
-  //   kprintf("\tWARNING Drive 0x%x on 0x%x is not ATA compliant, ignoring\r\n", (uint32_t)drive_nr, (uint32_t)base_addr);
-  //   master_driver_state->pending_disk_operation[bus_nr]->type = ATA_OP_NONE;
-  //   return NULL;
-  // }
-
   //Still here? Good. We've got a drive, now poll for success or failure.
 
   //create a new buffer to store the drive information. If we get a failure this is freed otherwise it
@@ -172,13 +159,21 @@ void initialise_ata_driver()
   }
 
   ata_detect_active_buses();
-  kputs("\tDetecting drives...\r\n");
+  kputs("\tATA: Detecting drives...\r\n");
+
+  for(register int i=0;i<4; i++) {
+    master_driver_state->pending_disk_operation[i]->type = ATA_OP_NONE;
+  }
+
+  kprintf("INFO Active bus mask is 0x%x\r\n", master_driver_state->active_bus_mask);
+
   if(master_driver_state->active_bus_mask & 0x1) {
     info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_MASTER);
     if(info!=NULL) {
       kprintf("\tFound ATA Primary Master, data at 0x%x\r\n", info);
       master_driver_state->disk_identity[0] = info;
       print_drive_info(0);
+      //FIXME: parse disk identity data and drive capabilities to get LBA modes, etc.
     }
     info = identify_drive(ATA_PRIMARY_BASE, ATA_SELECT_SLAVE);
     if(info!=NULL) {
@@ -206,10 +201,14 @@ void initialise_ata_driver()
     kputs("\tWARNING - did not detect any hard disks!\r\n");
   }
 
-  for(register int i=0;i<4; i++) {
-    master_driver_state->pending_disk_operation[i]->type = ATA_OP_NONE;
+  if(master_driver_state->disk_identity[0]!=NULL) {
+    volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_PRIMARY_BASE, DF_IDE_MASTER);
   }
-  kputs("done.\r\n");
+  if(master_driver_state->disk_identity[2]!=NULL) {
+    volmgr_add_disk(DISK_TYPE_ISA_IDE, ATA_SECONDARY_BASE, DF_IDE_MASTER);
+  }
+
+  kputs("ATA: Drive detection done.\r\n");
 }
 
 /*
@@ -237,7 +236,13 @@ uint8_t ata_max_udma_mode(uint8_t drive_nr)
   uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
   if(drive_info == NULL) return 0;
 
-  return drive_info[88] & 0xFF; //low byte gives max the supported UDMA mode
+  const ud_low = drive_info[88] & 0xFF; //low byte gives max the supported UDMA mode as a bitfield
+  for(register uint8_t mode=6; mode>0; mode--) {
+    if(ud_low & (1 << mode)) {
+      return mode; //return the highest supported mode
+    }
+  }
+  return 0;
 }
 
 /*
@@ -249,7 +254,13 @@ uint8_t ata_current_udma_mode(uint8_t drive_nr)
   uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
   if(drive_info == NULL) return 0;
 
-  return (drive_info[88] >> 8) & 0xFF; //high byte gives the active mode
+  const ud_hi = (drive_info[88] >> 8) & 0xFF; //high byte gives the active mode as a bitfield
+  for(register uint8_t mode=6; mode>0; mode--) {
+    if(ud_hi & (1 << mode)) {
+      return mode; //return the highest active mode
+    }
+  }
+  return 0;
 }
 
 /*
