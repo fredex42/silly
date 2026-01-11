@@ -6,3 +6,4 @@
 *.o
 *.a
 *.iso
+newlib-i686-silly
