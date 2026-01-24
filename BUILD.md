@@ -3,6 +3,13 @@
 ## Kernel
 You can build the kernel with your native toolchain, provided that it supports 32-bit x86 output.  The kernel is not yet ready for 64-bit.
 
+```bash
+cd andy_elf
+make -j4
+```
+
+The final binary is called `test.elf`, this is intended to be loaded
+in a VM via grub TODO
 
 ## Userland
 
@@ -17,7 +24,7 @@ I would **highly** recommend using Docker or another system that lets you
 build these things in isolation.
 
 ```bash
-docker run --rm -it -v $HOME/path/to/code:/usr/src .... ubuntu:latest
+docker run --rm -it -v $HOME/path/to/code:/usr/src ...any other paths... ubuntu:latest
 apt update
 apt install build-essential nasm vim file less libgmp-dev libmpc-dev libmpfr-dev
 ```
@@ -52,9 +59,13 @@ Once you've done this, `ls /opt/bin` should show you `i686-elf-gcc`, `i686-elf-c
 
 ### 2. Configure and build newlib (the C library)
 
+We're now going to use the cross-compiler to build libc.  This repo contains a version of newlib, customised
+to contain syscalls for the OS.  **TODO** well, not actually customised yet ;-)
+
 ```bash
 export PATH=/opt/bin:$PATH
 export CC=/opt/bin/i686-elf-gcc
+cd /usr/src/silly
 cd newlib
 mkdir i686-silly
 cd i686-silly
@@ -94,7 +105,7 @@ i686-elf-objdump -x a.out
 #          filesz 0x00000014 memsz 0x00000034 flags rw-
 # etc. etc.
 
-i686-elf-objdump -d a.out
+i686-elf-objdump -d a.out #if you want to check the assembly code of the binary
 ```
 
 Crucially:
@@ -102,4 +113,9 @@ Crucially:
 - you should see text, rodata, bss sections and two loadable chunks. Other sections may be present, but the OS loader doesn't care about them.
 - you should see the `write` and `_exit` stubs as well as a `main` function
 
-### 4. Configure Rust toolchain
+### 5. Rebuild the cross-compiler with libc
+
+Now we have a working libc, we can rebuild the cross-compiler so it will work properly.
+
+
+### x. Configure Rust toolchain
