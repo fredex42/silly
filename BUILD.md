@@ -13,6 +13,15 @@ in a VM via grub TODO
 
 ## Userland
 
+**TL;DR** The fully configured toolchain is available on Docker Hub.  Simply:
+
+```bash
+docker run --rm -it andyg42/crosscompiler-silly-elf32:latest
+```
+
+to get the toolchain and not need to run any of the steps below.
+
+
 ### 1. Build the cross-compiler
 Download binutils from here: https://sourceware.org/pub/binutils/releases/.
 I initially used version 2.45
@@ -26,7 +35,7 @@ build these things in isolation.
 ```bash
 docker run --rm -it -v $HOME/path/to/code:/usr/src ...any other paths... ubuntu:latest
 apt update
-apt install build-essential nasm vim file less libgmp-dev libmpc-dev libmpfr-dev
+apt install -y build-essential nasm vim file less libgmp-dev libmpc-dev libmpfr-dev
 ```
 
 With this in place, you can decompress and compile binutils:
@@ -71,6 +80,7 @@ mkdir i686-silly
 cd i686-silly
 ../newlib/configure --disable-multilib --srcdir ../newlib --host i686-elf --prefix /opt
 make -j4
+make install
 ```
 
 Once you've done this, `ls /opt/i686-elf/include` should be full of .h files, and `/opt/i686-elf/lib` should include `libc.a`, `libm.a`, etc.
@@ -87,7 +97,7 @@ cp crt0.o /opt/i686-elf/lib
 With these in place you should be able to smoke-test the crosscompiler:
 
 ```bash
-i686-elf-gcc -m32 first_test.c stubs.c -L/opt/i686-elf/lib -lc -I/opt/i686-elf/include
+i686-elf-gcc -nostdlib crt0.o first_test.c stubs.c -L/opt/i686-elf/lib -lc -I/opt/i686-elf/include
 file a.out
 # a.out: ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), statically linked, not stripped
 i686-elf-objdump -x a.out
@@ -117,5 +127,32 @@ Crucially:
 
 Now we have a working libc, we can rebuild the cross-compiler so it will work properly.
 
+```bash
+cd /Downloads
+rm -rf build-gcc
+mkdir build-gcc
+cd build-gcc
+unset CC # important - we want to rebuild gcc with the host compiler, not the cross-compiler
+../gcc-14.3.0/configure --target=i686-elf --prefix=/opt --with-sysroot=/opt/i686-elf --disable-nls --enable-languages=c --disable-shared --disable-threads --disable-multilib #important - not using --without-headers as we were before
+make all-gcc -j4
+make install-gcc
+make all-target-libgcc -j4
+make install-target-libgcc
+```
 
-### x. Configure Rust toolchain
+Once you have done this, `/opt/lib/gcc/i686-elf/14.3.0` should contain files like `crtbegin.o`, `crtend.o`, `libgcc.a` etc.
+
+Now we can re-run the smoke test:
+
+```bash
+cd $REPO_ROOT/userland-test
+rm a.out
+i686-elf-gcc first_test.c stubs.c
+file a.out 
+# a.out: ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), statically linked, not stripped
+objdump -x a.out
+```
+
+You'll now see more sections, things like `crtstuff.c`, `__CTOR_LIST__` and other symbols from libgcc.
+
+### 6. Configure Rust toolchain
