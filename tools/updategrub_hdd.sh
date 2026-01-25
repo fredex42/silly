@@ -16,8 +16,8 @@ if [ ! -f ../shell.app/shell.app ]; then
 fi
 
 sudo kpartx -av disk.img
-sudo mount /dev/mapper/loop0p1 /mnt
-sudo cp ../andy_elf/test.elf /mnt/boot/mykernel.elf
-sudo cp ../shell.app/shell.app /mnt
-sudo umount /mnt
+sudo mount /dev/mapper/loop0p1 /mnt/temp
+sudo cp ../andy_elf/test.elf /mnt/temp/boot/mykernel.elf
+#sudo cp ../shell.app/shell.app /mnt/temp
+sudo umount /mnt/temp
 sudo kpartx -dv disk.img

@@ -1192,14 +1192,14 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
           vaddr page_phys = page & MP_ADDRESS_MASK;
           size_t phys_index = page_phys >> 12;
           if(phys_index > physical_page_count) {
-            kprintf("ERROR page %d/%d (0x%x) references physical address 0x%x which is beyond the end of RAM\r\n",i, j, (i<<22) | (j<<12), page_phys);
+            kprintf("ERROR page %d/%d (0x%x) -> phys 0x%x beyond RAM limit!\r\n",i, j, (i<<22) | (j<<12), page_phys);
             continue;
           }
           //acquire_spinlock(&physlock);
           if(!physical_memory_map[phys_index].in_use) {
             vaddr virt = (vaddr)(i<<22) | (vaddr)(j<<12);
             #ifdef MMGR_VERBOSE
-            kprintf("WARN page %d/%d (0x%x) references physical address 0x%x\r\n",i, j, virt, page_phys);
+            kprintf("WARN page %d/%d (0x%x) -> phys 0x%x\r\n",i, j, virt, page_phys);
             #endif
             if(should_panic) {
               kprintf("ERROR physical 0x%x is index %d which is freed!\r\n", page_phys, phys_index);
@@ -1210,7 +1210,7 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
             }
           } 
           if(!physical_memory_map[phys_index].present) {
-            kprintf("ERROR page %d/%d (0x%x) references physical addres 0x%x\r\n",i, j, (i<<22) | (j<<12), page_phys);
+            kprintf("ERROR page %d/%d (0x%x) -> phys 0x%x\r\n",i, j, (i<<22) | (j<<12), page_phys);
             kprintf("ERROR physical 0x%x is index %d which is not present!\r\n", page_phys, phys_index);
             k_panic("Attempt to use physical RAM that is not present\r\n");
           }
