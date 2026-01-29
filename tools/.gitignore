@@ -1,3 +1,5 @@
 inject
 *.elf
 *.img
+*.log
+*.app

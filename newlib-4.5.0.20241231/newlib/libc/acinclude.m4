@@ -20,7 +20,7 @@ m4_foreach_w([SYS_DIR], [
   netware
   or1k
   rdos rtems
-  sh sysmec sysnec810 sysnecv850 sysvi386 sysvnecv70
+  sh silly sysmec sysnec810 sysnecv850 sysvi386 sysvnecv70
   tic80 tirtos
   w65
   z8ksim

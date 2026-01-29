@@ -446,6 +446,9 @@ case "${host}" in
 	sys_dir=tirtos
 	have_crt0="no"
 	;;
+  *-*-silly)
+    sys_dir=silly
+	;;
   *-esp-*)
 	sys_dir=esp
     have_crt0="no"

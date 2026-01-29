@@ -22,6 +22,9 @@ docker run --rm -it andyg42/crosscompiler-silly-elf32:latest
 to get the toolchain and not need to run any of the steps below.
 
 
+TODO - update instructions for i686-unknown-silly host. Needed to make libc, include etc. all go to the same place.
+With the updated newlib configuration, this makes it possible to compile without explicit crt0 or syscall stubs
+
 ### 1. Build the cross-compiler
 Download binutils from here: https://sourceware.org/pub/binutils/releases/.
 I initially used version 2.45
