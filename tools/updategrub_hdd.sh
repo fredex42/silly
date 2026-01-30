@@ -18,6 +18,6 @@ fi
 sudo kpartx -av disk.img
 sudo mount /dev/mapper/loop0p1 /mnt/temp
 sudo cp ../andy_elf/test.elf /mnt/temp/boot/mykernel.elf
-sudo cp ../userland-test/shell.app /mnt/temp
+sudo cp ../userland/test/shell.app /mnt/temp
 sudo umount /mnt/temp
 sudo kpartx -dv disk.img
