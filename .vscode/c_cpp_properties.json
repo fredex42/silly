@@ -13,6 +13,21 @@
             "intelliSenseMode": "linux-gcc-x86",
             "configurationProvider": "ms-vscode.makefile-tools",
             "forcedInclude": []
+        },
+        {
+            "name": "sillyOS",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath": "/opt/cross/bin/i686-elf-gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerArgs": [
+                "--sysroot",
+                "/opt/cross/i686-elf"
+            ]
         }
     ],
     "version": 4
