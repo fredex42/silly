@@ -1,6 +1,8 @@
-#include <stdio.h>
 #include <stdint.h>
 #include <stdarg.h>
+/* Forward declare libc functions to avoid include path conflicts */
+int puts(const char *);
+int vprintf(const char *, va_list);
 
 /**
 This file contains stub implementations of logging functions that call through to the
@@ -15,8 +17,8 @@ void k_panic() {
   puts("Error, kernel would have panicked\n");
 }
 
-int kprintf(char *fmt, ...) {
+void kprintf(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    return vprintf(fmt, ap);
+    (void)vprintf(fmt, ap);
 }

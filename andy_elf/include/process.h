@@ -1,8 +1,8 @@
-#include <types.h>
-#include <utils/ringbuffer.h>
-
 #ifndef __PROCESS_H
 #define __PROCESS_H
+
+#include <types.h>
+#include <utils/ringbuffer.h>
 
 #define PID_MAX 256
 #define FILE_MAX 512

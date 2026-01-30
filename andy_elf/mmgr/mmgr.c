@@ -1,12 +1,8 @@
 #ifdef __BUILDING_TESTS
   #include <sys/types.h>
   #include <stdint.h>
+  #include <stddef.h>
   #include "include/sys/mmgr.h"
-  #if __WORDSIZE == 64
-    typedef uint64_t vaddr;
-  #else
-    typedef uint64_t vaddr;
-  #endif
 #else
   #include <types.h>
   #include <sys/mmgr.h>
@@ -43,7 +39,7 @@ static uint32_t *flat_pagetables_ptr  = 0xF0000000;
 struct PhysMapEntry *physical_memory_map = NULL;
 static size_t physical_page_count = 0;
 
-#define __invalidate_vptr(vptr_to_invalidate) asm inline volatile("invlpg (%0)" : : "r" (vptr_to_invalidate) : "memory")
+#define __invalidate_vptr(vptr_to_invalidate) __asm__ __volatile__("invlpg (%0)" : : "r" (vptr_to_invalidate) : "memory")
 
 
 /**
