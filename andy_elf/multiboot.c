@@ -122,9 +122,10 @@ uint32_t multiboot2_late_init(uint32_t magic, uint32_t addr) {
 
     struct MultibootKernelDataHeader *header = (struct MultibootKernelDataHeader *)addr;
     kprintf("Multiboot2 info total size %d\r\n", header->total_size);
-
+    kprintf("Multiboot2 header at 0x%x\r\n", header);
     struct MultibootTagHeader *tag = (struct MultibootTagHeader *)(addr + sizeof(struct MultibootKernelDataHeader));
     while (tag && tag->type != MB_TAG_END) {
+        kprintf("Processing MB2 tag at 0x%x\r\n", tag);
         // Process each tag as needed
         switch (tag->type) {
             case MB_TAG_BASIC_MEMINFO:
@@ -156,11 +157,11 @@ uint32_t multiboot2_late_init(uint32_t magic, uint32_t addr) {
             case MB_TAG_RSDP_NEW:
                 kputs("ACPI RSDP 2.0 found\r\n");
                 //TODO - should pass the RSDP address to the ACPI loader so it does not need to traverse for it
-                load_acpi_data();
+                //load_acpi_data();
                 break;
             case MB_TAG_RSDP_OLD:
                 kputs("ACPI RSDP 1.0 found\r\n");
-                load_acpi_data();
+                //load_acpi_data();
                 break;
             case MB_TAG_VBE:
                 struct MultibootTagVBE *vbe = (struct MultibootTagVBE *)tag;
@@ -184,6 +185,7 @@ uint32_t multiboot2_late_init(uint32_t magic, uint32_t addr) {
         tag = (struct MultibootTagHeader *)((uint32_t)tag + ((tag->size + 7) & ~7));
     }
 
+    kputs("MB2 init done, initialising volmgr\r\n");
     //Initialise the volume manager.
     volmgr_init(kernel_config_ptr);
     return 1; // Successfully processed multiboot2 info

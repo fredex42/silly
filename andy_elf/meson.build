@@ -10,7 +10,8 @@ common_c_args = [
   '-m32',
   '-march=i486',
   '-fno-asynchronous-unwind-tables',
-  '-fno-stack-protector',
+  #'-fno-stack-protector',
+  '-O0',
 ]
 add_project_arguments(common_c_args, language: 'c')
 add_project_arguments(['-std=gnu11'], language: 'c')

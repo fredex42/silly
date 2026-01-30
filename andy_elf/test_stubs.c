@@ -9,8 +9,15 @@ This file contains stub implementations of logging functions that call through t
 glibc counterparts. This is to enable compilation of tests that can run as regular
 linux apps.
 */
-void kputs(char *str) {
+void kputs(const char *str) {
   puts(str);
+}
+
+void kputlen(const char *str, uint32_t len) {
+  /* naive: print as a separate buffer */
+  for(uint32_t i=0;i<len && str[i]!=0;i++) {
+    putchar(str[i]);
+  }
 }
 
 void k_panic() {
