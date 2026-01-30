@@ -317,10 +317,10 @@ extern defer_launch_shell
 call defer_launch_shell
 
 ;make sure that there are no left-over memory allocations
-; xor eax,eax
-; push ax
-; call validate_kernel_memory_allocations
-; pop ax
+xor eax,eax
+push ax
+call validate_kernel_memory_allocations
+pop ax
 
 extern scheduler_tick
 extern enter_next_process

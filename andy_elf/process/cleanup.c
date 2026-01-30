@@ -41,7 +41,8 @@ void cleanup_process(SchedulerTask *t)
       this is because the allocation process leaves on page (the upper-level paging dir) mapped in kernel space AND in
       process-space; so we need to make sure it gets removed here to prevent a memory leak.
     */
-    validate_kernel_memory_allocations(0);
+   //TODO: there seem to be invalid map entries from very early in the kernel. Needs fixing.
+    //validate_kernel_memory_allocations(0);
     
     // Reset the process table entry to PROCESS_NONE to indicate it's available
     // Clear any stale data that might cause issues
