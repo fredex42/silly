@@ -2,7 +2,6 @@
 
 int write(int fd, const void *buf, size_t count) {
 	int ret;
-	//TODO: check actual register assignments to call
 	asm volatile(
 			"movl %[fd], %%ebx\n\t"
 			"movl %[buf], %%esi\n\t"

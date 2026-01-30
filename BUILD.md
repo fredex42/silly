@@ -91,7 +91,7 @@ Once you've done this, `ls /opt/i686-elf/include` should be full of .h files, an
 Now build and install crt0.o:
 
 ```bash
-cd userland-test
+cd userland/test
 nasm -f elf32 crt0.asm -o crt0.o
 cp crt0.o /opt/i686-elf/lib
 ```
@@ -148,7 +148,7 @@ Once you have done this, `/opt/lib/gcc/i686-elf/14.3.0` should contain files lik
 Now we can re-run the smoke test:
 
 ```bash
-cd $REPO_ROOT/userland-test
+cd $REPO_ROOT/userland/test
 rm a.out
 i686-elf-gcc first_test.c stubs.c
 file a.out 
