@@ -13,7 +13,7 @@ uint32_t api_open(char *filename, char *xtn, uint16_t mode_flags)
 
 }
 
-void api_close(uint32_t fd)
+uint32_t api_close(uint32_t fd)
 {
 
 }

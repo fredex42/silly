@@ -17,5 +17,8 @@ process_ops.o: process_ops.c process_ops.h
 stream_ops.o: stream_ops.c stream_ops.h
 	gcc -c ${CFLAGS} stream_ops.c
 
-libnative_api.a: process_ops.o stream_ops.o native_api.o console.o
-	ar rcs libnative_api.a native_api.o process_ops.o stream_ops.o console.o
+dispatcher.o: dispatcher.c dispatcher.h
+	gcc -c ${CFLAGS} dispatcher.c
+
+libnative_api.a: process_ops.o stream_ops.o native_api.o console.o dispatcher.o
+	ar rcs libnative_api.a native_api.o process_ops.o stream_ops.o console.o dispatcher.o

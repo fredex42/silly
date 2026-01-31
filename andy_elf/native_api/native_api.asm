@@ -4,29 +4,19 @@ section .text
 global init_native_api
 global native_api_landing_pad
 
-%include "apicodes.asm"
 %include "../memlayout.asm"
 extern CreateIA32IDTEntry
 
 ;kickoff.asm
 extern idle_loop
 
-;process_ops.c
-extern api_terminate_current_process
-extern api_sleep_current_process
-extern api_create_process
-
-;stream_ops.c
-extern api_close
-extern api_open
-extern api_read
-extern api_write
 
 ;scheduler/lowlevel.asm
 extern switch_out_process
 
-;drivers/cmos/rtc.c
-extern rtc_get_epoch_time
+; ;drivers/cmos/rtc.c
+; extern rtc_get_epoch_time
+extern native_api_dispatcher
 
 ;Purpose - initialise the native API by attaching the landing pad function to
 ; the int 0x60 interrupt
@@ -49,93 +39,30 @@ init_native_api:
   pop ebp
   ret
 
-; native_api_landing_pad_v2:
-;   call enter_kernel_context
-;   mov esi, .napi_jump_table
-;   add esi, eax
-;   cmp esi, .napi_jump_table_end
-;   jg .napi_nf
-;   call esi
-;   jmp .napi_rtn_to_kern
-
-; .napi_jump_table:
-;   dd api_terminate_current_process
-;   dd api_sleep_current_process
-;   dd api_create_process
-;   dd api_close
-;   dd api_open
-;   dd api_read
-;   dd api_write
-;   dd api_get_time
-; .napi_jump_table_end:
-;   nop
-
 ;this interrupt handler is called for every native API call. Its job is to dispatch
 ;the call into the necessary handler (usually a C function)
 native_api_landing_pad:
-  cmp eax, API_EXIT
-  jnz .napi_2
-  call api_terminate_current_process ;puts the process record into a TERMINATING state. The scheduler will trigger cleanup
-  jmp .napi_rtn_to_kern
-.napi_2:
-  cmp eax, API_SLEEP
-  jnz .napi_3
-  call api_sleep_current_process
-  jmp .napi_rtn_to_kern
-.napi_3:
-  cmp eax, API_CREATE_PROCESS
-  jnz .napi_4
-  call api_create_process
-  jmp .napi_rtn_to_kern
-.napi_4:
-  cmp eax, API_CLOSE
-  jnz .napi_5
-  call api_close
-  jmp .napi_rtn_direct
-.napi_5:
-  cmp eax, API_OPEN
-  jnz .napi_6
-  call api_open
-  jmp .napi_rtn_direct
-.napi_6:
-  cmp eax, API_READ
-  jnz .napi_7
-  push ecx        ;length
-  push esi        ;pointer
-  and ebx, 0xFFFF
-  push ebx        ;file descriptor
-  call api_read
-  add esp, 12
-  test ax,ax
-  jnz .napi_rtn_direct
-  jmp .napi_rtn_to_kern
-.napi_7:
-  cmp eax, API_WRITE
-  jnz .napi_8
-  push ecx          ;length
-  push esi          ;pointer
-  and ebx, 0xFFFF
-  push ebx          ;file descriptor
-  call api_write
-  add esp, 12
-
-  jmp .napi_rtn_direct
-.napi_8:
-  cmp eax, API_GET_TIME
-  jnz .napi_nf
-  push ebx
-  push ecx
-  push edx
+  ; eax = api code
+  ; ebx, ecx, edx, esi, edi = api parameters
+  push ebp
   push edi
   push esi
-  call rtc_get_epoch_time
+  push edx
+  push ecx
+  push ebx
+  push eax
+
+  call native_api_dispatcher
+  ;return value in eax
+
+  ;FIXME - need to check new scheduler state to detect if we need to switch processes into kernel runloop
+  add esp, 16
   pop esi
   pop edi
-  pop edx
-  pop ecx
-  pop ebx
-  jmp .napi_rtn_direct
+  pop ebp
+  iret
 
+temp_label:
 .napi_nf:
   ;we did not recognise the API code. Fallthrough to return to process.
   mov eax, API_ERR_NOTFOUND
