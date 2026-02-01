@@ -1,4 +1,4 @@
-.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api volmgr
+.PHONY: 8259pic acpi drivers scheduler mmgr fs process utils native_api volmgr x86
 
 all: test.elf kernel.map
 
@@ -17,6 +17,7 @@ clean:
 	make -C utils clean
 	make -C native_api clean
 	make -C volmgr clean
+	make -C x86 clean
 
 kickoff.o: kickoff.s
 	nasm -f elf32 kickoff.s
@@ -89,12 +90,15 @@ native_api:
 volmgr:
 	make -C volmgr
 
+x86: 
+	make -C x86
+
 test.elf: multiboot.o kickoff.o exceptions.o basic_console.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o \
-		cpuid.o config.o mmgr 8259pic acpi drivers scheduler fs process utils native_api volmgr
+		cpuid.o config.o mmgr 8259pic acpi drivers scheduler fs process utils native_api volmgr x86
 	ld -b elf32-i386 multiboot.o kickoff.o exceptions.o basic_console.o config.o cfuncs.o stdio_funcs.o \
 		c_exceptions.o panic.o inkernel_memory_tests.o memops.o ioports.o cpuid.o fs/fs.o \
-		-L mmgr/ -lmmgr \
+		-L x86/ -lx86 -L mmgr/ -lmmgr \
 		-L 8259pic/ -l8259pic -Lacpi/ -lacpi -Ldrivers/ata_pio/ -lata_pio -Lscheduler/ -l scheduler \
 		-Ldrivers/ps2_controller -lps2_controller \
 		-Ldrivers/early_serial -learly_serial -Lnative_api -lnative_api -Lvolmgr -lvolmgr -Lfs/vfat -lfs_vfat -L process -lprocess -L utils -lutils \
