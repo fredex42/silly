@@ -1,6 +1,9 @@
 #include <types.h>
 #include "8259pic.h"
 #include <cpuid.h>
+#include <x86/idt.h>
+#include <x86/segmentation.h>
+#include "interrupts.h"
 #include "picroutines.h"
 
 /*
@@ -51,6 +54,29 @@ asm volatile ("mov $0xff, %%al\n\t"
   "out %%al, $0xa1\n\t"
   "out %%al, $0x21\n\t"
  : : : "%eax");
+}
+
+/**
+ * Links the defined interrupt handlers into the IDT.
+ */
+void configure_pic_interrupts() {
+	//We assume that IDT is already configured.
+	create_idt_entry(0x20, ITimer, IDT_SELECTOR_CODE, 0); // Timer interrupt
+	create_idt_entry(0x21, IKeyboard, IDT_SELECTOR_CODE, 0); // Keyboard interrupt
+	create_idt_entry(0x22, IDummy, IDT_SELECTOR_CODE, 0); // IRQ2 - Cascade for second PIC
+	create_idt_entry(0x23, ISerial2, IDT_SELECTOR_CODE, 0); // COM2
+	create_idt_entry(0x24, ISerial1, IDT_SELECTOR_CODE, 0); // COM1
+	create_idt_entry(0x25, IParallel2, IDT_SELECTOR_CODE, 0); // LPT2
+	create_idt_entry(0x26, IFloppy, IDT_SELECTOR_CODE, 0); // Floppy disk
+	create_idt_entry(0x27, ISpurious, IDT_SELECTOR_CODE, 0); // Spurious interrupt
+	create_idt_entry(0x28, ICmosRTC, IDT_SELECTOR_CODE, 0); // CMOS real-time clock
+	create_idt_entry(0x29, IRQ9, IDT_SELECTOR_CODE, 0); // IRQ9
+	create_idt_entry(0x2A, IRQ10, IDT_SELECTOR_CODE, 0); // IRQ10
+	create_idt_entry(0x2B, IRQ11, IDT_SELECTOR_CODE, 0); // IRQ11
+	create_idt_entry(0x2C, IMouse, IDT_SELECTOR_CODE, 0); // PS/2 Mouse
+	create_idt_entry(0x2D, IFPU, IDT_SELECTOR_CODE, 0); // FPU / Coprocessor / Inter-processor
+	create_idt_entry(0x2E, IPrimaryATA, IDT_SELECTOR_CODE, 0); // Primary ATA
+	create_idt_entry(0x2F, ISecondaryATA, IDT_SELECTOR_CODE, 0); // Secondary ATA
 }
 
 void setup_pic()

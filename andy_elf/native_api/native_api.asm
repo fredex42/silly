@@ -18,26 +18,6 @@ extern switch_out_process
 ; extern rtc_get_epoch_time
 extern native_api_dispatcher
 
-;Purpose - initialise the native API by attaching the landing pad function to
-; the int 0x60 interrupt
-init_native_api:
-  push ebp
-  mov ebp, esp
-
-  push es
-  mov ax, 0x08      ;kernel CS
-  mov es, ax
-  mov esi, IDTOffset
-  add esi, 0x300  ;jump forward 0x60 (=96) entries of 8 bytes each
-  mov edi, native_api_landing_pad
-  mov bl, 0x0E    ;interrupt gate
-  mov cx, 0x0003
-
-  call CreateIA32IDTEntry
-
-  pop es
-  pop ebp
-  ret
 
 ;this interrupt handler is called for every native API call. Its job is to dispatch
 ;the call into the necessary handler (usually a C function)

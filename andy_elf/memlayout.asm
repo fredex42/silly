@@ -1,8 +1,5 @@
 ;This file defines the low-memory layout used during bootstrapping the kernel
-;from 16-bit to 32-bit mode, and a few static bits and bobx used later
-%define IDTOffset    0x1006	;where we store the interrupt descriptor table in our data segment
-%define IDTSize      0x800	;256 entries of 8 bytes each
-%define IDTPtr	     0x1000	;IDT pointer block goes right before the IDT, at the start of page 1
+;from 16-bit to 32-bit mode, and a few static bits and bobs used later
 
 %define FullGDT      0xe08
 %define FullGDTPtr   0xe00

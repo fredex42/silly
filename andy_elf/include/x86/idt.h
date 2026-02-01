@@ -37,6 +37,6 @@ struct InterruptDescriptor32 {
 void create_idt_entry(uint16_t intnum, void *handler, uint16_t selector, uint8_t level);
 void remove_idt_entry(uint16_t intnum);
 void print_idt_entry(struct InterruptDescriptor32* entry);
-void initialize_idt();
+void initialise_idt();
 
 #endif // __X86_IDT_H__

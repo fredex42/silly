@@ -5,7 +5,7 @@
 
 struct InterruptDescriptor32 idt[INTERRUPT_MAX];
 
-void initialize_idt() {
+void initialise_idt() {
     memset(&idt, 0, INTERRUPT_MAX * sizeof(struct InterruptDescriptor32));
 }
 

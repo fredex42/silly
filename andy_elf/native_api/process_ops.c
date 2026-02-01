@@ -1,6 +1,20 @@
 #include <types.h>
 #include <stdio.h>
 #include <process.h>
+#include <x86/idt.h>
+#include "process_ops.h"
+#include <x86/segmentation.h>
+
+// This is defined in native_api.asm
+extern native_api_landing_pad();
+
+/**
+ * Initializes the native API by creating an IDT entry for the native API interrupt on 0x60.
+ */
+void init_native_api()
+{
+    create_idt_entry(0x60, native_api_landing_pad, IDT_SELECTOR_CODE, 3);   
+}
 
 void api_terminate_current_process()
 {
