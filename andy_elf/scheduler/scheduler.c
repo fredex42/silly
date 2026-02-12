@@ -185,3 +185,17 @@ pid_t get_active_pid()
 {
   return active_process;
 }
+
+void set_needs_reschedule(uint8_t val)
+{
+  global_scheduler_state->needs_reschedule = val;
+}
+void clear_needs_reschedule()
+{
+  global_scheduler_state->needs_reschedule = 0;
+}
+int8_t get_needs_reschedule()
+{
+  kprintf("get_needs_reschedule: %d\r\n", (uint16_t)global_scheduler_state->needs_reschedule);
+  return global_scheduler_state->needs_reschedule;
+}

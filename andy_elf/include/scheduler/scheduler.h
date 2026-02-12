@@ -33,6 +33,7 @@ typedef struct scheduler_state {
   uint32_t current_buffer;
   uint32_t tasks_in_progress;
 
+  uint8_t needs_reschedule; //set to 1 when a process switch is needed on return from native api
 } SchedulerState;
 
 void initialise_scheduler();
@@ -49,4 +50,7 @@ pid_t get_active_pid();
 //finds the next runnable process (in a round-robin fashion) and attempts to enter it
 void enter_next_process();
 
+void set_needs_reschedule(uint8_t val);
+void clear_needs_reschedule();
+int8_t get_needs_reschedule();
 #endif

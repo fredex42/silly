@@ -13,6 +13,8 @@ extern idle_loop
 
 ;scheduler/lowlevel.asm
 extern switch_out_process
+extern get_needs_reschedule
+extern clear_needs_reschedule
 
 ; ;drivers/cmos/rtc.c
 ; extern rtc_get_epoch_time
@@ -40,17 +42,17 @@ native_api_landing_pad:
   pop esi
   pop edi
   pop ebp
-  iret
 
-temp_label:
-.napi_nf:
-  ;we did not recognise the API code. Fallthrough to return to process.
-  mov eax, API_ERR_NOTFOUND
-
-.napi_rtn_direct:
+  push eax
+  call get_needs_reschedule
+  test eax, eax
+  jnz .napi_rtn_to_kern
+  pop eax
   iret
 
 .napi_rtn_to_kern:
+  call clear_needs_reschedule
+  pop eax
   call switch_out_process
   ;set up a stack frame that gets us back to the kernel idle loop
   pushf
@@ -60,3 +62,13 @@ temp_label:
   mov eax, idle_loop
   push eax
   iret
+
+; temp_label:
+; .napi_nf:
+;   ;we did not recognise the API code. Fallthrough to return to process.
+;   mov eax, API_ERR_NOTFOUND
+
+; .napi_rtn_direct:
+;   iret
+
+

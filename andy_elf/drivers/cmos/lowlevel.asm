@@ -250,8 +250,7 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   push eax
   push ebx
   push ds
-
-  mov ax, 0x10  ;kernel data segment
+  mov ax, 0x10
   mov ds, ax
 
   ;We must read status register C both to know what happened, and to clear the processing flag
