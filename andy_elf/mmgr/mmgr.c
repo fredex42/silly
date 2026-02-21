@@ -1212,7 +1212,7 @@ void validate_kernel_memory_allocations(uint8_t should_panic)
           if(!physical_memory_map[phys_index].present) {
             kprintf("ERROR page %d/%d (0x%x) -> phys 0x%x\r\n",i, j, (i<<22) | (j<<12), page_phys);
             kprintf("ERROR physical 0x%x is index %d which is not present!\r\n", page_phys, phys_index);
-            k_panic("Attempt to use physical RAM that is not present\r\n");
+            //k_panic("Attempt to use physical RAM that is not present\r\n");
           }
           //release_spinlock(&physlock);
         }

@@ -246,7 +246,12 @@ IPrimaryATA:             ;IRQ14 Primary IDE
   push esi
   push edi
   push ebp
-  
+  push ds
+  push es
+  mov ebx, 0x10
+  mov ds, bx
+  mov es, bx
+
   mov ebx, 0
   push ebx
   call ata_service_interrupt  ;tell the ATA driver that this cane from bus 0 (primary)
@@ -257,6 +262,8 @@ IPrimaryATA:             ;IRQ14 Primary IDE
   call pic_send_eoi
   add esp, 4
 
+  pop es
+  pop ds
   pop ebp
   pop edi
   pop esi
@@ -276,6 +283,11 @@ ISecondaryATA:             ;IRQ15 Secondary IDE
   push esi
   push edi
   push ebp
+  push ds
+  push es
+  mov ebx, 0x10
+  mov ds, bx
+  mov es, bx
 
   mov ebx, 1
   push ebx
@@ -287,6 +299,8 @@ ISecondaryATA:             ;IRQ15 Secondary IDE
   call pic_send_eoi
   add esp, 4
 
+  pop es
+  pop ds
   pop ebp
   pop edi
   pop esi
