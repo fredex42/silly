@@ -295,6 +295,10 @@ ps2_send:
 IKeyboard:	;keyboard interrupt handler
 	push ax
     push bx
+    push ds
+
+    mov ax, 0x10      ;kernel data segment
+    mov ds, ax
 
     xor ax, ax
     in al, PS2_DATA ;get the current character from the buffer. If the buffer is not flushed then no more interrupts occur.
@@ -312,6 +316,7 @@ IKeyboard:	;keyboard interrupt handler
     call pic_send_eoi
     add esp, 4
 
+    pop ds
 	pop bx
     pop ax
 	iret

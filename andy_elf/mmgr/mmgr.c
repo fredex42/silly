@@ -90,8 +90,9 @@ void idmap_multiboot_data(void *multiboot_ptr, size_t length_bytes)
     length_bytes = 0x10000;
   }
   //we need to identity-map the multiboot data so we can access it
-  size_t pages = (length_bytes / PAGE_SIZE) + 1;
   vaddr start_page = (vaddr)multiboot_ptr & MP_ADDRESS_MASK;
+  size_t page_offset = (vaddr)multiboot_ptr & ~MP_ADDRESS_MASK; // offset within the first page
+  size_t pages = (page_offset + length_bytes + PAGE_SIZE - 1) / PAGE_SIZE;
   kputs("INFO Identity-mapping multiboot data...\r\n");
   for(size_t i=0;i<pages;i++) {
     vaddr phys_page = start_page + i*PAGE_SIZE;

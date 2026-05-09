@@ -4,7 +4,7 @@ set -euo pipefail
 # ============================================================
 # CONFIGURATION
 # ============================================================
-cp ../andy_elf/test.elf ./mykernel.elf
+cp ../build/test.elf ./mykernel.elf
 IMAGE=disk.img
 IMAGE_SIZE=200M            # Size of disk image
 KERNEL=./mykernel.elf      # Path to your kernel file
