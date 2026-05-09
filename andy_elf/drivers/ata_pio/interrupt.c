@@ -18,7 +18,7 @@ the interrupt handler so care should be taken not to block un-necessarily
 void ata_service_interrupt(uint8_t bus_nr)
 {
   SchedulerTask *t;
-  kprintf("ata_service_interrupt master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
+  //kprintf("ata_service_interrupt master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
   
   // Check if master_driver_state is accessible
   if(!master_driver_state) {

@@ -3,6 +3,8 @@
 #define __VOLMGR_H
 #include <types.h>
 
+struct KernelConfig;
+
 enum disk_type {
     DISK_TYPE_UNKNOWN = 0,
     DISK_TYPE_ISA_IDE,
@@ -24,7 +26,7 @@ enum disk_type {
 #define CB_DISK_ADDED 0x04
 #define CB_DISK_REMOVED 0x08
 
-void volmgr_init();
+void volmgr_init(struct KernelConfig *config);
 //When a disk is added, the partitions are automatically enumerated and added as volumes
 //This is called by hardware init/scan code including PCI, ACPI and ISA bus code
 uint32_t volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags);

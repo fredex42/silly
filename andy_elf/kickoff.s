@@ -287,7 +287,9 @@ extern load_acpi_data
 call load_acpi_data
 
 extern volmgr_init
+push dword 0
 call volmgr_init
+add esp, 4
 
 .post_mbt:
 extern setup_pic
