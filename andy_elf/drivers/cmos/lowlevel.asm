@@ -249,6 +249,16 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   pushf
   push eax
   push ebx
+  push ds
+    push es
+    push fs
+    push gs
+
+  mov ax, 0x10      ;kernel data segment
+  mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
 
   ;We must read status register C both to know what happened, and to clear the processing flag
   mov ax, 0x0C      ;select status register C
@@ -287,6 +297,10 @@ ICmosRTC:             ;IRQ8 CMOS RTC interrupt handler.
   call pic_send_eoi
   add esp, 4
 
+    pop gs
+    pop fs
+    pop es
+  pop ds
   pop ebx
   pop eax
   popf

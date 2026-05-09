@@ -74,9 +74,20 @@ IReserved:
 
 ;Trap handlers
 IDivZero:
+	push ds
+	push es
+	push fs
+	push gs
 	mov ax, 0x10
 	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
 	call c_except_div0	;helpfully, the CPU has already arranged a stack frame for us that is compatible with GCC
+	pop gs
+	pop fs
+	pop es
+	pop ds
 	mov eax, DivZeroMsg
 	call FatalMsg
 
@@ -121,9 +132,20 @@ IBoundRange:
 	call FatalMsg
 
 IOpcodeInval:
+	push ds
+	push es
+	push fs
+	push gs
 	mov ax, 0x10
 	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
   call c_except_invalidop
+	pop gs
+	pop fs
+	pop es
+	pop ds
 	mov eax, InvalidOpcodeMsg
 	call FatalMsg
 
@@ -162,9 +184,20 @@ IStackSegFault: ;leaves error code
 	call FatalMsg
 
 IGPF:		;leaves error code
+	push ds
+	push es
+	push fs
+	push gs
 	mov ax, 0x10
 	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
 	call c_except_gpf
+	pop gs
+	pop fs
+	pop es
+	pop ds
 	mov eax, GPFMsg
 	call FatalMsg
 
@@ -188,6 +221,9 @@ IPageFault:	;leaves error code
 
 	mov ax, 0x10
 	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
 
 	;When we entered, our stack frame looked like this: uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags
 	;we need to add the faulting address

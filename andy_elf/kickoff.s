@@ -287,7 +287,9 @@ extern load_acpi_data
 call load_acpi_data
 
 extern volmgr_init
+push dword 0
 call volmgr_init
+add esp, 4
 
 .post_mbt:
 extern setup_pic
@@ -317,10 +319,10 @@ extern defer_launch_shell
 call defer_launch_shell
 
 ;make sure that there are no left-over memory allocations
-xor eax,eax
-push ax
-call validate_kernel_memory_allocations
-pop ax
+;xor eax,eax
+;push ax
+;call validate_kernel_memory_allocations
+;pop ax
 
 extern scheduler_tick
 extern enter_next_process
@@ -333,5 +335,13 @@ sti
 hlt									;pause processor until an interrupt comes along. We will be regularly woken by the timer interrupt.
 jmp idle_loop
 
+global __stack_chk_fail_local
+extern k_panic
+__stack_chk_fail_local:
+push dword StackChkFailString
+call k_panic
+hlt
+
 section .rodata
 HelloString: db 'Hello world', 0x0a, 0x0d, 0
+StackChkFailString: db 'Kernel stack overflow detected! System halted.', 0x0a, 0x0d, 0

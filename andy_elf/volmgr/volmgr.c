@@ -25,8 +25,10 @@ void volmgr_init(struct KernelConfig *config) {
     volmgr_state->disk_count = 0;
     volmgr_state->internal_counter = 0;
     if(config!=NULL) {
-        volmgr_state->root_device = config_root_device(config);
-    } else {
+        volmgr_state->root_device = (char *)config_root_device(config);
+    }
+
+    if(volmgr_state->root_device==NULL) {
         kputs("WARNING: volmgr was not supplied with kernel configuration\r\n");
         volmgr_state->root_device = (char *)malloc(8);
         if(!volmgr_state->root_device) {
@@ -82,6 +84,7 @@ void mount_volume_completed(uint8_t status, void *fs_ptr, void *extradata) {
 
     if(status==E_OK) {
         kprintf("volmgr: Volume %s mounted successfully\r\n", mount_data->volume->name);
+        kprintf("volmgr: root device target is %s\r\n", volmgr_state->root_device);
         mount_data->volume->fs_ptr = fs_ptr;
 
         volmgr_internal_trigger_callbacks(CB_MOUNT, E_OK, mount_data->volume->name, mount_data->volume);
@@ -91,6 +94,8 @@ void mount_volume_completed(uint8_t status, void *fs_ptr, void *extradata) {
             //This is the root device, set up any necessary root FS pointers here
             volmgr_internal_register_alias("#root", mount_data->volume->name);
             volmgr_internal_trigger_callbacks(CB_MOUNT, E_OK, "#root", mount_data->volume);
+        } else {
+            kprintf("volmgr: mounted volume %s is not root target %s\r\n", mount_data->volume->name, volmgr_state->root_device);
         }
     } else {
         kprintf("volmgr: Volume %s mount failed with status %d\r\n", mount_data->volume->name, status);
@@ -605,16 +610,19 @@ void *volmgr_resolve_path_to_fs(const char *path) {
  * The returned volume has its reference count incremented, and must be unref'd by the caller.
  */
 void *volmgr_resolve_path_to_volume(const char *path) {
-    const char *path_start = strchr(path, ':');
-    if(!path_start) {
+    const char *path_sep = strchr(path, ':');
+    if(!path_sep) {
         kprintf("ERROR volmgr_resolve_path_to_volume: path %s is not valid (no colon found)\r\n", path);
         return NULL;
     }
-    ++path_start;  //skip the colon
 
-    size_t dev_len = (size_t)path_start - (size_t)path;
+    size_t dev_len = (size_t)(path_sep - path);
     char device_name[32];
-    strncpy(device_name, path, dev_len > 32 ? 32 : dev_len);
+    if(dev_len >= sizeof(device_name)) {
+        dev_len = sizeof(device_name) - 1;
+    }
+    memcpy(device_name, path, dev_len);
+    device_name[dev_len] = '\0';
     
     if(path[0] == '#') {
         kprintf("DEBUG: checking alias %s\r\n", device_name);

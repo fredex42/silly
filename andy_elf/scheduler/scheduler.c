@@ -35,7 +35,7 @@ void scheduler_tick()
   SchedulerTask *to_run;
 
   cli();
-
+  //kputs(".");
   ++global_scheduler_state->ticks_elapsed;
   //FIXME: run deadline tasks first
   //FIXME: run after-time tasks second

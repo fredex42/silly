@@ -58,7 +58,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
   kprintf("DEBUG RSDT oemid '%s'\r\n", id_str);
   int entries = (rsdt->h.Length - sizeof(struct ACPISDTHeader)) / 4;
 
-  for(register int i=0; i<entries; i++) {
+  for(uint32_t i=0; i<(uint32_t)entries; i++) {
     kprintf("DEBUG RSDT entry %d at 0x%x\r\n", i, rsdt->PointerToOtherSDT[i]);
 
     //It's important to note that the relative_ptr can be _negative_ e.g. in qemu the RSDT is on the _end_ of the tables not the _start_.
@@ -77,7 +77,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
       memset(id_str, 0, 8);
       strncpy(id_str, h->OEMID, 7);
 
-      kprintf("Table %d: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, sig_str, id_str, h->Length, (uint32_t)valid);
+      kprintf("Table %l: Signature %s, OEM ID %s, Length %d, Valid %d.\r\n", i, sig_str, id_str, h->Length, (uint32_t)valid);
       if(h->Signature[0]=='A' && h->Signature[1]=='P' && h->Signature[2]=='I' && h->Signature[3]=='C') {
         read_madt_info((char *)h);
       } else if (h->Signature[0]=='M' && h->Signature[1]=='C' && h->Signature[2]=='F' && h->Signature[3]=='G') {

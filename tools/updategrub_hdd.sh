@@ -5,7 +5,7 @@ if [ ! -f disk.img ]; then
     exit 1
 fi
 
-if [ ! -f ../andy_elf/test.elf ]; then
+if [ ! -f ../build/test.elf ]; then
     echo "Kernel ELF not found!"
     exit 1
 fi
@@ -17,7 +17,7 @@ fi
 
 sudo kpartx -av disk.img
 sudo mount /dev/mapper/loop0p1 /mnt/temp
-sudo cp ../andy_elf/test.elf /mnt/temp/boot/mykernel.elf
-sudo cp ../userland/test/shell.app /mnt/temp
+sudo cp ../build/test.elf /mnt/temp/boot/mykernel.elf
+sudo cp ../shell.app/shell.app /mnt/temp/SHELL.APP
 sudo umount /mnt/temp
 sudo kpartx -dv disk.img

@@ -6,7 +6,7 @@ global switch_out_process
 extern get_current_process  ;defined in process.c  Returns the process struct for the current PID
 extern idle_loop            ;defined in kickoss.s. NOT a function, this is our "return address"
 
-%include "../memlayout.asm"
+%include "memlayout.asm"
 
 ;Purpose: Executes an IRET to exit kernel mode into user-mode on the given process.
 ;Expects the process stack frame to be configured for the return already; this is either

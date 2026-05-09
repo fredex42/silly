@@ -56,13 +56,17 @@ void kprintf(const char *fmt, ...)
           kputs(buf);
           break;
         case 'x':
-          value = (int32_t)va_arg(ap, int32_t);
-          longToString(value, buf, 16);
+          {
+            unsigned int uvalue = va_arg(ap, unsigned int); // default promotions yield unsigned int for uint32_t
+            longToString((int32_t)uvalue, buf, 16);
+          }
           kputs(buf);
           break;
         case 'l':
-          value = (int32_t)va_arg(ap, int32_t);
-          longToString(value, buf, 10);
+          {
+            int ivalue = va_arg(ap, int); // default promotions yield int for int32_t
+            longToString((int32_t)ivalue, buf, 10);
+          }
           kputs(buf);
           break;
         case 's':

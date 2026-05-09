@@ -1,8 +1,8 @@
-#include <types.h>
-#include <process.h>
-
 #ifndef __MMGR_PROCESS_H
 #define __MMGR_PROCESS_H
+
+#include <types.h>
+#include "../include/process.h"
 
 #include <exeformats/elf.h>
 
@@ -13,6 +13,6 @@ void remove_process(struct ProcessTableEntry* e);
 //INTERNAL USE ONLY! Called by the scheduler when switching processes.
 uint16_t set_current_process_id(uint16_t pid);
 //Get the process table entry for a given pid
-struct ProcessTableEntry* get_process(uint16_t pid);
+struct ProcessTableEntry* get_process(pid_t pid);
 
 #endif

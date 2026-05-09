@@ -200,5 +200,14 @@ void spawn_process(const char *path, void *extradata, void (*callback)(uint8_t s
 }
 
 void defer_launch_shell() {
+  struct VolMgr_Volume *vol = (struct VolMgr_Volume *)volmgr_resolve_path_to_volume("#root:/");
+  if(vol!=NULL) {
+    kputs("INFO Root filesystem already mounted, launching shell immediately\r\n");
+    _fs_root_device_mounted(E_OK, "#root", (void *)vol, NULL);
+    volmgr_vol_unref(vol);
+    return;
+  }
+
+  kputs("INFO Deferring shell launch until #root is mounted\r\n");
   volmgr_register_callback("#root", "launch_shell", CB_MOUNT | CB_ONESHOT, NULL, &_fs_root_device_mounted);
 }

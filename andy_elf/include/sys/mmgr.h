@@ -1,6 +1,8 @@
 #ifdef __BUILDING_TESTS
 #include <stdint.h>
 #include <sys/types.h>
+#include <stddef.h>
+typedef uintptr_t vaddr;
 #else
 #include <types.h>
 #endif
