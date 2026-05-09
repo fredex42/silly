@@ -4,6 +4,7 @@
 #include <panic.h>
 #include <spinlock.h>
 #include <memops.h>
+#include <sys/ioports.h>
 #include "heap.h"
 #include "process.h"
 
