@@ -7,6 +7,7 @@ struct VolMgr_Volume;
 
 #include <volmgr.h>
 #include <fs.h>
+#include "../drivers/ata_pio/ata_bus.h"
 
 #define MOUNT_CALLBACK_LIST_SIZE 16
 
@@ -30,7 +31,8 @@ struct VolMgr_Disk {
     uint32_t disk_id;
     uint32_t refcount;
     enum disk_type type;
-    uint32_t base_addr;
+    struct AtaBus *ata_bus; //Non-null if this disk is an ATA disk
+    uint32_t bus_index; //For ATA disks, the index of the bus they are on (0 for primary, 1 for secondary)
     uint32_t flags;
     uint8_t volume_count;
     //More fields as needed

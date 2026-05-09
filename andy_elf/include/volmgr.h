@@ -2,6 +2,7 @@
 #ifndef __VOLMGR_H
 #define __VOLMGR_H
 #include <types.h>
+extern struct AtaBus; //Forward declaration to avoid circular dependency with ata_bus.h
 
 enum disk_type {
     DISK_TYPE_UNKNOWN = 0,
@@ -27,7 +28,7 @@ enum disk_type {
 void volmgr_init();
 //When a disk is added, the partitions are automatically enumerated and added as volumes
 //This is called by hardware init/scan code including PCI, ACPI and ISA bus code
-uint32_t volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags);
+uint32_t volmgr_add_disk(enum disk_type type, struct AtaBus *ata_bus, uint32_t flags);
 uint8_t volmgr_get_disk_count();
 void *volmgr_disk_for_id(uint32_t id);
 

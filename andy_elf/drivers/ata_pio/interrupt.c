@@ -5,69 +5,50 @@
 #include <sys/ioports.h>
 #include <panic.h>
 #include <memops.h>
-#include "ata_pio.h"
-#include "ata_readwrite.h"
+// #include "ata_pio.h"
+// #include "ata_readwrite.h"
+#include "ata_bus.h"
 
-extern ATADriverState *master_driver_state;
+//extern ATADriverState *master_driver_state;
 
 /*
 This is called from the (assembly language) IPrimaryATA / ISecondaryATA
 handlers to actually work on the event that occurred. This is still a part of
 the interrupt handler so care should be taken not to block un-necessarily
 */
-void ata_service_interrupt(uint8_t bus_nr)
+void ata_service_interrupt(uint32_t irq_num)
 {
-  SchedulerTask *t;
-  //kprintf("ata_service_interrupt master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
-  
-  // Check if master_driver_state is accessible
-  if(!master_driver_state) {
-    kprintf("ERROR master_driver_state is NULL\r\n");
-    return;
-  }
-  
-  // Check if bus_nr is valid
-  if(bus_nr >= 4) {  // Assuming max 4 ATA buses
-    kprintf("ERROR invalid bus_nr %d\r\n", bus_nr);
-    return;
-  }
-  
-  //kprintf("About to access pending_disk_operation[%d]\r\n", (uint16_t)bus_nr);
-  //kprintf("master_driver_state=0x%x bus_nr=%d\r\n", master_driver_state, (uint16_t)bus_nr);
-  ATAPendingOperation *op = master_driver_state->pending_disk_operation[bus_nr];
-  
-  if(op==NULL || op->type==ATA_OP_NONE) {
-    kprintf("ERROR Received unexpected notification for IDE bus %d\r\n", (uint16_t)bus_nr);
+  SchedulerTask *t = NULL;
+
+  kprintf("DEBUG Received ATA interrupt on IRQ %d\r\n", irq_num);
+  struct AtaBus *bus = ata_bus_get_by_irq(irq_num);
+  if(bus == NULL) {
+    kprintf("ERROR Received ATA interrupt for unknown IRQ %d\r\n", irq_num);
     return;
   }
 
-  switch(op->type) {
-    case ATA_OP_READ:
-        //set up a lower-half to complete the read operation
-        t = new_scheduler_task(TASK_ASAP, &ata_complete_read_lowerhalf, op);
-        if(t==NULL) {
-          k_panic("ERROR Could not create schedule task to implement lower-half of ata interrupt\r\n");
-          return;
-        }
-        schedule_task(t);
-        break;
-    case ATA_OP_WRITE:
-      //set up a lower-half to complete the write operation
-      t = new_scheduler_task(TASK_ASAP, &ata_complete_write_lowerhalf, op);
-      if(t==NULL) {
-        k_panic("ERROR Could not create schedule task to implement lower-half of ata interrupt\r\n");
-        return;
-      }
-      schedule_task(t);
+  switch(bus->state) {
+    case ATA_STATE_PENDING_READ:
+      bus->state = ATA_STATE_PENDING_READ_DRAIN;
+      ata_bus_clear_interrupts(bus); // Prevent further interrupts until the lower half has drained the disk buffer
+      t = new_scheduler_task(TASK_ASAP, &ata_bus_complete_read, bus);
       break;
-    case ATA_OP_IGNORE:
-      kputs("DEBUG Ignoring ATA operation as requested\r\n");
-      op->type = ATA_OP_NONE;
-      return;
+    case ATA_STATE_PENDING_WRITE:
+      bus->state = ATA_STATE_PENDING_WRITE_DRAIN;
+      ata_bus_clear_interrupts(bus); // Prevent further interrupts until the lower half has drained the disk buffer
+      t = new_scheduler_task(TASK_ASAP, &ata_complete_write_lowerhalf, bus);
+      break;
     default:
-      kprintf("ERROR Unknown ATA operation type %d\r\n", (uint16_t)op->type);
+      kprintf("ERROR Received ATA interrupt for bus %s in unexpected state %d\r\n", bus->bus_name, bus->state);
       return;
   }
+
+  if(t==NULL) {
+    k_panic("ERROR Could not create schedule task to implement lower-half of ata interrupt\r\n");
+    return;
+  }
+  kprintf("DEBUG scheduled drain task at 0x%x\r\n", (uint32_t)t);
+  schedule_task(t);
 }
 
 void ata_dump_errors(uint8_t err)

@@ -19,7 +19,7 @@
 #define ATA_STATUS(base_addr) base_addr+7         //only when reading
 #define ATA_COMMAND(base_addr) base_addr+7        //only when writing
 
-#define ATA_ALTSTATUS(base_addr) base_addr+0x206
+#define ATA_ALTSTATUS(base_addr) base_addr+0
 
 #define ATA_CMD_IDENTIFY      0xEC
 #define ATA_CMD_READ_SECTORS  0x20

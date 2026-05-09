@@ -256,24 +256,24 @@ void volmgr_boot_sector_loaded(uint8_t status, void *buffer, void *extradata) {
     volmgr_disk_unref(disk);
 }
 
-/**
- * Uses the flags and base IO address to determine the ISA IDE disk number.
- * Returns 0xFF if the IO address and flags do not indicate ISA IDE.
- */
-uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk) {
-    if(disk->base_addr==0x1F0 && (disk->flags & DF_IDE_MASTER))
-        return 0;
-    else if(disk->base_addr==0x1F0 && (disk->flags & DF_IDE_SLAVE))
-        return 1;
-    else if(disk->base_addr==0x170 && (disk->flags & DF_IDE_MASTER))
-        return 2;
-    else if(disk->base_addr==0x170 && (disk->flags & DF_IDE_SLAVE))
-        return 3;
-    else {
-        kprintf("volmgr: Unknown IDE disk base address 0x%X\r\n", disk->base_addr);
-        return 0xFF;
-    }
-}
+// /**
+//  * Uses the flags and base IO address to determine the ISA IDE disk number.
+//  * Returns 0xFF if the IO address and flags do not indicate ISA IDE.
+//  */
+// uint8_t volmgr_isa_disk_number(struct VolMgr_Disk *disk) {
+//     if(disk->base_addr==0x1F0 && (disk->flags & DF_IDE_MASTER))
+//         return 0;
+//     else if(disk->base_addr==0x1F0 && (disk->flags & DF_IDE_SLAVE))
+//         return 1;
+//     else if(disk->base_addr==0x170 && (disk->flags & DF_IDE_MASTER))
+//         return 2;
+//     else if(disk->base_addr==0x170 && (disk->flags & DF_IDE_SLAVE))
+//         return 3;
+//     else {
+//         kprintf("volmgr: Unknown IDE disk base address 0x%X\r\n", disk->base_addr);
+//         return 0xFF;
+//     }
+// }
 
 uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk) {
     switch(disk->type) {
@@ -281,10 +281,14 @@ uint8_t volmgr_initialise_disk(struct VolMgr_Disk *disk) {
             //Initialise ISA IDE disk
             kprintf("volmgr: Initialising ISA IDE disk at 0x%x\r\n", disk);
             void * buffer = malloc(512); //Temporary buffer for boot sector
-            uint8_t disk_num = volmgr_isa_disk_number(disk);
-            strncpy(disk->base_name, "$ide", 8);
-            disk->base_name[4] = '0' + disk_num;
+            //uint8_t disk_num = volmgr_isa_disk_number(disk);
+            //strncpy(disk->base_name, "$ide", 8);
+            //disk->base_name[4] = '0' + disk_num;
+            //disk->base_name[5] = '\0';
+            strncpy(disk->base_name, disk->ata_bus->bus_name, 8);
+            disk->base_name[4] = '0' + disk->bus_index;
             disk->base_name[5] = '\0';
+            
             kprintf("volmgr: initialising disk %s\r\n", disk->base_name);
             int8_t rc = volmgr_disk_start_read(disk, 0, 1, buffer, (void *)disk, &volmgr_boot_sector_loaded);
             if(rc != E_OK) {
@@ -548,12 +552,13 @@ void* volmgr_get_disk_by_name(const char *name) {
     return NULL;
 }
 
-uint32_t volmgr_add_disk(enum disk_type type, uint32_t base_addr, uint32_t flags) {
+uint32_t volmgr_add_disk(enum disk_type type, struct AtaBus *ata_bus, uint32_t flags) {
     struct VolMgr_Disk *new_disk = (struct VolMgr_Disk *)malloc(sizeof(struct VolMgr_Disk));
+    if(ata_bus) ata_bus->refcount++; //The disk holds a strong reference to the AtaBus struct
     new_disk->type = type;
     new_disk->disk_id = volmgr_next_counter_value();
     new_disk->refcount = 0;
-    new_disk->base_addr = base_addr;
+    new_disk->ata_bus = ata_bus;
     new_disk->flags = flags;
     new_disk->volume_count = 0;
     new_disk->partition_count = 0;
