@@ -65,13 +65,6 @@ memops_o = custom_target('memops.o',
   build_by_default: true,
 )
 
-ioports_o = custom_target('ioports.o',
-  input: 'ioports.asm',
-  output: 'ioports.o',
-  command: [nasm, '-f', 'elf32', '@INPUT@', '-o', '@OUTPUT@'],
-  build_by_default: true,
-)
-
 cpuid_o = custom_target('cpuid.o',
   input: 'cpuid.asm',
   output: 'cpuid.o',
@@ -97,7 +90,6 @@ kernel = executable('test.elf',
     basic_console_o,
     cfuncs_o,
     memops_o,
-    ioports_o,
     cpuid_o,
   ],
   link_with: [

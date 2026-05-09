@@ -1,7 +1,7 @@
 native_api_o = custom_target('native_api.o',
   input: 'native_api.asm',
   output: 'native_api.o',
-  command: [nasm, '-f', 'elf32', '-I', meson.current_source_dir() + '/', '@INPUT@', '-o', '@OUTPUT@'],
+  command: [nasm, '-f', 'elf32', '-I', meson.current_source_dir() + '/', '-I', meson.project_source_root() + '/', '@INPUT@', '-o', '@OUTPUT@'],
   build_by_default: true,
 )
 

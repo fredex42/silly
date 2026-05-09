@@ -5,7 +5,7 @@ global init_native_api
 global native_api_landing_pad
 
 %include "apicodes.asm"
-%include "../memlayout.asm"
+%include "memlayout.asm"
 extern CreateIA32IDTEntry
 
 ;kickoff.asm

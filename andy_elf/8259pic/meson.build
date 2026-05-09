@@ -8,7 +8,7 @@ picroutines_o = custom_target('picroutines.o',
 interrupts_o = custom_target('interrupts.o',
   input: 'interrupts.asm',
   output: 'interrupts.o',
-  command: [nasm, '-f', 'elf32', '@INPUT@', '-o', '@OUTPUT@'],
+  command: [nasm, '-f', 'elf32', '-I', meson.project_source_root() + '/', '@INPUT@', '-o', '@OUTPUT@'],
   build_by_default: true,
 )
 

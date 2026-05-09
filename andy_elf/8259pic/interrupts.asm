@@ -1,6 +1,6 @@
 [BITS 32]
 
-%include "../memlayout.asm"  ;for IDTPtr
+%include "memlayout.asm"  ;for IDTPtr
 ;function exports
 global ISpurious
 global ITimer

@@ -1,7 +1,7 @@
 lowlevel_o = custom_target('sched_lowlevel.o',
   input: 'lowlevel.asm',
   output: 'sched_lowlevel.o',
-  command: [nasm, '-f', 'elf32', '@INPUT@', '-o', '@OUTPUT@'],
+  command: [nasm, '-f', 'elf32', '-I', meson.project_source_root() + '/', '@INPUT@', '-o', '@OUTPUT@'],
   build_by_default: true,
 )
 

@@ -7,8 +7,9 @@
 
 ## Build
 ```sh
-meson setup build
-meson compile -C build
+cd andy_elf
+meson setup ../build
+meson compile -C ../build
 ```
 Artifacts:
 - build/test.elf — linked with linker.ld
