@@ -105,7 +105,18 @@ configure_pic_interrupts:
 
 ITimer:     ;timer interrupt handler
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   xor bx, bx
 
   mov ebx, 0
@@ -113,125 +124,278 @@ ITimer:     ;timer interrupt handler
 	call pic_send_eoi
   add esp, 4
 
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 ISerial2:             ;IRQ3 serial port 2 interrupt handler. Just sends EOI at present
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 3
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 ISerial1:             ;IRQ4 serial port 1 interrupt handler. Just sends EOI at present
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 4
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 IParallel2:             ;IRQ5 parallel port 2 interrupt handler. Just sends EOI at present
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 5
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 IFloppy1:             ;IRQ6 floppy disk 1 interrupt handler. Just sends EOI at present
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 6
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 ISpurious:  ;IRQ7 spurious interrupt handler (also parallel port 1)
   pushf
-  push ax
+  push eax
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov bx, 0x10
+  mov ds, bx
+  mov es, bx
+  mov fs, bx
+  mov gs, bx
 
   call pic_get_isr
   shr ax, 8       ;upper 8 bits are PIC1
   and ax, 0x40    ;check bit 7
   jz no_eoi_reqd  ;if result is 0 then this is a suprious IRQ and no EOI is required
 
-  mov ax, 7
-  push ax
+  mov eax, 7
+  push eax
   call pic_send_eoi
   add esp, 4
 
   no_eoi_reqd:
-  pop ax
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop eax
   popf
   iret
 
 IRQ9:             ;IRQ9
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 9
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 IRQ10:             ;IRQ10
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 10
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 IRQ11:             ;IRQ11
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 11
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 IMouse:             ;IRQ12 PS/2 mouse
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 12
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
 IFPU:             ;IRQ13 FPU/Coprocessor/inter-processor
   pushf
-  push bx
+  push ebx
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 13
   push ebx
   call pic_send_eoi
   add esp, 4
-  pop bx
+  pop gs
+  pop fs
+  pop es
+  pop ds
+  pop ebx
   popf
   iret
 
@@ -247,9 +411,15 @@ IPrimaryATA:             ;IRQ14 Primary IDE
   push edi
   push ebp
   push ds
+  push es
+  push fs
+  push gs
 
   mov ax, 0x10              ;kernel data segment
   mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
 
   mov ebx, 0
   push ebx
@@ -261,6 +431,9 @@ IPrimaryATA:             ;IRQ14 Primary IDE
   call pic_send_eoi
   add esp, 4
 
+  pop gs
+  pop fs
+  pop es
   pop ds
   pop ebp
   pop edi
@@ -282,9 +455,15 @@ ISecondaryATA:             ;IRQ15 Secondary IDE
   push edi
   push ebp
   push ds
+  push es
+  push fs
+  push gs
 
   mov ax, 0x10              ;kernel data segment
   mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
 
   mov ebx, 1
   push ebx
@@ -296,6 +475,9 @@ ISecondaryATA:             ;IRQ15 Secondary IDE
   call pic_send_eoi
   add esp, 4
 
+  pop gs
+  pop fs
+  pop es
   pop ds
   pop ebp
   pop edi
@@ -308,8 +490,24 @@ ISecondaryATA:             ;IRQ15 Secondary IDE
   iret
 
 IDummy:   ;generic dummy interrupt handler
+  push ds
+  push es
+  push fs
+  push gs
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov fs, ax
+  mov gs, ax
+
   mov ebx, 2
   push ebx
   call pic_send_eoi
   add esp, 4
+
+  pop gs
+  pop fs
+  pop es
+  pop ds
   iret

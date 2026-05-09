@@ -1037,9 +1037,17 @@ vaddr _mmgr_get_pd();
 uint32_t page_value_for_vaddr(vaddr pf_load_addr) {
   size_t pf_load_dir = ADDR_TO_PAGEDIR_IDX(pf_load_addr);
   size_t pf_load_pg  = ADDR_TO_PAGEDIR_OFFSET(pf_load_addr);
+  uint32_t pd_value = kernel_paging_directory[pf_load_dir];
   #ifdef MMGR_VERBOSE
   kprintf("DEBUG page_value_for_vaddr looking up 0x%x-0x%x for 0x%x\r\n", pf_load_dir, pf_load_pg, pf_load_addr);
   #endif
+
+  // If the page directory entry is not present, probing the flat page-tables view
+  // can fault recursively. Return the directory entry flags directly in that case.
+  if(!(pd_value & MP_PRESENT)) {
+    return pd_value;
+  }
+
   vaddr ptr = (vaddr)flat_pagetables_ptr + ((vaddr)pf_load_dir << 12) + ((vaddr)pf_load_pg * sizeof(uint32_t));
   return *(uint32_t *)ptr;
 }
@@ -1053,7 +1061,8 @@ uint32_t page_value_for_vaddr(vaddr pf_load_addr) {
 */
 uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint32_t faulting_addr, uint32_t faulting_codeseg, uint32_t eflags)
 {
-  kprintf("INFO handle_allocation_fault access 0x%x, recursion depth %l\r\n", pf_load_addr, pagefault_depth_ctr);
+    kprintf("INFO handle_allocation_fault access 0x%x from 0x%x:0x%x err 0x%x, recursion depth %l\r\n",
+      pf_load_addr, faulting_codeseg, faulting_addr, error_code, pagefault_depth_ctr);
 
   void *phys_ptr;
   if(error_code&PAGEFAULT_ERR_PRESENT) {  //if this is set, then the page _was_ present => protection violation => not an allocation fault => can't handle it here.
@@ -1072,76 +1081,56 @@ uint8_t handle_allocation_fault(uint32_t pf_load_addr, uint32_t error_code, uint
   kprintf("DEBUG handle_allocation_fault Address 0x%x has page flags 0x%x\r\n", pf_load_addr, page_flags);
 
   if(page_flags&MPC_PAGINGDIR) { //the fault occurred on a sparse page
-    ++pagefault_depth_ctr;
-    kputs("DEBUG handle_allocation_fault detected on sparse page\r\n");
-    uint32_t *current_pd = (uint32_t *)_mmgr_get_pd();
-    kprintf("DEBUG current PD is 0x%x\r\n", current_pd);
-
     if(faulting_codeseg!=0x08 || error_code&PAGEFAULT_ERR_USER) {
       kputs("DEBUG the fault occurred in user code, not handling.\r\n");
       return 1;
     }
 
+    ++pagefault_depth_ctr;
+    kputs("DEBUG handle_allocation_fault detected on sparse page\r\n");
+    uint32_t *current_pd = (uint32_t *)_mmgr_get_pd();
+    kprintf("DEBUG current PD is 0x%x\r\n", current_pd);
 
-    //OK, so we need to allocate a page table entry. Work out where it goes.
-    vaddr pf_loc = (vaddr)pf_load_addr & 0x3FFFFF;  //the bits representing lower 4Mb is the page location
-    vaddr pagedir_idx = pf_loc >> 12;
-    vaddr pagedir_ent = (pf_loc >> 2) & 0x3FF;
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG allocating pagedir at 0x%x-0x%x from 0x%x\r\n", pagedir_idx, pagedir_ent, pf_loc);
-    #endif
-    vaddr pagetables_entry = ((vaddr)pf_load_addr & 0xFFC00000) + 0x03c0000; //the bits representing the upper portion should give us the paging dir base address.  
-                                                                        //The root paging dir should be mapped at offset 0x3fc00 beyond this.
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG pagetable_ptr is 0x%x\r\n", pagetables_entry);
-    #endif
+    size_t pf_load_dir = ADDR_TO_PAGEDIR_IDX(pf_load_addr);
+    size_t pf_load_pg  = ADDR_TO_PAGEDIR_OFFSET(pf_load_addr);
+    uint32_t *pagetables_entry = (uint32_t *)((vaddr)flat_pagetables_ptr + ((vaddr)pf_load_dir << 12));
 
-    if(pagetables_entry==ROOT_PAGE_DIR_LOCATION || pagetables_entry==KERNEL_PAGETABLES_LOCATION) {
-      page_flags |= MP_GLOBAL; //kernel space pages should be global
-    } else {
-      page_flags |= MP_USER;  //user space pages should be user-accessible
+    // Ensure a backing page-table exists for this directory before touching flat page-table view.
+    if(!(current_pd[pf_load_dir] & MP_PRESENT)) {
+      uint32_t allocd_pt = allocate_free_physical_pages(1, &phys_ptr);
+      if(allocd_pt!=1) {
+        kputs("ERROR Could not allocate physical page table\r\n");
+        --pagefault_depth_ctr;
+        return 1;
+      }
+
+      uint32_t pd_flags = MP_PRESENT | MP_READWRITE | MP_PCD | MPC_PAGINGDIR;
+      if(page_flags & MP_USER) pd_flags |= MP_USER;
+      if(page_flags & MP_GLOBAL) pd_flags |= MP_GLOBAL;
+      current_pd[pf_load_dir] = ((vaddr)phys_ptr & MP_ADDRESS_MASK) | pd_flags;
+      mb();
+
+      // New page-table must be cleared to avoid stale mappings.
+      memset_dw(pagetables_entry, 0, PAGE_SIZE_DWORDS);
+      mb();
     }
 
-    uint32_t allocd = allocate_free_physical_pages(1, &phys_ptr);
-    if(allocd!=1) {
+    uint32_t allocd_page = allocate_free_physical_pages(1, &phys_ptr);
+    if(allocd_page!=1) {
       kputs("ERROR Could not allocate more physical RAM\r\n");
       --pagefault_depth_ctr;
       return 1;
     }
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG physical ptr to map is 0x%x\r\n", phys_ptr);
-    #endif
 
-    //set up the new page in the root paging directory.
-    if(current_pd != pagetables_entry) {
-      #ifdef MMGR_VERBOSE
-      kprintf("DEBUG mapping to alternate PD 0x%x (current 0x%x)\r\n", pagetables_entry, current_pd);
-      kprintf("DEBUG pagedir_idx is 0x%x\r\n", pagedir_idx);
-      #endif
-      current_pd[pagedir_idx] = ((vaddr)phys_ptr & MP_ADDRESS_MASK) | MPC_PAGINGDIR | MP_PCD | MP_PRESENT | MP_READWRITE;
-    }
-    
-    //map it into RAM at the right place in the page-tables area.  For that we need to get a pointer
-    //to the page entry holding the page-tables area.
-
-    // vaddr flat_pagetables_ptr_pageoff = pagetable_ptr >> 10;
-    // uint32_t* pagetables_entry = (uint32_t *)(pagetable_ptr + flat_pagetables_ptr_pageoff);
-    ((uint32_t *)pagetables_entry)[pagedir_idx] = (vaddr)phys_ptr | MP_PRESENT | MP_PCD | MP_READWRITE | page_flags;
+    uint32_t pte_flags = MP_PRESENT | MP_READWRITE | MP_PCD;
+    if(page_flags & MP_USER) pte_flags |= MP_USER;
+    if(page_flags & MP_GLOBAL) pte_flags |= MP_GLOBAL;
+    pagetables_entry[pf_load_pg] = ((vaddr)phys_ptr & MP_ADDRESS_MASK) | pte_flags;
     mb();
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG handle_allocation_fault flat pagetables at 0x%x\r\n", &((uint32_t *)pagetables_entry)[pagedir_idx]);
-    kprintf("DEBUG pagetables address of pagetables is 0x%x\r\n", pagetables_entry);
-    #endif
 
     vaddr pageaddr_nowmapped = pf_load_addr & 0xFFFFF000; //base of the page we just mapped
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG page now mapped at base 0x%x, zeroing\r\n", pageaddr_nowmapped);
-    #endif
     memset_dw((void *)pageaddr_nowmapped, 0, PAGE_SIZE_DWORDS);
     mb();
-    #ifdef MMGR_VERBOSE
-    kprintf("DEBUG done.\r\n");
-    #endif
 
     //the faulting operation can now be retried by returning 0
     --pagefault_depth_ctr;
