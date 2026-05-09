@@ -84,6 +84,11 @@ typedef struct elf_program_header_i386 {
   uint32_t p_align;      //0 and 1 specify no alignment. Otherwise should be a positive, integral power of 2, with p_vaddr equating p_offset modulus p_align.
 } __attribute__((packed)) ElfProgramHeader32;
 
+//values for p_flags
+#define PF_X          0x01
+#define PF_W          0x02
+#define PF_R          0x04
+
 //values for sh_type
 #define SHT_NULL      0   //unused section
 #define SHT_PROGBITS  1   //program data

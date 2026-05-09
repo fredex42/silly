@@ -21,6 +21,7 @@
 #define ROOT_PAGE_DIR_LOCATION        0x3000
 #define KERNEL_PAGETABLES_LOCATION    0xF03C0000 //the kernel root paging dir is remapped here in the flat pagetables area
 #define FIRST_PAGEDIR_ENTRY_LOCATION  0x4000
+#define PAGEDIR_ROOT_OFFSET           0x03C0000
 
 static uint32_t *kernel_paging_directory;  //root paging directory on page 0
 static uint32_t *first_pagedir_entry;    //first directory entry on page 1
@@ -437,6 +438,15 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
     kprintf("DEBUG k_map_page new value is 0x%x\r\n", *(uint32_t *)page_ptr);
     #endif
   }
+
+  // User mappings require MP_USER on both the PTE and its parent PDE.
+  if(flags & MP_USER) {
+    uint32_t *root_dir = (pagetables == flat_pagetables_ptr)
+      ? kernel_paging_directory
+      : (uint32_t *)((vaddr)pagetables + PAGEDIR_ROOT_OFFSET);
+    root_dir[pagedir_idx] |= MP_USER;
+  }
+
   vaddr vptr = (vaddr)pagedir_idx << 22 | (vaddr)pageent_idx << 12;
 
   //kprintf("DEBUG k_map_page successfully mapped physical pointer 0x%x to vptr 0x%x\r\n", phys_addr, vptr);
@@ -638,7 +648,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
     return;
   }
 
-  uint32_t *paging_dir_root = (uint32_t *)((vaddr)mapped_pd + 0x03c0000); //the root directory is mapped at the end of the 
+  uint32_t *paging_dir_root = (uint32_t *)((vaddr)mapped_pd + PAGEDIR_ROOT_OFFSET); //the root directory is mapped at the end of the 
 
   for(size_t i=0; i<1024;i++) {
     if( (paging_dir_root[i] & MP_PRESENT) && ! (paging_dir_root[i] & MP_GLOBAL) && (paging_dir_root[i] & MP_USER)) {

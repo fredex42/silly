@@ -299,9 +299,9 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
 
     //now map the pages into the process's paging directory and remove them from kernel space
     for(size_t pagenum=0;pagenum < pages_required; ++pagenum) {
-      void *page_addr = (void *) ( (ph->p_vaddr & ~0x3FF) + pagenum*PAGE_SIZE);
+      void *page_addr = (void *) ( (ph->p_vaddr & ~0xFFF) + pagenum*PAGE_SIZE);
       size_t flags = MP_PRESENT | MP_USER;
-      if(ph->p_flags & SHF_WRITE) flags |= MP_READWRITE;
+      if(ph->p_flags & PF_W) flags |= MP_READWRITE;
       k_map_page_bytes(mapped_pagedirs, phys_ptrs[pagenum], page_addr, flags);
       k_unmap_page_ptr(NULL, (vaddr)(base_kernel_ptr + pagenum*PAGE_SIZE));
     }
