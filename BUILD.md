@@ -1,12 +1,29 @@
 # Building the OS and Userland
 
 ## Kernel
-You can build the kernel with your native toolchain, provided that it supports 32-bit x86 output.  The kernel is not yet ready for 64-bit.
+You can build the kernel with Meson/Ninja, provided that you have a toolchain supporting 32-bit x86 output.  The kernel is not yet ready for 64-bit.
 
-```bash
+
+### Prerequisites
+- GCC with 32-bit support (-m32) and binutils
+- nasm assembler
+- Meson (>= 0.60) and Ninja
+
+### Build
+```sh
 cd andy_elf
-make -j4
+meson setup ../build
+meson compile -C ../build
 ```
+Artifacts:
+- build/test.elf — linked with linker.ld
+- build/kernel.map — generated via gen_bochs_map.sh
+- build/test_mmgr — standalone mmgr unit test
+
+### Notes
+- The build mirrors the original Makefiles: NASM sources are assembled via `nasm -f elf32`, C sources use `-m32` and `-fno-pie`.
+- If your toolchain lacks 32-bit support, install gcc-multilib (distribution-specific) or an i386 cross toolchain.
+
 
 The final binary is called `test.elf`, this is intended to be loaded
 in a VM via grub TODO

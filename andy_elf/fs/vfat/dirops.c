@@ -96,7 +96,7 @@ void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, void *extradat
 void vfat_decode_attributes(uint8_t attrs, char *buf)
 {
   if(attrs&0x0F) {  //Read-only, hidden, system, volume label all set => LFN fragment
-    strcpy(buf, "!LFN");
+    memcpy(buf, "!LFN", 5);
     return;
   }
   if(attrs&VFAT_ATTR_READONLY) {
