@@ -6,6 +6,8 @@
 #include <panic.h>
 #include <sys/mmgr.h>
 #include <drivers/kb_buffer.h>
+#include <stdio.h>
+#include <cfuncs.h>
 
 /**
  * Routine to actually cleanup the process.  This is called from the scheduler by schedule_cleanup_task

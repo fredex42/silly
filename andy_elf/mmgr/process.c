@@ -5,6 +5,8 @@
 #include <spinlock.h>
 #include <memops.h>
 #include <sys/ioports.h>
+#include <stdio.h>
+#include <cfuncs.h>
 #include "heap.h"
 #include "process.h"
 

@@ -1,6 +1,7 @@
 #include <types.h>
 #include <scheduler/scheduler.h>
 #include <cfuncs.h>
+#include <stdio.h>
 #include <sys/ioports.h>
 // #include <sys/mmgr.h>
 #include <memops.h>

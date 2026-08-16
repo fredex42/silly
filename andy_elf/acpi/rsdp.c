@@ -5,7 +5,11 @@
 #include <sys/mmgr.h>
 #include <memops.h>
 #include <string.h>
+#include <malloc.h>
+#include <panic.h>
 #include "search_mem.h"
+#include "apic.h"
+#include "../drivers/pci/pci_ops.h"
 
 static struct AcpiTableShortcut *acpi_shortcuts;
 static uint8_t ShortcutTableLength=0;

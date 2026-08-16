@@ -92,6 +92,8 @@ void _fs_shell_spawn_cb(uint8_t status, pid_t pid, void *extradata) {
  * This callback is invoked when the root device has been mounted, via a call
  * in `defer_launch_shell`.
  */
+void spawn_process(const char *path, void *extradata, void (*callback)(uint8_t status, pid_t pid, void *extradata));
+
 void _fs_root_device_mounted(uint8_t status, const char *target, void *volume, void *extradata)
 {
   kprintf("INFO Root FS mount completed with status %d\r\n", status);

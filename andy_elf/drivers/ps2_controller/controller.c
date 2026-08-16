@@ -6,6 +6,9 @@
 #include <panic.h>
 #include <memops.h>
 #include <spinlock.h>
+#include <stdio.h>
+#include <cfuncs.h>
+#include <drivers/kb_buffer.h>
 #include "controller.h"
 #include "keymap.h"
 

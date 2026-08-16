@@ -5,7 +5,9 @@
 #include <cfuncs.h>
 #include <stdio.h>
 #include <memops.h>
+#include <panic.h>
 #include "apic.h"
+#include "../8259pic/8259pic.h"
 
 /*
 works out how many pages we need to store the given number of bytes

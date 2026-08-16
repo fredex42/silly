@@ -2,6 +2,8 @@
 #include "ioapic.h"
 #include "interrupts.h"
 #include <sys/mmgr.h>
+#include <memops.h>
+#include <stdio.h>
 
 void write_ioapic_register(const vaddr apic_base, const uint8_t offset, const uint32_t val)
 {

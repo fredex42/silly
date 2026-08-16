@@ -193,4 +193,8 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks);
 uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks);
 void *k_map_page_bytes(uint32_t *root_page_dir, void *phys_addr, void *target_virt_addr, uint32_t flags);
 vaddr _mmgr_get_pd();
+void initialise_flat_pagetables();
+void idmap_multiboot_data(void *multiboot_ptr, size_t length_bytes);
+void reserve_physical_page(void *phys_addr);
+void *k_map_next_unallocated_pages(uint32_t flags, void **phys_addr, size_t pages);
 #endif

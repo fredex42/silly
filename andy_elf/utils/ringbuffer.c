@@ -1,6 +1,7 @@
 #include <types.h>
 #include <malloc.h>
 #include <utils/ringbuffer.h>
+#include <cfuncs.h>
 
 RingBuffer* ring_buffer_new(size_t len)
 {

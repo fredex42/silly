@@ -5,3 +5,4 @@ void pci_scanner_check_function(uint8_t bus, uint8_t device, uint8_t function);
 
 void pci_recursive_scan();
 void pci_scanner_check_bus(uint8_t bus);
+void pci_init_device(uint8_t bus, uint8_t slot, uint8_t func, uint8_t base_class, uint8_t sub_class);

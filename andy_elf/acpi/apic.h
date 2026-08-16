@@ -85,3 +85,5 @@ typedef struct {
 #define LAPIC_TIMER_CHOSEN_VECTOR 0x20
 
 #define PLAPIC_DEFAULT_ADDRESS  0xFEE00000
+
+void read_madt_info(char *madt_ptr);

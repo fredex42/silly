@@ -1,6 +1,7 @@
 #include "search_mem.h"
 #include <sys/mmgr.h>
 #include <panic.h>
+#include <stdio.h>
 
 uint8_t *map_bios_area()
 {

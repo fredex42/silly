@@ -2,6 +2,9 @@
 #include <acpi/rsdt.h>
 #include <acpi/fadt.h>
 #include <memops.h>
+#include <malloc.h>
+#include <stdio.h>
+#include <cfuncs.h>
 
 struct AcpiTableShortcut *acpi_shortcut_list_end(struct AcpiTableShortcut *list) 
 {

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <sys/mmgr.h>
 #include <panic.h>
+#include <memops.h>
 #include "process.h"
 
 /**

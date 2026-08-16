@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <types.h>
 #include <scheduler/scheduler.h>
+#include <panic.h>
+#include <memops.h>
 #include "scheduler_task_internals.h"
 
 /**

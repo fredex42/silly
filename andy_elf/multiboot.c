@@ -4,6 +4,8 @@
 #include <kernel_config.h>
 #include <panic.h>
 #include <volmgr.h>
+#include <stdio.h>
+#include <cfuncs.h>
 
 //defined in acpi/rsdp.c
 void load_acpi_data();

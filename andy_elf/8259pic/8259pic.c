@@ -3,6 +3,7 @@
 #include "8259pic.h"
 #include <cpuid.h>
 #include "picroutines.h"
+#include <cfuncs.h>
 
 /*
 arguments:

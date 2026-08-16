@@ -1,6 +1,7 @@
 #include <types.h>
 #include <drivers/kb_buffer.h>
 #include <process.h>
+#include <stdio.h>
 #include "../ps2_controller/controller.h"
 #include "pending_operation_list.h"
 
