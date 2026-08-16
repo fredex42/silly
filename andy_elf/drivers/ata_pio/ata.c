@@ -1,11 +1,11 @@
 #include <types.h>
-#include <interrupts.h>
+#include <scheduler/scheduler.h>
 #include "ata_bus.h"
 #include <spinlock.h>
 #include <stdio.h>
 #include "ata_pio.h"
 #include <errors.h>
-#include <scheduler/scheduler.h>
+
 
 spinlock_t ata_bus_list_lock = 0;
 struct AtaBus *ata_bus_list = NULL;

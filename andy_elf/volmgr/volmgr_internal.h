@@ -7,6 +7,7 @@ struct VolMgr_Volume;
 
 #include <volmgr.h>
 #include <fs.h>
+#include <scheduler/scheduler.h>
 #include "../drivers/ata_pio/ata_bus.h"
 
 #define MOUNT_CALLBACK_LIST_SIZE 16

@@ -8,7 +8,7 @@ basic_routines_o = custom_target('basic_routines.o',
 libata_pio = static_library('ata_pio',
   sources: [
     'detect.c',
-    'readwrite.c',
+    'ata.c',
     'interrupt.c',
   ],
   objects: [basic_routines_o],
