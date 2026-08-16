@@ -66,8 +66,12 @@ uint16_t * identify_drive(uint16_t base_addr, uint8_t drive_nr)
   }
 }
 
+/**
+ * Takes an allocated ATA bus and performs hardware initialisation on it, including sending a software reset and attempting to identify any connected disks.
+ */
 void initialise_bus_disks(struct AtaBus *bus) {
   bus->refcount += 1; // Increment reference count for the bus
+  bus->state = ATA_STATE_DETECTING;
   uint16_t *identity = identify_drive(bus->io_base, bus->device_number==0 ? ATA_SELECT_MASTER : ATA_SELECT_SLAVE);
   if(identity) {
       kprintf("INFO Master drive found on bus %s\r\n", bus->bus_name);
@@ -115,11 +119,22 @@ void register_ata_bus(char *name, uint8_t bus_number, uint8_t device_number, uin
 
   kprintf("Registered ATA bus: %s (bus %d, device %d)\r\n", name, bus_number, device_number);
   
+  ata_bus_send_software_reset(new_bus);
+  ata_bus_clear_interrupts(new_bus);
+
+  //FIXME: assuming PIO. We should check for UDMA support and not use this buffer if using DMA
+  new_bus->active_buffer = (uint16_t *)malloc(256*sizeof(uint16_t)); // Allocate a 512-byte buffer for PIO operations
+  if(!new_bus->active_buffer) {
+    k_panic("Could not allocate memory for ATA bus active buffer\r\n");
+    return;
+  }
+
   initialise_bus_disks(new_bus);
   new_bus->device_number = 1; // Now check the slave device
   initialise_bus_disks(new_bus);
   new_bus->device_number = 0; // Reset to master for future operations
   new_bus->state = ATA_STATE_IDLE; // Set state to idle after initialization
+  ata_bus_set_interrupts(new_bus); // Enable interrupts for the bus after initialization
 }
 
 /** 

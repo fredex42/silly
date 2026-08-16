@@ -19,6 +19,10 @@ enum AtaState {
 #define ATA_SLAVE_LBA28 0x04
 #define ATA_SLAVE_LBA48 0x08
 
+/**
+ * This structure represents the current state of an ATA bus, which can have one or two connected disks (master and slave).
+ * This is either initialised while scanning PCI or, if no PCI bus is present, by default for the ISA primary bus.
+ */
 struct AtaBus {
     char sig[4];
     uint32_t refcount;
@@ -37,6 +41,8 @@ struct AtaBus {
     uint8_t slave_udma_mode;
     uint16_t flags;
     void (*active_completion_callback)(uint8_t status, void *buffer, void *extradata); // Callback function for read/write completion
+    uint16_t *active_buffer; // Only used in PIO mode; points to a 256 word (512 byte) buffer which holds the current sector under read or write
+    void *active_extradata; // Points to a user-supplied pointer which is passed to the callback when the read/write completes. Should be NULL if there is no operation in flight
 };
 
 /**
