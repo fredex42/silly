@@ -4,6 +4,8 @@
 #include <types.h>
 
 struct KernelConfig;
+//defined in volmgr/volmgr_internal.h
+struct VolMgr_Volume;
 
 enum disk_type {
     DISK_TYPE_UNKNOWN = 0,
@@ -71,7 +73,7 @@ void volmgr_register_callback(char *target, char *opt_label, uint8_t flags, void
  * Removes the given callback for the specified target.
  * Returns E_OK if successful, or E_NOT_SUPPORTED if the callback was not found.
  */
-uint8_t volmgr_unregister_callback(char *target, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata));
+uint8_t volmgr_unregister_callback(const char *target, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata));
 
 /**
  * Registers the given alias name to point to the specified target device name.

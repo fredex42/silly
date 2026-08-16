@@ -113,7 +113,7 @@ void acpi_setup_shortcuts(const struct RSDT *rsdt, uint32_t rsdt_phys)
 
 void load_acpi_data() {
   uint8_t *bios_area = map_bios_area();
-  const struct RSDPDescriptor* rsdp;
+  struct RSDPDescriptor* rsdp;
 
   const struct RSDPDescriptor* rsdp_temp = scan_memory_for_acpi(bios_area);
   if(rsdp_temp==NULL) {
@@ -121,7 +121,7 @@ void load_acpi_data() {
     unmap_bios_area(bios_area);
     return;
   } else {
-    rsdp = (const struct RSDPDescriptor *)malloc(sizeof(struct RSDPDescriptor));
+    rsdp = (struct RSDPDescriptor *)malloc(sizeof(struct RSDPDescriptor));
     if(!rsdp) {
       k_panic("Unable to allocate memory for RSDP descriptor");
     }
@@ -146,7 +146,7 @@ void load_acpi_data() {
     kprintf("DEBUG RSDT physical page address is 0x%x\r\n", phys_ptr);
     vaddr offset = ((vaddr)rsdp->RsdtAddress - (vaddr)phys_ptr);
 
-    void *rsdt_base = (const struct RSDT *)vm_map_next_unallocated_pages(NULL, MP_PRESENT, &phys_ptr, 1);
+    void *rsdt_base = vm_map_next_unallocated_pages(NULL, MP_PRESENT, &phys_ptr, 1);
     kprintf("DEBUG mapped location of 0x%x is 0x%x\r\n", phys_ptr, rsdt_base);
 
     const struct RSDT* rsdt = (const struct RSDT *)((vaddr)rsdt_base + offset);

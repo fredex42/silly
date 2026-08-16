@@ -75,7 +75,7 @@ void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, void *extradat
 
   memset(transient, 0, sizeof(struct find_8point3_file_transient_data));
 
-  char (*maybe_dot)=strchr(filename, '.');
+  const char (*maybe_dot)=strchr(filename, '.');
 
   if(maybe_dot!=NULL) {
     size_t name_len = maybe_dot - filename;

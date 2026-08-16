@@ -3,6 +3,9 @@
 #ifndef __FS_FAT_FILEOPS_H
 #define __FS_FAT_FILEOPS_H
 
+//defined in include/fs/vfat.h
+struct directory_entry;
+
 typedef struct vfat_open_file {
   struct fat_fs* parent_fs;
   size_t current_cluster_number;
