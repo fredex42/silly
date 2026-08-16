@@ -33,7 +33,7 @@ static size_t pagefault_depth_ctr = 0;
 //all of the page tables in the root directory get mapped into this area.
 //We initialise it by configuring a page directory to cover the whole area and set up the first entry to the first_pagedir_entry value
 //After that, further pages are added "just-in-time" by handling page faults to the region.
-static uint32_t *flat_pagetables_ptr  = 0xF0000000;     
+static uint32_t *flat_pagetables_ptr  = (uint32_t *)0xF0000000;
 
 #define PHYSICAL_MAP_VMM_LIMIT 0xFE000000       //the physical memory map will be allocated backwards from this address in kernel-space
 //this is a pointer to an array of physical_page_count PhysMapEntry objects
@@ -97,9 +97,9 @@ void idmap_multiboot_data(void *multiboot_ptr, size_t length_bytes)
   kputs("INFO Identity-mapping multiboot data...\r\n");
   for(size_t i=0;i<pages;i++) {
     vaddr phys_page = start_page + i*PAGE_SIZE;
-    reserve_physical_page(phys_page);
+    reserve_physical_page((void *)phys_page);
     kprintf("  DEBUG Mapping 0x%x to 0x%x...\r\n", phys_page, phys_page);
-    k_map_page_bytes(kernel_paging_directory, phys_page, phys_page, MP_PRESENT|MP_READWRITE);
+    k_map_page_bytes(kernel_paging_directory, (void *)phys_page, (void *)phys_page, MP_PRESENT|MP_READWRITE);
   }
   kputs("Done.\r\n");
 }
@@ -266,7 +266,7 @@ size_t map_physical_memory_map_area(size_t map_start, size_t map_length_pages)
 void initialise_flat_pagetables() {
   void* phys_ptrs[1];
 
-  vaddr *temp_ptr = 0x300000;  //we are not using the 3Mb range right now, use that as a temporary area
+  vaddr *temp_ptr = (vaddr *)0x300000;  //we are not using the 3Mb range right now, use that as a temporary area
   vaddr temp_pagedir = (vaddr)temp_ptr >> 12;
   vaddr target_pagedir = (vaddr)flat_pagetables_ptr >> 22;
 
@@ -402,7 +402,7 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
   uint32_t *pagedir;
 
   uint32_t *pagetables;
-  if((vaddr)app_paging_dir==NULL || (vaddr)app_paging_dir==_mmgr_get_pd()) {
+  if((vaddr)app_paging_dir==0 || (vaddr)app_paging_dir==_mmgr_get_pd()) {
     #ifdef MMGR_VERBOSE
     kprintf("DEBUG k_map_page for kernel usage\r\n");
     #endif
@@ -412,7 +412,7 @@ void * k_map_page(uint32_t *app_paging_dir, void * phys_addr, uint16_t pagedir_i
   }
 
   //temporary check while we are porting this over
-  if( ((vaddr)app_paging_dir < 0xC0000000) && ((vaddr)app_paging_dir != kernel_paging_directory)) {
+  if( ((vaddr)app_paging_dir < 0xC0000000) && ((vaddr)app_paging_dir != (vaddr)kernel_paging_directory)) {
     kprintf("ERROR k_map_page called with app_paging_dir value 0x%x, this is probably a bug\r\n", app_paging_dir);
     k_panic("ERROR Possible unsafe map request");
   }
@@ -601,7 +601,7 @@ uint32_t *map_app_pagingdir(vaddr paging_dir_phys, vaddr starting_from) {
       kprintf("DEBUG map_app_paging_dir found space at 0x%x\r\n", i);
       #endif
       //now map it in
-      kernel_paging_directory[i] = (uint32_t *)(paging_dir_phys | MP_PRESENT | MP_READWRITE);
+      kernel_paging_directory[i] = paging_dir_phys | MP_PRESENT | MP_READWRITE;
       result = (uint32_t *)(i << 22);
       break;
     }
@@ -626,7 +626,7 @@ void unmap_app_pagingdir(uint32_t *mapped_pd) {
   #ifdef MMGR_VERBOSE
   kprintf("DEBUG unmap_app_pagingdir pd location 0x%x is page 0x%x\r\n", mapped_pd, page_num);
   #endif
-  kernel_paging_directory[page_num] = NULL;
+  kernel_paging_directory[page_num] = 0;
   
   for(register size_t i=0; i<0x400; i++) {
     vaddr target = (vaddr)mapped_pd | i<<12;
@@ -665,7 +665,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
             #ifdef MMGR_VERBOSE
             kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", addr);
             #endif
-            deallocate_physical_pages(1, &addr);
+            deallocate_physical_pages(1, (void **)&addr);
             paging_dir_ent[j] = 0;
           }
         }
@@ -677,7 +677,7 @@ void free_app_memory(uint32_t *mapped_pd, void *root_pd_phys) {
         #ifdef MMGR_VERBOSE
         kprintf("DEBUG free_app_memory deallocating phys 0x%x\r\n", pg_addr);
         #endif
-        if(pg_addr!=0) deallocate_physical_pages(1, &pg_addr);
+        if(pg_addr!=0) deallocate_physical_pages(1, (void **)&pg_addr);
       }
     }
   }
@@ -802,10 +802,10 @@ void *vm_alloc_pages(uint32_t *root_page_dir, size_t page_count, uint32_t flags)
  * allocates a new page of physical RAM and maps it to the given dest_vaddr in the given paging area.
  * if this is not the kernel paging area, the memory is also mapped into the kernel area and this pointer is returned.
 */
-void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t flags)
+void *vm_alloc_specific_page(uint32_t *root_page_dir, void *dest_vaddr, uint32_t flags)
 {
   if(root_page_dir==NULL) root_page_dir = kernel_paging_directory;
-  void *phys_ptr = 0xdeadbeef;
+  void *phys_ptr = (void *)0xdeadbeef;
   uint32_t allocd = allocate_free_physical_pages(1, &phys_ptr);
   if(allocd!=1) {
     kputs("  WARNING insufficient pages allocd, deallocating and removing\r\n");

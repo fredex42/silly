@@ -236,7 +236,7 @@ uint8_t ata_max_udma_mode(uint8_t drive_nr)
   uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
   if(drive_info == NULL) return 0;
 
-  const ud_low = drive_info[88] & 0xFF; //low byte gives max the supported UDMA mode as a bitfield
+  const uint8_t ud_low = drive_info[88] & 0xFF; //low byte gives max the supported UDMA mode as a bitfield
   for(register uint8_t mode=6; mode>0; mode--) {
     if(ud_low & (1 << mode)) {
       return mode; //return the highest supported mode
@@ -254,7 +254,7 @@ uint8_t ata_current_udma_mode(uint8_t drive_nr)
   uint16_t *drive_info = master_driver_state->disk_identity[drive_nr];
   if(drive_info == NULL) return 0;
 
-  const ud_hi = (drive_info[88] >> 8) & 0xFF; //high byte gives the active mode as a bitfield
+  const uint8_t ud_hi = (drive_info[88] >> 8) & 0xFF; //high byte gives the active mode as a bitfield
   for(register uint8_t mode=6; mode>0; mode--) {
     if(ud_hi & (1 << mode)) {
       return mode; //return the highest active mode
@@ -304,13 +304,13 @@ void print_drive_info(uint8_t drive_nr)
   }
 }
 
-void test_write_cb(uint8_t status, void *buffer)
+void test_write_cb(uint8_t status, void *buffer, void *extradata)
 {
   kprintf("Completed test write from 0x%x with status %d\r\n", buffer, (uint16_t) status);
   free(buffer);
 }
 
-void test_read_cb(uint8_t status, void *buffer)
+void test_read_cb(uint8_t status, void *buffer, void *extradata)
 {
   kprintf("Received data from test read with status %d at 0x%x\r\n", (uint16_t) status, buffer);
   free(buffer);

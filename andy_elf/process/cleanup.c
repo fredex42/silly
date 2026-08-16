@@ -15,7 +15,7 @@
 void cleanup_process(SchedulerTask *t)
 {
     kputs("DEBUG entered cleanup_process\r\n");
-    pid_t pid = (pid_t)t->data;
+    pid_t pid = (pid_t)(vaddr)t->data;
     struct ProcessTableEntry *process = get_process(pid);
 
     kprintf("DEBUG pid %d is at 0x%x\r\n", pid, process);
@@ -34,7 +34,7 @@ void cleanup_process(SchedulerTask *t)
     kb_cleanup_process_operations(process);
 
     //get hold of the process's memory table
-    uint32_t *pagingdir = map_app_pagingdir(process->root_paging_directory_phys, APP_PAGEDIRS_BASE);
+    uint32_t *pagingdir = map_app_pagingdir((vaddr)process->root_paging_directory_phys, APP_PAGEDIRS_BASE);
     free_app_memory(pagingdir, process->root_paging_directory_phys);
     unmap_app_pagingdir(pagingdir);
 
@@ -66,7 +66,7 @@ void cleanup_process(SchedulerTask *t)
 */
 void schedule_cleanup_task(pid_t pid)
 {
-    SchedulerTask *t = new_scheduler_task(TASK_ASAP, &cleanup_process, (void *)pid);
+    SchedulerTask *t = new_scheduler_task(TASK_ASAP, &cleanup_process, (void *)(vaddr)pid);
 
     schedule_task(t);
 }

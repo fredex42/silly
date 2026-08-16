@@ -140,11 +140,11 @@ void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*call
         case PARTTYPE_NTFS:
             //Mount NTFS filesystem
             kputs("volmgr: NTFS mounting not yet implemented\r\n");
-            callback(NULL, E_NOT_SUPPORTED,mount_data);
+            callback(E_NOT_SUPPORTED, NULL, mount_data);
             break;
         default:
             kprintf("volmgr: Unsupported partition type 0x%x\r\n", vol->part_type);
-            callback(NULL, E_NOT_SUPPORTED, mount_data);
+            callback(E_NOT_SUPPORTED, NULL, mount_data);
             break;
     }
 }

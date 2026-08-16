@@ -147,7 +147,7 @@ uint8_t vm_is_address_present(uint32_t *mapped_pagedirs, void *ptr);
 /**
  * allocates a new page of physical RAM and maps it to the given dest_vaddr
 */
-void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t flags);
+void *vm_alloc_specific_page(uint32_t *root_page_dir, void *dest_vaddr, uint32_t flags);
 
 /**
  * frees all the physical RAM associated with the given app
