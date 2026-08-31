@@ -147,7 +147,7 @@ uint8_t vm_is_address_present(uint32_t *mapped_pagedirs, void *ptr);
 /**
  * allocates a new page of physical RAM and maps it to the given dest_vaddr
 */
-void *vm_alloc_specific_page(uint32_t root_page_dir, void *dest_vaddr, uint32_t flags);
+void *vm_alloc_specific_page(uint32_t *root_page_dir, void *dest_vaddr, uint32_t flags);
 
 /**
  * frees all the physical RAM associated with the given app
@@ -193,4 +193,8 @@ uint32_t allocate_free_physical_pages(uint32_t page_count, void **blocks);
 uint32_t deallocate_physical_pages(uint32_t page_count, void **blocks);
 void *k_map_page_bytes(uint32_t *root_page_dir, void *phys_addr, void *target_virt_addr, uint32_t flags);
 vaddr _mmgr_get_pd();
+void initialise_flat_pagetables();
+void idmap_multiboot_data(void *multiboot_ptr, size_t length_bytes);
+void reserve_physical_page(void *phys_addr);
+void *k_map_next_unallocated_pages(uint32_t flags, void **phys_addr, size_t pages);
 #endif

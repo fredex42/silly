@@ -3,6 +3,8 @@
 #include "keymap.h"
 #include "builtin_keymap.h"
 #include <panic.h>
+#include <stdio.h>
+#include <cfuncs.h>
 
 char *active_keymap_ptr = builtin_keymap;
 

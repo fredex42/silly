@@ -13,7 +13,7 @@ struct find_8point3_file_transient_data {
   char filename[9];
   char xtn[4];
   void *extradata;
-  void (*callback)(uint8_t status, FATFS *fs_ptr, DirectoryEntry *dir_entry, char *extradata);
+  void (*callback)(uint8_t status, FATFS *fs_ptr, DirectoryEntry *dir_entry, void *extradata);
 };
 
 void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir* dir, void* extradata)
@@ -65,7 +65,7 @@ void _vfat_find_8point3_dir_opened(VFatOpenFile* fp, uint8_t status, VFatOpenDir
   free(transient);
 }
 
-void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, void *extradata, void (*callback)(uint8_t status, FATFS *fs_ptr, DirectoryEntry *dir_entry, char *extradata))
+void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, void *extradata, void (*callback)(uint8_t status, FATFS *fs_ptr, DirectoryEntry *dir_entry, void *extradata))
 {
   struct find_8point3_file_transient_data* transient = (struct find_8point3_file_transient_data *)malloc(sizeof(struct find_8point3_file_transient_data));
   if(!transient) {
@@ -75,7 +75,7 @@ void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, void *extradat
 
   memset(transient, 0, sizeof(struct find_8point3_file_transient_data));
 
-  char (*maybe_dot)=strchr(filename, '.');
+  const char (*maybe_dot)=strchr(filename, '.');
 
   if(maybe_dot!=NULL) {
     size_t name_len = maybe_dot - filename;
@@ -96,7 +96,7 @@ void vfat_find_8point3_in_root_dir(FATFS *fs_ptr, char *filename, void *extradat
 void vfat_decode_attributes(uint8_t attrs, char *buf)
 {
   if(attrs&0x0F) {  //Read-only, hidden, system, volume label all set => LFN fragment
-    strcpy(buf, "!LFN");
+    memcpy(buf, "!LFN", 5);
     return;
   }
   if(attrs&VFAT_ATTR_READONLY) {

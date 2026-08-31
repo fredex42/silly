@@ -2,6 +2,8 @@
 #include "ioapic.h"
 #include "interrupts.h"
 #include <sys/mmgr.h>
+#include <memops.h>
+#include <stdio.h>
 
 void write_ioapic_register(const vaddr apic_base, const uint8_t offset, const uint32_t val)
 {
@@ -23,13 +25,13 @@ uint32_t read_ioapic_register(const vaddr apic_base, const uint8_t offset)
 
 void configure_ioapic(vaddr ioapic_base)
 {
-  if(ioapic_base==NULL) ioapic_base = DEFAULT_IOAPIC_BASE;
+  if(ioapic_base==0) ioapic_base = DEFAULT_IOAPIC_BASE;
   uint32_t value = 0;
   size_t dir_idx = (size_t)ioapic_base >> 22;
   size_t dir_off = (size_t)ioapic_base >> 12 & 0x03FF;
 
   //identity-map the register location for the ioapic
-  k_map_page(NULL, ioapic_base, dir_idx, dir_off, MP_READWRITE);
+  k_map_page(NULL, (void *)ioapic_base, dir_idx, dir_off, MP_READWRITE);
   //The only interesting field is in bits 24 - 27: the APIC ID for this device
   uint32_t apic_id = (read_ioapic_register(ioapic_base, IOAPICID) >> 24 & 0xF);
 

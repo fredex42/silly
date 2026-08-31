@@ -30,3 +30,5 @@ void legacy_pic_remap(int offset1, int offset2);
 disable the legacy 8259 pic. See https://wiki.osdev.org/PIC
 */
 void disable_legacy_pic();
+
+void configure_pic_interrupts();

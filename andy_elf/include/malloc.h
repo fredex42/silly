@@ -3,6 +3,9 @@
 #ifndef __MALLOC_H
 #define __MALLOC_H
 
+//defined in mmgr/heap.h
+struct HeapZoneStart;
+
 //These alloc functions are defined in heap.c
 void* malloc(size_t bytes);
 void* malloc_for_process(uint16_t pid, size_t bytes);

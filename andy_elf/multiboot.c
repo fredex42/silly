@@ -4,6 +4,8 @@
 #include <kernel_config.h>
 #include <panic.h>
 #include <volmgr.h>
+#include <stdio.h>
+#include <cfuncs.h>
 
 //defined in acpi/rsdp.c
 void load_acpi_data();
@@ -80,7 +82,10 @@ uint32_t init_multiboot_system(uint32_t magic, uint32_t addr) {
                 for (int i = 0; i < entries; i++) {
                     kprintf("Entry %d: Address 0x%x, Length 0x%x, Type %d\r\n", i, (uint32_t)mmap->entries[i].addr, (uint32_t)mmap->entries[i].len, mmap->entries[i].type);
                 }
-                initialise_mmgr(mmap->entries, entries, addr, header->total_size);
+                //struct MultibootTagMemoryMap.entries and struct MemoryMapEntry have identical layout (see comment on struct MemoryMapEntry);
+                //go via a void* since entries[] is a packed-struct member and GCC can't otherwise confirm the alignment is safe to reinterpret.
+                void *mmap_entries = mmap->entries;
+                initialise_mmgr((struct MemoryMapEntry *)mmap_entries, entries, (void *)addr, header->total_size);
                 break;
             case MB_TAG_FRAMEBUFFER:
                 struct MultibootTagFramebuffer *fb = (struct MultibootTagFramebuffer *)tag;

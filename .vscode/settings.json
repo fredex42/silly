@@ -13,5 +13,7 @@
         "errors.h": "c",
         "volmgr.h": "c",
         "ata_pio.h": "c"
-    }
+    },
+    "C_Cpp.default.compileCommands": "/home/andy/silly/andy_elf/builddir/compile_commands.json",
+    "C_Cpp.default.configurationProvider": "mesonbuild.mesonbuild"
 }

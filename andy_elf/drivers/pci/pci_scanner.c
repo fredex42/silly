@@ -2,6 +2,8 @@
 #include "pci_ops.h"
 #include "pci_categorisation.h"
 #include "pci_ide.h"
+#include <stdio.h>
+#include <cfuncs.h>
 
 //Mostly taken from https://wiki.osdev.org/PCI#Enumerating_PCI_Buses !
 const char* pci_description_string(uint8_t pci_class, uint8_t subclass) {

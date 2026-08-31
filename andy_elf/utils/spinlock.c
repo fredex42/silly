@@ -1,5 +1,6 @@
 #include <types.h>
 #include <spinlock.h>
+#include <stdio.h>
 
 /** 
  * Atomically acquire the given lock if it's free, or loop until it is available

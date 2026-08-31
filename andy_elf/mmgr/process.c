@@ -5,6 +5,8 @@
 #include <spinlock.h>
 #include <memops.h>
 #include <sys/ioports.h>
+#include <stdio.h>
+#include <cfuncs.h>
 #include "heap.h"
 #include "process.h"
 
@@ -262,7 +264,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     void *base_kernel_ptr = vm_map_next_unallocated_pages(NULL, MP_PRESENT|MP_USER|MP_READWRITE, phys_ptrs, pages_required);
     if(!base_kernel_ptr) {
       kputs("ERROR Unable to map process segment into kernel memory\r\n");
-      deallocate_physical_pages(c, &phys_ptrs);
+      deallocate_physical_pages(c, phys_ptrs);
       free(phys_ptrs);
       unmap_app_pagingdir(mapped_pagedirs);
       new_entry->status = PROCESS_NONE;
@@ -274,7 +276,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     if(!seg) {
       kprintf("ERROR internal_create_process could not find load list entry for segment %d\r\n", i);
       k_unmap_page_ptr(NULL, base_kernel_ptr);
-      deallocate_physical_pages(c, &phys_ptrs);
+      deallocate_physical_pages(c, phys_ptrs);
       free(phys_ptrs);
       unmap_app_pagingdir(mapped_pagedirs);
       new_entry->status = PROCESS_NONE;
@@ -283,7 +285,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
     if(seg->length < ph->p_filesz) {
       kprintf("ERROR internal_create_process load list entry for segment %d is too small (%d < %d)\r\n", i, seg->length, ph->p_filesz);
       k_unmap_page_ptr(NULL, base_kernel_ptr);
-      deallocate_physical_pages(c, &phys_ptrs);
+      deallocate_physical_pages(c, phys_ptrs);
       free(phys_ptrs);
       unmap_app_pagingdir(mapped_pagedirs);
       new_entry->status = PROCESS_NONE;
@@ -303,7 +305,7 @@ pid_t internal_create_process(struct elf_parsed_data *elf)
       size_t flags = MP_PRESENT | MP_USER;
       if(ph->p_flags & PF_W) flags |= MP_READWRITE;
       k_map_page_bytes(mapped_pagedirs, phys_ptrs[pagenum], page_addr, flags);
-      k_unmap_page_ptr(NULL, (vaddr)(base_kernel_ptr + pagenum*PAGE_SIZE));
+      k_unmap_page_ptr(NULL, (void *)((vaddr)base_kernel_ptr + pagenum*PAGE_SIZE));
     }
   }
 

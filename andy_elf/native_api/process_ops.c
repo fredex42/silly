@@ -1,6 +1,7 @@
 #include <types.h>
 #include <stdio.h>
 #include <process.h>
+#include <scheduler/scheduler.h>
 
 void api_terminate_current_process()
 {

@@ -140,11 +140,11 @@ void volmgr_mount_volume(struct VolMgr_Volume *vol, void *extradata, void (*call
         case PARTTYPE_NTFS:
             //Mount NTFS filesystem
             kputs("volmgr: NTFS mounting not yet implemented\r\n");
-            callback(NULL, E_NOT_SUPPORTED,mount_data);
+            callback(E_NOT_SUPPORTED, NULL, mount_data);
             break;
         default:
             kprintf("volmgr: Unsupported partition type 0x%x\r\n", vol->part_type);
-            callback(NULL, E_NOT_SUPPORTED, mount_data);
+            callback(E_NOT_SUPPORTED, NULL, mount_data);
             break;
     }
 }
@@ -778,7 +778,7 @@ void volmgr_register_callback(char *target, char *opt_label, uint8_t flags, void
  * Removes the given callback for the specified target.
  * Returns E_OK if successful, or E_NOT_SUPPORTED if the callback was not found.
  */
-uint8_t volmgr_unregister_callback(char *target, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata)) {
+uint8_t volmgr_unregister_callback(const char *target, void (*callback)(uint8_t status, const char *target, void *volume, void *extradata)) {
     acquire_spinlock(&volmgr_lock);
     struct VolMgr_CallbackList *prev = NULL;
     for(struct VolMgr_CallbackList *cb = volmgr_state->mount_callbacks; cb!=NULL; cb=cb->next) {

@@ -59,7 +59,7 @@ PendingOperationList* kb_cancel_pending_ops_for_process(PendingOperationList *st
  */
 PendingOperationList* kb_cancel_pending_ops_for_file(PendingOperationList *start, struct FilePointer *fp)
 {
-    if(start==NULL) return; //no list => nothing to do
+    if(start==NULL) return NULL; //no list => nothing to do
 
     acquire_spinlock(&kb_pending_operation_lock);
     PendingOperationList *prev=NULL,*op=NULL,*new_start=NULL,*temp=NULL;
@@ -102,7 +102,7 @@ PendingOperationList *kb_pop_pending_operation(PendingOperationList **start)
 
     acquire_spinlock(&kb_pending_operation_lock);
     PendingOperationList *head = *start;
-    start = (*start)->next;
+    *start = (*start)->next;
     release_spinlock(&kb_pending_operation_lock);
     return head;
 }

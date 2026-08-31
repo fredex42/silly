@@ -1,6 +1,7 @@
 #include <types.h>
 #include <malloc.h>
 #include <utils/ringbuffer.h>
+#include <cfuncs.h>
 
 RingBuffer* ring_buffer_new(size_t len)
 {
@@ -38,7 +39,7 @@ void ring_buffer_push(RingBuffer *rb, char ch)
 {
     if(!rb) {
         kputs("ERROR ring_buffer_push called with null buffer!\r\n");
-        return 0;
+        return;
     }
     rb->buf[rb->write_ptr] = ch;
     ++rb->write_ptr;

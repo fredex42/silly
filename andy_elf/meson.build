@@ -10,6 +10,7 @@ common_c_args = [
   '-m32',
   '-march=i486',
   '-fno-asynchronous-unwind-tables',
+  '-ffreestanding',
   #'-fno-stack-protector',
   '-O0',
 ]

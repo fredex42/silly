@@ -224,7 +224,7 @@ void _elf_loaded_file_header(VFatOpenFile *fp, uint8_t status, size_t bytes_read
   //check the magic
   if(header->magic[0] != 0x7F || header->magic[1] != 'E' || header->magic[2] != 'L' || header->magic[3] != 'F') {
     kprintf("ERROR: Not a valid ELF file (bad magic)\r\n");
-    t->callback(E_NOT_ELF, t, t->extradata);
+    t->callback(E_NOT_ELF, t->parsed_data, t->extradata);
     free(t);
     free(header);
     return;

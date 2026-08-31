@@ -65,7 +65,7 @@ struct VolMgr_Alias {
     struct VolMgr_Volume *volume;
 };
 
-typedef (VolMgr_Public_CallbackFunc)(uint8_t status, const char *target, void *volume, void *extradata);
+typedef void (VolMgr_Public_CallbackFunc)(uint8_t status, const char *target, void *volume, void *extradata);
 
 struct VolMgr_CallbackList {
     struct VolMgr_CallbackList *next;

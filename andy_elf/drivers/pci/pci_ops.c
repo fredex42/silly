@@ -1,4 +1,5 @@
 #include "pci_ops.h"
+#include "pci_scanner.h"
 #include <stdio.h>
 
 static enum PCI_MODE mode = ISA_ONLY;   //i.e., PCI disabled initially. This value is set in `pci_init`

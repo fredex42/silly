@@ -3,6 +3,7 @@
 #include <sys/mmgr.h>
 #include <stdio.h>
 #include <sys/ioports.h>
+#include <panic.h>
 #include "scheduler_task_internals.h"
 #include <cfuncs.h>
 #include "../drivers/cmos/rtc.h"
